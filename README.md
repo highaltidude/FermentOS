@@ -77,10 +77,12 @@ cd FermentOS
 bash install.sh
 ```
 
+During the install you'll be prompted for the **web port** the app should listen on (default `3000`). Pick any free port between 1–65535; this is the port you'll open in the browser. To skip the prompt (e.g. for unattended installs), set `FERMENTOS_PORT` first: `FERMENTOS_PORT=8080 bash install.sh`.
+
 The script will:
 - Install Node.js, pnpm, and PostgreSQL (if not already installed)
 - Create the database and generate a random secure password
-- Create your `.env` file automatically
+- Create your `.env` file automatically (including the port you chose)
 - Install dependencies, run migrations, and build the app
 - Register and start the systemd service so it survives reboots
 

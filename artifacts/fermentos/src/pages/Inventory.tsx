@@ -9,6 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
 const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
+const MALT_TYPES = [
+  { value: "lme", label: "LME" },
+  { value: "dme", label: "DME" },
+  { value: "all_grain", label: "All-Grain" },
+];
 const TYPE_COLORS: Record<string, string> = {
   malt: "bg-amber-100 text-amber-800 border-amber-200",
   hop: "bg-green-100 text-green-800 border-green-200",
@@ -19,7 +24,8 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const emptyForm = () => ({
-  name: "", type: "malt", amount: "", unit: "lbs", purchasedDate: "", expiryDate: "", supplier: "", notes: "",
+  name: "", type: "malt", maltType: "", amount: "", unit: "lbs",
+  purchasedDate: "", expiryDate: "", supplier: "", notes: "",
 });
 
 type InventoryFormData = ReturnType<typeof emptyForm>;
@@ -53,10 +59,16 @@ function InventoryForm({ form, setForm, isEdit = false, isPending, onSubmit, onC
           <Input placeholder="Amount *" type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="text-sm w-24" />
           <Input placeholder="Unit" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="text-sm w-20" />
         </div>
-        <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+        <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, maltType: "" })}>
           <SelectTrigger className="text-sm h-9"><SelectValue /></SelectTrigger>
           <SelectContent>{INGREDIENT_TYPES.map((t) => <SelectItem key={t} value={t}>{t.replace("_", " ")}</SelectItem>)}</SelectContent>
         </Select>
+        {form.type === "malt" && (
+          <Select value={form.maltType || ""} onValueChange={(v) => setForm({ ...form, maltType: v })}>
+            <SelectTrigger className="text-sm h-9 col-span-2"><SelectValue placeholder="Malt type (LME, DME, All-Grain)" /></SelectTrigger>
+            <SelectContent>{MALT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+          </Select>
+        )}
         <div><label className="text-xs text-muted-foreground mb-1 block">Purchased</label><Input type="date" value={form.purchasedDate} onChange={(e) => setForm({ ...form, purchasedDate: e.target.value })} className="text-sm" /></div>
         <div><label className="text-xs text-muted-foreground mb-1 block">Expiry</label><Input type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} className="text-sm" /></div>
         <Input placeholder="Supplier (optional)" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} className="text-sm col-span-2" />
@@ -108,6 +120,7 @@ export default function Inventory() {
       data: {
         name: form.name,
         type: form.type as any,
+        maltType: (form.type === "malt" && form.maltType) ? form.maltType as any : undefined,
         amount: Number(form.amount),
         unit: form.unit,
         purchasedDate: form.purchasedDate || undefined,
@@ -125,6 +138,7 @@ export default function Inventory() {
       data: {
         name: form.name,
         type: form.type as any,
+        maltType: (form.type === "malt" && form.maltType) ? form.maltType as any : null,
         amount: Number(form.amount),
         unit: form.unit,
         purchasedDate: form.purchasedDate || undefined,
@@ -137,7 +151,8 @@ export default function Inventory() {
 
   const startEdit = (item: any) => {
     setForm({
-      name: item.name, type: item.type, amount: String(item.amount), unit: item.unit,
+      name: item.name, type: item.type, maltType: item.maltType ?? "",
+      amount: String(item.amount), unit: item.unit,
       purchasedDate: item.purchasedDate ?? "", expiryDate: item.expiryDate ?? "",
       supplier: item.supplier ?? "", notes: item.notes ?? "",
     });
@@ -146,6 +161,9 @@ export default function Inventory() {
   };
 
   const handleCancel = () => { setShowAdd(false); setEditingId(null); };
+
+  const maltTypeLabel = (v: string | null | undefined) =>
+    MALT_TYPES.find((t) => t.value === v)?.label ?? null;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
@@ -205,9 +223,14 @@ export default function Inventory() {
                     <Package className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-semibold text-foreground">{item.name}</span>
                       <span className={`text-xs px-1.5 py-0.5 rounded border font-medium shrink-0 ${TYPE_COLORS[item.type]}`}>{item.type.replace("_", " ")}</span>
+                      {item.type === "malt" && maltTypeLabel(item.maltType) && (
+                        <span className="text-xs px-1.5 py-0.5 rounded border font-medium shrink-0 bg-amber-50 text-amber-700 border-amber-300">
+                          {maltTypeLabel(item.maltType)}
+                        </span>
+                      )}
                       {isExpired(item.expiryDate) && <span className="text-xs text-destructive font-medium">Expired</span>}
                       {!isExpired(item.expiryDate) && isExpiringSoon(item.expiryDate) && <span className="text-xs text-amber-600 font-medium">Expiring soon</span>}
                     </div>

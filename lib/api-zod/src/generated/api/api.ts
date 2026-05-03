@@ -870,6 +870,7 @@ export const ListInventoryResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
   type: zod.enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"]),
+  maltType: zod.enum(["lme", "dme", "all_grain"]).nullish(),
   amount: zod.number(),
   unit: zod.string(),
   purchasedDate: zod.string().date().nullish(),
@@ -887,6 +888,7 @@ export const ListInventoryResponse = zod.array(ListInventoryResponseItem);
 export const CreateInventoryItemBody = zod.object({
   name: zod.string(),
   type: zod.enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"]),
+  maltType: zod.enum(["lme", "dme", "all_grain"]).nullish(),
   amount: zod.number(),
   unit: zod.string(),
   purchasedDate: zod.string().date().nullish(),
@@ -907,6 +909,7 @@ export const UpdateInventoryItemBody = zod.object({
   type: zod
     .enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"])
     .optional(),
+  maltType: zod.enum(["lme", "dme", "all_grain"]).nullish(),
   amount: zod.number().optional(),
   unit: zod.string().optional(),
   purchasedDate: zod.string().date().nullish(),
@@ -919,6 +922,7 @@ export const UpdateInventoryItemResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   type: zod.enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"]),
+  maltType: zod.enum(["lme", "dme", "all_grain"]).nullish(),
   amount: zod.number(),
   unit: zod.string(),
   purchasedDate: zod.string().date().nullish(),

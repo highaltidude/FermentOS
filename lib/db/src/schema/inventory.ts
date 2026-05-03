@@ -3,10 +3,13 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { ingredientTypeEnum } from "./recipes";
 
+export const maltTypeEnum = ["lme", "dme", "all_grain"] as const;
+
 export const inventoryTable = pgTable("inventory", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   type: text("type", { enum: ingredientTypeEnum }).notNull(),
+  maltType: text("malt_type", { enum: maltTypeEnum }),
   amount: real("amount").notNull(),
   unit: text("unit").notNull(),
   purchasedDate: date("purchased_date"),

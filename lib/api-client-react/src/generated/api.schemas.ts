@@ -267,10 +267,19 @@ export interface CreateFermentationReadingBody {
   notes?: string | null;
 }
 
+export type MaltType = (typeof MaltType)[keyof typeof MaltType];
+
+export const MaltType = {
+  lme: "lme",
+  dme: "dme",
+  all_grain: "all_grain",
+} as const;
+
 export interface InventoryItem {
   id: number;
   name: string;
   type: IngredientType;
+  maltType?: MaltType | null;
   amount: number;
   unit: string;
   purchasedDate?: string | null;
@@ -284,6 +293,7 @@ export interface InventoryItem {
 export interface CreateInventoryItemBody {
   name: string;
   type: IngredientType;
+  maltType?: MaltType | null;
   amount: number;
   unit: string;
   purchasedDate?: string | null;
@@ -295,6 +305,7 @@ export interface CreateInventoryItemBody {
 export interface UpdateInventoryItemBody {
   name?: string;
   type?: IngredientType;
+  maltType?: MaltType | null;
   amount?: number;
   unit?: string;
   purchasedDate?: string | null;

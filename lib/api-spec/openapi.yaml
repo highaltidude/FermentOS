@@ -1240,6 +1240,10 @@ components:
           nullable: true
       required: [readingAt]
 
+    MaltType:
+      type: string
+      enum: [lme, dme, all_grain]
+
     InventoryItem:
       type: object
       properties:
@@ -1249,6 +1253,9 @@ components:
           type: string
         type:
           $ref: "#/components/schemas/IngredientType"
+        maltType:
+          $ref: "#/components/schemas/MaltType"
+          nullable: true
         amount:
           type: number
         unit:
@@ -1282,6 +1289,9 @@ components:
           type: string
         type:
           $ref: "#/components/schemas/IngredientType"
+        maltType:
+          $ref: "#/components/schemas/MaltType"
+          nullable: true
         amount:
           type: number
         unit:
@@ -1309,6 +1319,9 @@ components:
           type: string
         type:
           $ref: "#/components/schemas/IngredientType"
+        maltType:
+          $ref: "#/components/schemas/MaltType"
+          nullable: true
         amount:
           type: number
         unit:

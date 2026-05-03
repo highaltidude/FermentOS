@@ -72,7 +72,7 @@ logging) leave `plannedDate` null.
 Clone the repo and run the installer:
 
 ```bash
-git clone https://github.com/highaltidude/FermentOS.git
+git clone https://github.com/highaltidude/FermentOS.git fermentos
 cd fermentos
 bash install.sh
 ```

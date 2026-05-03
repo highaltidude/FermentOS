@@ -72,8 +72,8 @@ logging) leave `plannedDate` null.
 Clone the repo and run the installer:
 
 ```bash
-git clone https://github.com/highaltidude/FermentOS.git fermentos
-cd fermentos
+git clone https://github.com/highaltidude/FermentOS.git
+cd FermentOS
 bash install.sh
 ```
 
@@ -101,14 +101,14 @@ The easiest way to update is from the app itself: **Settings → System → App 
 To update manually from the command line instead:
 
 ```bash
-cd fermentos
+cd FermentOS
 bash update.sh
 ```
 
 Or step by step:
 
 ```bash
-cd fermentos
+cd FermentOS
 git pull
 pnpm install
 source .env && pnpm --filter @workspace/db run push

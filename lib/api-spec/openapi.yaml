@@ -1,0 +1,1520 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: FermentOS API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: recipes
+    description: Beer recipe management
+  - name: ingredients
+    description: Recipe ingredient management
+  - name: steps
+    description: Step-by-step brewing instructions for recipes
+  - name: brew-sessions
+    description: Brew session tracking
+  - name: fermentation
+    description: Fermentation readings
+  - name: inventory
+    description: Ingredient inventory management
+  - name: dashboard
+    description: Dashboard and summary data
+  - name: settings
+    description: App settings (beer styles, etc.)
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/active-brews:
+    get:
+      operationId: getActiveBrews
+      tags: [dashboard]
+      summary: Get active brew sessions with latest fermentation data
+      responses:
+        "200":
+          description: Active brew sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActiveBrew"
+
+  /dashboard/upcoming-brews:
+    get:
+      operationId: getUpcomingBrews
+      tags: [dashboard]
+      summary: Get scheduled brew sessions sorted by brew date ascending
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Upcoming scheduled brew sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UpcomingBrew"
+
+  /recipes:
+    get:
+      operationId: listRecipes
+      tags: [recipes]
+      summary: List all recipes
+      parameters:
+        - name: style
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of recipes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recipe"
+    post:
+      operationId: createRecipe
+      tags: [recipes]
+      summary: Create a new recipe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecipeBody"
+      responses:
+        "201":
+          description: Recipe created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipe"
+
+  /recipes/styles:
+    get:
+      operationId: getRecipeStyles
+      tags: [recipes]
+      summary: Get recipe counts grouped by beer style
+      responses:
+        "200":
+          description: Recipe style breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StyleCount"
+
+  /recipes/{id}:
+    get:
+      operationId: getRecipe
+      tags: [recipes]
+      summary: Get a recipe by ID
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Recipe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeWithIngredients"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateRecipe
+      tags: [recipes]
+      summary: Update a recipe
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRecipeBody"
+      responses:
+        "200":
+          description: Updated recipe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipe"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteRecipe
+      tags: [recipes]
+      summary: Delete a recipe
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /recipes/{id}/ingredients:
+    get:
+      operationId: listRecipeIngredients
+      tags: [ingredients]
+      summary: List ingredients for a recipe
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: List of ingredients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecipeIngredient"
+    post:
+      operationId: addRecipeIngredient
+      tags: [ingredients]
+      summary: Add an ingredient to a recipe
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecipeIngredientBody"
+      responses:
+        "201":
+          description: Ingredient added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeIngredient"
+
+  /ingredients/{id}:
+    put:
+      operationId: updateRecipeIngredient
+      tags: [ingredients]
+      summary: Update a recipe ingredient
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRecipeIngredientBody"
+      responses:
+        "200":
+          description: Updated ingredient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeIngredient"
+    delete:
+      operationId: deleteRecipeIngredient
+      tags: [ingredients]
+      summary: Delete a recipe ingredient
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /recipes/{id}/steps:
+    get:
+      operationId: listRecipeSteps
+      tags: [steps]
+      summary: List ordered brewing steps for a recipe
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: List of steps (ordered by position)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecipeStep"
+    post:
+      operationId: addRecipeStep
+      tags: [steps]
+      summary: Append a brewing step to a recipe
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecipeStepBody"
+      responses:
+        "201":
+          description: Step created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeStep"
+
+  /steps/{id}:
+    put:
+      operationId: updateRecipeStep
+      tags: [steps]
+      summary: Update a brewing step
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRecipeStepBody"
+      responses:
+        "200":
+          description: Updated step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeStep"
+    delete:
+      operationId: deleteRecipeStep
+      tags: [steps]
+      summary: Delete a brewing step
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /recipes/{id}/steps/reorder:
+    put:
+      operationId: reorderRecipeSteps
+      tags: [steps]
+      summary: Replace the ordering of a recipe's steps
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderRecipeStepsBody"
+      responses:
+        "200":
+          description: Reordered steps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecipeStep"
+
+  /brew-sessions:
+    get:
+      operationId: listBrewSessions
+      tags: [brew-sessions]
+      summary: List all brew sessions
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/BrewStatus"
+        - name: recipeId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of brew sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BrewSession"
+    post:
+      operationId: createBrewSession
+      tags: [brew-sessions]
+      summary: Create a new brew session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrewSessionBody"
+      responses:
+        "201":
+          description: Brew session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewSession"
+
+  /brew-sessions/{id}:
+    get:
+      operationId: getBrewSession
+      tags: [brew-sessions]
+      summary: Get a brew session by ID
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Brew session with readings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewSessionWithReadings"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateBrewSession
+      tags: [brew-sessions]
+      summary: Update a brew session
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBrewSessionBody"
+      responses:
+        "200":
+          description: Updated brew session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBrewSession
+      tags: [brew-sessions]
+      summary: Delete a brew session
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /brew-sessions/{id}/readings:
+    get:
+      operationId: listFermentationReadings
+      tags: [fermentation]
+      summary: List fermentation readings for a brew session
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: List of fermentation readings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FermentationReading"
+    post:
+      operationId: addFermentationReading
+      tags: [fermentation]
+      summary: Add a fermentation reading
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFermentationReadingBody"
+      responses:
+        "201":
+          description: Reading added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FermentationReading"
+
+  /readings/{id}:
+    delete:
+      operationId: deleteFermentationReading
+      tags: [fermentation]
+      summary: Delete a fermentation reading
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /status-log/{id}:
+    delete:
+      operationId: deleteStatusLogEntry
+      tags: [brew-sessions]
+      summary: Delete a status log entry
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /settings/styles:
+    get:
+      operationId: listBeerStyles
+      tags: [settings]
+      summary: List all beer styles
+      responses:
+        "200":
+          description: List of beer styles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BeerStyle"
+    post:
+      operationId: createBeerStyle
+      tags: [settings]
+      summary: Create a beer style
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBeerStyleBody"
+      responses:
+        "201":
+          description: Beer style created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BeerStyle"
+
+  /settings/styles/{id}:
+    delete:
+      operationId: deleteBeerStyle
+      tags: [settings]
+      summary: Delete a beer style
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /inventory:
+    get:
+      operationId: listInventory
+      tags: [inventory]
+      summary: List all inventory items
+      parameters:
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/IngredientType"
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Inventory items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+    post:
+      operationId: createInventoryItem
+      tags: [inventory]
+      summary: Add an inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryItemBody"
+      responses:
+        "201":
+          description: Inventory item created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/{id}:
+    put:
+      operationId: updateInventoryItem
+      tags: [inventory]
+      summary: Update an inventory item
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInventoryItemBody"
+      responses:
+        "200":
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+    delete:
+      operationId: deleteInventoryItem
+      tags: [inventory]
+      summary: Delete an inventory item
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /equipment:
+    get:
+      operationId: listEquipment
+      tags: [equipment]
+      summary: List all equipment
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Equipment list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Equipment"
+    post:
+      operationId: createEquipment
+      tags: [equipment]
+      summary: Add a piece of equipment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEquipmentBody"
+      responses:
+        "201":
+          description: Created equipment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+
+  /equipment/{id}:
+    put:
+      operationId: updateEquipment
+      tags: [equipment]
+      summary: Update a piece of equipment
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEquipmentBody"
+      responses:
+        "200":
+          description: Updated equipment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+    delete:
+      operationId: deleteEquipment
+      tags: [equipment]
+      summary: Delete a piece of equipment
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    BrewStatus:
+      type: string
+      enum: [scheduled, brewing, fermenting, conditioning, packaged, complete]
+
+    IngredientType:
+      type: string
+      enum: [malt, hop, yeast, adjunct, water_agent, other]
+
+    IngredientUse:
+      type: string
+      enum: [mash, boil, dry_hop, whirlpool, primary, secondary, packaging, other]
+
+    Recipe:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        style:
+          type: string
+        batchSizeGallons:
+          type: number
+        originalGravity:
+          type: number
+          nullable: true
+        finalGravity:
+          type: number
+          nullable: true
+        abv:
+          type: number
+          nullable: true
+        ibu:
+          type: number
+          nullable: true
+        colorSrm:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        daysPlanned:
+          type: integer
+          nullable: true
+        daysBrewing:
+          type: integer
+          nullable: true
+        daysFermenting:
+          type: integer
+          nullable: true
+        daysConditioning:
+          type: integer
+          nullable: true
+        daysPackaged:
+          type: integer
+          nullable: true
+        avgRating:
+          type: number
+          nullable: true
+        batchCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, style, batchSizeGallons, batchCount, createdAt, updatedAt]
+
+    RecipeWithIngredients:
+      allOf:
+        - $ref: "#/components/schemas/Recipe"
+        - type: object
+          properties:
+            ingredients:
+              type: array
+              items:
+                $ref: "#/components/schemas/RecipeIngredient"
+            steps:
+              type: array
+              items:
+                $ref: "#/components/schemas/RecipeStep"
+          required: [ingredients, steps]
+
+    StepPhase:
+      type: string
+      enum: [mash, boil, fermentation, conditioning, packaging, other]
+
+    RecipeStep:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipeId:
+          type: integer
+        position:
+          type: integer
+          description: 1-based ordering within the recipe
+        phase:
+          $ref: "#/components/schemas/StepPhase"
+          nullable: true
+        body:
+          type: string
+          description: Free-form instruction text (markdown allowed)
+        durationMinutes:
+          type: integer
+          nullable: true
+      required: [id, recipeId, position, body]
+
+    CreateRecipeStepBody:
+      type: object
+      properties:
+        body:
+          type: string
+        phase:
+          $ref: "#/components/schemas/StepPhase"
+          nullable: true
+        durationMinutes:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+          nullable: true
+          description: Optional explicit position; if omitted, the step is appended.
+      required: [body]
+
+    UpdateRecipeStepBody:
+      type: object
+      properties:
+        body:
+          type: string
+        phase:
+          $ref: "#/components/schemas/StepPhase"
+          nullable: true
+        durationMinutes:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+
+    ReorderRecipeStepsBody:
+      type: object
+      properties:
+        stepIds:
+          type: array
+          items:
+            type: integer
+          description: Step IDs in the new desired order. Must contain every step ID belonging to the recipe.
+      required: [stepIds]
+
+    CreateRecipeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        style:
+          type: string
+        batchSizeGallons:
+          type: number
+        originalGravity:
+          type: number
+          nullable: true
+        finalGravity:
+          type: number
+          nullable: true
+        abv:
+          type: number
+          nullable: true
+        ibu:
+          type: number
+          nullable: true
+        colorSrm:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        daysPlanned:
+          type: integer
+          nullable: true
+        daysBrewing:
+          type: integer
+          nullable: true
+        daysFermenting:
+          type: integer
+          nullable: true
+        daysConditioning:
+          type: integer
+          nullable: true
+        daysPackaged:
+          type: integer
+          nullable: true
+      required: [name, style, batchSizeGallons]
+
+    UpdateRecipeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        style:
+          type: string
+        batchSizeGallons:
+          type: number
+        originalGravity:
+          type: number
+          nullable: true
+        finalGravity:
+          type: number
+          nullable: true
+        abv:
+          type: number
+          nullable: true
+        ibu:
+          type: number
+          nullable: true
+        colorSrm:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        daysPlanned:
+          type: integer
+          nullable: true
+        daysBrewing:
+          type: integer
+          nullable: true
+        daysFermenting:
+          type: integer
+          nullable: true
+        daysConditioning:
+          type: integer
+          nullable: true
+        daysPackaged:
+          type: integer
+          nullable: true
+
+    RecipeIngredient:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipeId:
+          type: integer
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+        unit:
+          type: string
+        use:
+          $ref: "#/components/schemas/IngredientUse"
+          nullable: true
+        timingMinutes:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [id, recipeId, name, type, amount, unit]
+
+    CreateRecipeIngredientBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+        unit:
+          type: string
+        use:
+          $ref: "#/components/schemas/IngredientUse"
+          nullable: true
+        timingMinutes:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [name, type, amount, unit]
+
+    UpdateRecipeIngredientBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+        unit:
+          type: string
+        use:
+          $ref: "#/components/schemas/IngredientUse"
+          nullable: true
+        timingMinutes:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    BrewSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipeId:
+          type: integer
+          nullable: true
+        recipeName:
+          type: string
+        status:
+          $ref: "#/components/schemas/BrewStatus"
+        brewDate:
+          type: string
+          format: date
+        plannedDate:
+          type: string
+          format: date
+          nullable: true
+          description: Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.
+        packagedDate:
+          type: string
+          format: date
+          nullable: true
+        batchSizeGallons:
+          type: number
+        originalGravityActual:
+          type: number
+          nullable: true
+        finalGravityActual:
+          type: number
+          nullable: true
+        abvActual:
+          type: number
+          nullable: true
+        rating:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        tastingNotes:
+          type: string
+          nullable: true
+        photoPath:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, recipeName, status, brewDate, batchSizeGallons, createdAt, updatedAt]
+
+    StatusLogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        brewSessionId:
+          type: integer
+        status:
+          $ref: "#/components/schemas/BrewStatus"
+        changedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+      required: [id, brewSessionId, status, changedAt]
+
+    BrewSessionWithReadings:
+      allOf:
+        - $ref: "#/components/schemas/BrewSession"
+        - type: object
+          properties:
+            readings:
+              type: array
+              items:
+                $ref: "#/components/schemas/FermentationReading"
+            statusLog:
+              type: array
+              items:
+                $ref: "#/components/schemas/StatusLogEntry"
+          required: [readings, statusLog]
+
+    CreateBrewSessionBody:
+      type: object
+      properties:
+        recipeId:
+          type: integer
+          nullable: true
+        recipeName:
+          type: string
+        status:
+          $ref: "#/components/schemas/BrewStatus"
+        brewDate:
+          type: string
+          format: date
+        plannedDate:
+          type: string
+          format: date
+          nullable: true
+        packagedDate:
+          type: string
+          format: date
+          nullable: true
+        batchSizeGallons:
+          type: number
+        originalGravityActual:
+          type: number
+          nullable: true
+        finalGravityActual:
+          type: number
+          nullable: true
+        abvActual:
+          type: number
+          nullable: true
+        rating:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [recipeName, status, brewDate, batchSizeGallons]
+
+    UpdateBrewSessionBody:
+      type: object
+      properties:
+        recipeId:
+          type: integer
+          nullable: true
+        recipeName:
+          type: string
+        status:
+          $ref: "#/components/schemas/BrewStatus"
+        brewDate:
+          type: string
+          format: date
+        plannedDate:
+          type: string
+          format: date
+          nullable: true
+        packagedDate:
+          type: string
+          format: date
+          nullable: true
+        batchSizeGallons:
+          type: number
+        originalGravityActual:
+          type: number
+          nullable: true
+        finalGravityActual:
+          type: number
+          nullable: true
+        abvActual:
+          type: number
+          nullable: true
+        rating:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        tastingNotes:
+          type: string
+          nullable: true
+
+    FermentationReading:
+      type: object
+      properties:
+        id:
+          type: integer
+        brewSessionId:
+          type: integer
+        readingAt:
+          type: string
+          format: date-time
+        temperatureFahrenheit:
+          type: number
+          nullable: true
+        gravity:
+          type: number
+          nullable: true
+        ph:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [id, brewSessionId, readingAt]
+
+    CreateFermentationReadingBody:
+      type: object
+      properties:
+        readingAt:
+          type: string
+          format: date-time
+        temperatureFahrenheit:
+          type: number
+          nullable: true
+        gravity:
+          type: number
+          nullable: true
+        ph:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [readingAt]
+
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+        unit:
+          type: string
+        purchasedDate:
+          type: string
+          format: date
+          nullable: true
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+        supplier:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, type, amount, unit, createdAt, updatedAt]
+
+    CreateInventoryItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+        unit:
+          type: string
+        purchasedDate:
+          type: string
+          format: date
+          nullable: true
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+        supplier:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [name, type, amount, unit]
+
+    UpdateInventoryItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+        unit:
+          type: string
+        purchasedDate:
+          type: string
+          format: date
+          nullable: true
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+        supplier:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalRecipes:
+          type: integer
+        totalBrewSessions:
+          type: integer
+        activeBrewCount:
+          type: integer
+        inventoryItemCount:
+          type: integer
+        recentSessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrewSession"
+      required: [totalRecipes, totalBrewSessions, activeBrewCount, inventoryItemCount, recentSessions]
+
+    ActiveBrew:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipeName:
+          type: string
+        status:
+          $ref: "#/components/schemas/BrewStatus"
+        brewDate:
+          type: string
+          format: date
+        daysSinceBrew:
+          type: integer
+        latestTemperature:
+          type: number
+          nullable: true
+        latestGravity:
+          type: number
+          nullable: true
+        targetFinalGravity:
+          type: number
+          nullable: true
+      required: [id, recipeName, status, brewDate, daysSinceBrew]
+
+    UpcomingBrew:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipeId:
+          type: integer
+          nullable: true
+        recipeName:
+          type: string
+        brewDate:
+          type: string
+          format: date
+        daysUntilBrew:
+          type: integer
+          description: Days from today to brewDate. Negative if overdue.
+        batchSizeGallons:
+          type: number
+      required: [id, recipeName, brewDate, daysUntilBrew, batchSizeGallons]
+
+    StyleCount:
+      type: object
+      properties:
+        style:
+          type: string
+        count:
+          type: integer
+      required: [style, count]
+
+    EquipmentCondition:
+      type: string
+      enum: [new, good, fair, poor]
+
+    Equipment:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        brand:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        category:
+          type: string
+        purchasedDate:
+          type: string
+          format: date
+          nullable: true
+        purchasePrice:
+          type: string
+          nullable: true
+        condition:
+          $ref: "#/components/schemas/EquipmentCondition"
+          nullable: true
+        serialNumber:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, category, createdAt, updatedAt]
+
+    CreateEquipmentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        brand:
+          type: string
+        model:
+          type: string
+        category:
+          type: string
+        purchasedDate:
+          type: string
+          format: date
+        purchasePrice:
+          type: string
+        condition:
+          $ref: "#/components/schemas/EquipmentCondition"
+        serialNumber:
+          type: string
+        notes:
+          type: string
+      required: [name, category]
+
+    UpdateEquipmentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        brand:
+          type: string
+        model:
+          type: string
+        category:
+          type: string
+        purchasedDate:
+          type: string
+          format: date
+        purchasePrice:
+          type: string
+        condition:
+          $ref: "#/components/schemas/EquipmentCondition"
+        serialNumber:
+          type: string
+        notes:
+          type: string
+
+    BeerStyle:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, sortOrder, createdAt]
+
+    CreateBeerStyleBody:
+      type: object
+      properties:
+        name:
+          type: string
+        sortOrder:
+          type: integer
+      required: [name]
+
+    PhotoUploadResult:
+      type: object
+      properties:
+        photoPath:
+          type: string
+      required: [photoPath]

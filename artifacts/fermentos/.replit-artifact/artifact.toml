@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "FermentOS"
+version = "1.0.0"
+id = "artifacts/brewmaster"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23975
+
+[services.development]
+run = "pnpm --filter @workspace/fermentos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fermentos", "run", "build" ]
+publicDir = "artifacts/fermentos/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23975"
+BASE_PATH = "/"

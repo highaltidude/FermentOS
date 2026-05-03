@@ -1,7 +1,38 @@
 import { Link, useRoute } from "wouter";
-import { Beer, BookOpen, Package, LayoutDashboard, Wrench, Settings } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Beer, BookOpen, Package, LayoutDashboard, Wrench, Settings, Sun, Moon } from "lucide-react";
 
 const logoUrl = `${import.meta.env.BASE_URL}fermentos-logo.png`;
+
+// Theme toggle. Persists choice in localStorage and toggles the `dark` class
+// on <html>. The initial class is set by an inline script in index.html before
+// React mounts to avoid a light-mode flash for users who picked dark.
+function ThemeToggle() {
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) root.classList.add("dark");
+    else root.classList.remove("dark");
+    try {
+      localStorage.setItem("fermentos-theme", isDark ? "dark" : "light");
+    } catch {
+      // localStorage may be unavailable (privacy mode); UI still works for the session.
+    }
+  }, [isDark]);
+  return (
+    <button
+      type="button"
+      onClick={() => setIsDark((v) => !v)}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className="fixed top-3 right-3 z-40 inline-flex items-center justify-center h-9 w-9 rounded-md bg-card border border-border text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+    >
+      {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
+  );
+}
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -58,6 +89,7 @@ function BottomNavItem({ href, label, icon: Icon }: { href: string; label: strin
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
+      <ThemeToggle />
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-56 shrink-0 bg-sidebar border-r border-sidebar-border flex-col">
         <div className="px-4 py-4 border-b border-sidebar-border flex justify-center">

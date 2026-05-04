@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Plus, X } from "lucide-react";
-import { useCreateRecipe, useAddRecipeIngredient, useAddRecipeStep, useDeleteRecipe, useListBeerStyles, getGetRecipeQueryKey } from "@workspace/api-client-react";
+import { useCreateRecipe, useAddRecipeIngredient, useAddRecipeStep, useDeleteRecipe, useListBeerStyles, useListInventory, getGetRecipeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
 
 function StyleSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { data: styles } = useListBeerStyles();
@@ -82,6 +83,8 @@ export default function NewRecipe() {
 
   const [ingredients, setIngredients] = useState<PendingIngredient[]>([emptyIngredient()]);
   const [steps, setSteps] = useState<PendingStep[]>([emptyStep()]);
+
+  const { data: inventoryItems = [] } = useListInventory({});
 
   const createMutation = useCreateRecipe();
   const addIngredientMutation = useAddRecipeIngredient();
@@ -237,7 +240,17 @@ export default function NewRecipe() {
           {ingredients.map((ing, i) => (
             <div key={i} className="space-y-2 pb-3 border-b border-border last:border-0 last:pb-0">
               <div className="flex gap-2 items-center">
-                <Input className="flex-1 text-sm min-w-0" placeholder="Ingredient name" value={ing.name} onChange={(e) => updateIngredient(i, "name", e.target.value)} />
+                <IngredientNameCombobox
+                  className="flex-1 min-w-0"
+                  value={ing.name}
+                  onChange={(v) => updateIngredient(i, "name", v)}
+                  onSelect={(item) => {
+                    const updated = [...ingredients];
+                    updated[i] = { ...updated[i], name: item.name, type: item.type, unit: item.unit };
+                    setIngredients(updated);
+                  }}
+                  suggestions={inventoryItems}
+                />
                 <button type="button" onClick={() => removeIngredientRow(i)} className="shrink-0 text-muted-foreground hover:text-destructive transition-colors p-1">
                   <X className="w-4 h-4" />
                 </button>

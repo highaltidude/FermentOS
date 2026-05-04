@@ -13,8 +13,10 @@ import {
   useDeleteRecipeStep,
   useReorderRecipeSteps,
   useListBeerStyles,
+  useListInventory,
   getGetRecipeQueryKey,
 } from "@workspace/api-client-react";
+import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -387,6 +389,7 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
   const [notes, setNotes] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { data: inventoryItems = [] } = useListInventory({});
   const addMutation = useAddRecipeIngredient({
     mutation: {
       onSuccess: () => {
@@ -412,7 +415,12 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
   return (
     <form onSubmit={handleSubmit} className="bg-muted/50 rounded-lg p-3 space-y-3 border border-border">
       <div className="grid grid-cols-2 gap-2">
-        <Input placeholder="Ingredient name" value={name} onChange={(e) => setName(e.target.value)} className="text-sm" />
+        <IngredientNameCombobox
+          value={name}
+          onChange={setName}
+          onSelect={(item) => { setName(item.name); setType(item.type); setUnit(item.unit); }}
+          suggestions={inventoryItems}
+        />
         <div className="flex gap-2">
           <Input placeholder="Amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-sm w-24" />
           <Input placeholder="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} className="text-sm w-20" />

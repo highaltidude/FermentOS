@@ -128,7 +128,7 @@ export default function Inventory() {
 
   const createMutation = useCreateInventoryItem({
     mutation: {
-      onSuccess: () => { qc.invalidateQueries({ queryKey: getListInventoryQueryKey() }); setShowAdd(false); setForm(emptyForm()); toast({ title: "Item added to inventory" }); },
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getListInventoryQueryKey() }); setShowAdd(false); setForm(emptyForm()); toast({ title: "Item added to ingredients" }); },
     },
   });
 
@@ -200,7 +200,7 @@ export default function Inventory() {
     <div className="p-6 max-w-4xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Inventory</h1>
+          <h1 className="text-xl font-bold text-foreground">Ingredients</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{items?.length ?? 0} items on hand</p>
         </div>
         <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null); setForm(emptyForm(defaultUnit)); }}>
@@ -211,7 +211,7 @@ export default function Inventory() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input className="pl-8 text-sm h-9" placeholder="Search inventory..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-8 text-sm h-9" placeholder="Search ingredients..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <button onClick={() => setTypeFilter(undefined)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${!typeFilter ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>All</button>
@@ -289,7 +289,7 @@ export default function Inventory() {
         ) : (
           <div className="bg-card border border-card-border rounded-lg py-16 text-center">
             <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
-            <p className="text-sm font-medium text-foreground mb-1">Inventory is empty</p>
+            <p className="text-sm font-medium text-foreground mb-1">No ingredients yet</p>
             <p className="text-xs text-muted-foreground mb-4">Track your malts, hops, yeast, and more</p>
             <Button size="sm" onClick={() => setShowAdd(true)}>
               <Plus className="w-4 h-4 mr-1.5" />Add First Item

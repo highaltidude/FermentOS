@@ -1,6 +1,13 @@
 {
   "entries": [
     {
+      "hash": "68f3092",
+      "message": "docs: add unit system feature to README",
+      "commitDate": "2026-05-04 14:45:43 +0000",
+      "deployedAt": "2026-05-04T17:38:17.653Z",
+      "branch": "main"
+    },
+    {
       "hash": "e296aa5",
       "message": "Add specific malt types to inventory tracking for brewers",
       "commitDate": "2026-05-03 13:54:02 +0000",

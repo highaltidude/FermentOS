@@ -38,7 +38,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/brew-sessions", label: "Brew Log", icon: Beer },
-  { href: "/inventory", label: "Inventory", icon: Package },
+  { href: "/ingredients", label: "Ingredients", icon: Package },
   { href: "/equipment", label: "Equipment", icon: Wrench },
 ];
 
@@ -46,7 +46,7 @@ const bottomNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/brew-sessions", label: "Brew Log", icon: Beer },
-  { href: "/inventory", label: "Inventory", icon: Package },
+  { href: "/ingredients", label: "Ingredients", icon: Package },
   { href: "/equipment", label: "Equipment", icon: Wrench },
 ];
 
@@ -92,8 +92,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <ThemeToggle />
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-56 shrink-0 bg-sidebar border-r border-sidebar-border flex-col">
-        <div className="px-4 py-4 border-b border-sidebar-border flex justify-center">
-          <img src={logoUrl} alt="FermentOS" className="h-24 w-auto object-contain" />
+        <div className="px-4 py-4 border-b border-sidebar-border flex flex-col items-center gap-2">
+          <img src={logoUrl} alt="FermentOS" className="h-20 w-auto object-contain" />
+          <span className="text-sm font-semibold tracking-wide text-sidebar-foreground">FermentOS</span>
         </div>
         <nav className="flex-1 px-2 py-3 space-y-0.5">
           {navItems.map((item) => (

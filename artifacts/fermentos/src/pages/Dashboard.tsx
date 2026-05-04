@@ -97,7 +97,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">Brewery Overview</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Track your brews, recipes, and inventory</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Track your brews, recipes, and ingredients</p>
         </div>
         <Link href="/brew-sessions/new">
           <Button size="sm">
@@ -116,7 +116,7 @@ export default function Dashboard() {
             <StatCard label="Active Brews" value={summary?.activeBrewCount ?? 0} icon={Beer} color="bg-amber-50 text-amber-700" />
             <StatCard label="Total Recipes" value={summary?.totalRecipes ?? 0} icon={BookOpen} color="bg-green-50 text-green-700" />
             <StatCard label="Brew Sessions" value={summary?.totalBrewSessions ?? 0} icon={Beer} color="bg-blue-50 text-blue-700" />
-            <StatCard label="Inventory Items" value={summary?.inventoryItemCount ?? 0} icon={Package} color="bg-purple-50 text-purple-700" />
+            <StatCard label="Ingredients" value={summary?.inventoryItemCount ?? 0} icon={Package} color="bg-purple-50 text-purple-700" />
           </>
         )}
       </div>

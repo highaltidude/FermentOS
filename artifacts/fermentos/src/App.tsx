@@ -35,7 +35,7 @@ function Router() {
         <Route path="/brew-sessions/new" component={NewBrewSession} />
         <Route path="/brew-sessions/:id" component={BrewSessionDetail} />
         <Route path="/brew-sessions" component={BrewSessions} />
-        <Route path="/inventory" component={Inventory} />
+        <Route path="/ingredients" component={Inventory} />
         <Route path="/equipment" component={Equipment} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />

@@ -1774,9 +1774,9 @@ function InventoryEnforcementPanel() {
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3 p-3 rounded-md border border-border bg-background">
         <div className="space-y-0.5">
-          <div className="text-sm font-medium text-foreground">Require inventory to start a brew</div>
+          <div className="text-sm font-medium text-foreground">Require ingredients to start a brew</div>
           <div className="text-xs text-muted-foreground">
-            When enabled, starting a brew session linked to a recipe will check that all ingredients are in stock and deduct them from inventory. Sessions without a linked recipe are unaffected.
+            When enabled, starting a brew session linked to a recipe will check that all ingredients are on hand and deduct them. Sessions without a linked recipe are unaffected.
           </div>
         </div>
         <button
@@ -1792,7 +1792,7 @@ function InventoryEnforcementPanel() {
       </div>
       <div className="flex items-start gap-2 text-xs text-muted-foreground rounded-md border border-dashed border-border p-3">
         <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-        <span>Inventory items are matched by name + type + unit. If a recipe calls for "Cascade hops · oz" but you only have it stored as "g", the check will fail. Keep names and units consistent across recipes and inventory for this to work smoothly.</span>
+        <span>Ingredients are matched by name + type + unit. If a recipe calls for "Cascade hops · oz" but you only have it stored as "g", the check will fail. Keep names and units consistent across recipes and ingredients for this to work smoothly.</span>
       </div>
     </div>
   );
@@ -1933,7 +1933,7 @@ export default function Settings() {
                 <h2 className="text-sm font-semibold text-foreground">Unit System</h2>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Choose which units appear in the inventory form. Affects new entries only — existing inventory items keep their current units.
+                Choose which units appear in the ingredients form. Affects new entries only — existing ingredient items keep their current units.
               </p>
             </div>
             <div className="p-4">
@@ -1945,10 +1945,10 @@ export default function Settings() {
             <div className="px-4 py-3 border-b border-card-border">
               <div className="flex items-center gap-2">
                 <Package className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Inventory Enforcement</h2>
+                <h2 className="text-sm font-semibold text-foreground">Ingredient Enforcement</h2>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Optionally require ingredients to be in inventory (and deduct them) when starting a brew session from a recipe.
+                Optionally require ingredients to be on hand (and deduct them) when starting a brew session from a recipe.
               </p>
             </div>
             <div className="p-4">

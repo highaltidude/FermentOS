@@ -267,6 +267,22 @@ export interface CreateFermentationReadingBody {
   notes?: string | null;
 }
 
+export type UnitSystem = (typeof UnitSystem)[keyof typeof UnitSystem];
+
+export const UnitSystem = {
+  imperial: "imperial",
+  metric: "metric",
+  both: "both",
+} as const;
+
+export interface UnitSystemResponse {
+  system: UnitSystem;
+}
+
+export interface UnitSystemBody {
+  system: UnitSystem;
+}
+
 export type MaltType = (typeof MaltType)[keyof typeof MaltType];
 
 export const MaltType = {

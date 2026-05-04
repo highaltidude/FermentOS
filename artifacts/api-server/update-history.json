@@ -1,6 +1,13 @@
 {
   "entries": [
     {
+      "hash": "e296aa5",
+      "message": "Add specific malt types to inventory tracking for brewers",
+      "commitDate": "2026-05-03 13:54:02 +0000",
+      "deployedAt": "2026-05-03T15:03:07.933Z",
+      "branch": "main"
+    },
+    {
       "hash": "62b6ff6",
       "message": "Add a dark mode toggle to the application interface",
       "commitDate": "2026-05-03 06:05:55 +0000",

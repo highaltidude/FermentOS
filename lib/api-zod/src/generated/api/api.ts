@@ -857,6 +857,24 @@ export const DeleteBeerStyleParams = zod.object({
 });
 
 /**
+ * @summary Get the unit system preference
+ */
+export const GetUnitSystemResponse = zod.object({
+  system: zod.enum(["imperial", "metric", "both"]),
+});
+
+/**
+ * @summary Set the unit system preference
+ */
+export const SetUnitSystemBody = zod.object({
+  system: zod.enum(["imperial", "metric", "both"]),
+});
+
+export const SetUnitSystemResponse = zod.object({
+  system: zod.enum(["imperial", "metric", "both"]),
+});
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({

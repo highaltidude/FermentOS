@@ -46,6 +46,8 @@ import type {
   RecipeWithIngredients,
   ReorderRecipeStepsBody,
   StyleCount,
+  UnitSystemBody,
+  UnitSystemResponse,
   UpcomingBrew,
   UpdateBrewSessionBody,
   UpdateEquipmentBody,
@@ -2712,6 +2714,167 @@ export const useDeleteBeerStyle = <
   TContext
 > => {
   return useMutation(getDeleteBeerStyleMutationOptions(options));
+};
+
+/**
+ * @summary Get the unit system preference
+ */
+export const getGetUnitSystemUrl = () => {
+  return `/api/settings/unit-system`;
+};
+
+export const getUnitSystem = async (
+  options?: RequestInit,
+): Promise<UnitSystemResponse> => {
+  return customFetch<UnitSystemResponse>(getGetUnitSystemUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUnitSystemQueryKey = () => {
+  return [`/api/settings/unit-system`] as const;
+};
+
+export const getGetUnitSystemQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUnitSystem>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUnitSystem>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUnitSystemQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUnitSystem>>> = ({
+    signal,
+  }) => getUnitSystem({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUnitSystem>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUnitSystemQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUnitSystem>>
+>;
+export type GetUnitSystemQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the unit system preference
+ */
+
+export function useGetUnitSystem<
+  TData = Awaited<ReturnType<typeof getUnitSystem>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUnitSystem>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUnitSystemQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set the unit system preference
+ */
+export const getSetUnitSystemUrl = () => {
+  return `/api/settings/unit-system`;
+};
+
+export const setUnitSystem = async (
+  unitSystemBody: UnitSystemBody,
+  options?: RequestInit,
+): Promise<UnitSystemResponse> => {
+  return customFetch<UnitSystemResponse>(getSetUnitSystemUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(unitSystemBody),
+  });
+};
+
+export const getSetUnitSystemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setUnitSystem>>,
+    TError,
+    { data: BodyType<UnitSystemBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setUnitSystem>>,
+  TError,
+  { data: BodyType<UnitSystemBody> },
+  TContext
+> => {
+  const mutationKey = ["setUnitSystem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setUnitSystem>>,
+    { data: BodyType<UnitSystemBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setUnitSystem(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetUnitSystemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setUnitSystem>>
+>;
+export type SetUnitSystemMutationBody = BodyType<UnitSystemBody>;
+export type SetUnitSystemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the unit system preference
+ */
+export const useSetUnitSystem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setUnitSystem>>,
+    TError,
+    { data: BodyType<UnitSystemBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setUnitSystem>>,
+  TError,
+  { data: BodyType<UnitSystemBody> },
+  TContext
+> => {
+  return useMutation(getSetUnitSystemMutationOptions(options));
 };
 
 /**

@@ -6,6 +6,7 @@ import {
   isInventoryEnforcementEnabled,
   setInventoryEnforcementEnabled,
 } from "../services/inventoryEnforcement";
+import { getUnitSystem, setUnitSystem, isUnitSystem } from "../services/unitSystem";
 
 const router = Router();
 
@@ -21,6 +22,20 @@ router.put("/settings/inventory-enforcement", async (req, res) => {
   }
   await setInventoryEnforcementEnabled(enabled);
   return res.json({ enabled });
+});
+
+router.get("/settings/unit-system", async (_req, res) => {
+  const system = await getUnitSystem();
+  return res.json({ system });
+});
+
+router.put("/settings/unit-system", async (req, res) => {
+  const { system } = req.body as { system: unknown };
+  if (!isUnitSystem(system)) {
+    return res.status(400).json({ error: "system must be 'imperial', 'metric', or 'both'" });
+  }
+  await setUnitSystem(system);
+  return res.json({ system });
 });
 
 router.get("/settings/styles", async (_req, res) => {

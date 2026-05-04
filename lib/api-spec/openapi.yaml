@@ -554,6 +554,36 @@ paths:
         "204":
           description: Deleted
 
+  /settings/unit-system:
+    get:
+      operationId: getUnitSystem
+      tags: [settings]
+      summary: Get the unit system preference
+      responses:
+        "200":
+          description: Current unit system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnitSystemResponse"
+    put:
+      operationId: setUnitSystem
+      tags: [settings]
+      summary: Set the unit system preference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnitSystemBody"
+      responses:
+        "200":
+          description: Updated unit system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnitSystemResponse"
+
   /inventory:
     get:
       operationId: listInventory
@@ -1239,6 +1269,24 @@ components:
           type: string
           nullable: true
       required: [readingAt]
+
+    UnitSystem:
+      type: string
+      enum: [imperial, metric, both]
+
+    UnitSystemResponse:
+      type: object
+      properties:
+        system:
+          $ref: "#/components/schemas/UnitSystem"
+      required: [system]
+
+    UnitSystemBody:
+      type: object
+      properties:
+        system:
+          $ref: "#/components/schemas/UnitSystem"
+      required: [system]
 
     MaltType:
       type: string

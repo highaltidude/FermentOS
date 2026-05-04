@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Search, Package, Pencil, Trash2, Check, X } from "lucide-react";
 import { useListInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem, getListInventoryQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,8 +23,33 @@ const TYPE_COLORS: Record<string, string> = {
   other: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
-const emptyForm = () => ({
-  name: "", type: "malt", maltType: "", amount: "", unit: "lbs",
+type UnitSystem = "imperial" | "metric" | "both";
+
+const UNITS_BY_SYSTEM: Record<UnitSystem, string[]> = {
+  imperial: ["lbs", "oz", "gal", "qt", "pt", "fl oz", "tsp", "tbsp", "pkg", "each"],
+  metric:   ["kg", "g", "L", "mL", "tsp", "tbsp", "pkg", "each"],
+  both:     ["lbs", "oz", "kg", "g", "gal", "qt", "pt", "fl oz", "L", "mL", "tsp", "tbsp", "pkg", "each"],
+};
+
+function useUnitOptions(): { unitOptions: string[]; defaultUnit: string; loading: boolean } {
+  const [system, setSystem] = useState<UnitSystem>("imperial");
+  const [loading, setLoading] = useState(true);
+  const BASE = import.meta.env.BASE_URL as string;
+
+  useEffect(() => {
+    fetch(`${BASE}api/settings/unit-system`)
+      .then((r) => r.json())
+      .then((d: { system: UnitSystem }) => { if (d.system) setSystem(d.system); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [BASE]);
+
+  const unitOptions = UNITS_BY_SYSTEM[system];
+  return { unitOptions, defaultUnit: unitOptions[0], loading };
+}
+
+const emptyForm = (defaultUnit = "lbs") => ({
+  name: "", type: "malt", maltType: "", amount: "", unit: defaultUnit,
   purchasedDate: "", expiryDate: "", supplier: "", notes: "",
 });
 
@@ -48,16 +73,21 @@ interface InventoryFormProps {
   isPending: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  unitOptions: string[];
 }
 
-function InventoryForm({ form, setForm, isEdit = false, isPending, onSubmit, onCancel }: InventoryFormProps) {
+function InventoryForm({ form, setForm, isEdit = false, isPending, onSubmit, onCancel, unitOptions }: InventoryFormProps) {
+  const allUnits = unitOptions.includes(form.unit) ? unitOptions : [form.unit, ...unitOptions];
   return (
     <form onSubmit={onSubmit} className="bg-muted/50 rounded-lg p-3 space-y-3 border border-border">
       <div className="grid grid-cols-2 gap-2">
         <Input placeholder="Name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="text-sm col-span-2" />
         <div className="flex gap-2">
           <Input placeholder="Amount *" type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="text-sm w-24" />
-          <Input placeholder="Unit" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="text-sm w-20" />
+          <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
+            <SelectTrigger className="text-sm h-9 w-24"><SelectValue /></SelectTrigger>
+            <SelectContent>{allUnits.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
         <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, maltType: "" })}>
           <SelectTrigger className="text-sm h-9"><SelectValue /></SelectTrigger>
@@ -89,7 +119,8 @@ export default function Inventory() {
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState(emptyForm());
+  const { unitOptions, defaultUnit } = useUnitOptions();
+  const [form, setForm] = useState(() => emptyForm(defaultUnit));
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -172,7 +203,7 @@ export default function Inventory() {
           <h1 className="text-xl font-bold text-foreground">Inventory</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{items?.length ?? 0} items on hand</p>
         </div>
-        <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null); setForm(emptyForm()); }}>
+        <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null); setForm(emptyForm(defaultUnit)); }}>
           <Plus className="w-4 h-4 mr-1.5" />Add Item
         </Button>
       </div>
@@ -199,6 +230,7 @@ export default function Inventory() {
           isPending={createMutation.isPending}
           onSubmit={handleCreate}
           onCancel={handleCancel}
+          unitOptions={unitOptions}
         />
       )}
 
@@ -216,6 +248,7 @@ export default function Inventory() {
                   isPending={updateMutation.isPending}
                   onSubmit={handleUpdate(item.id)}
                   onCancel={handleCancel}
+                  unitOptions={unitOptions}
                 />
               ) : (
                 <div className="bg-card border border-card-border rounded-lg px-4 py-3 flex items-center gap-4 hover:border-primary/30 transition-colors group">

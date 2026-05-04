@@ -16,7 +16,7 @@ A self-hosted web app for home brewers to manage recipes, log brew sessions, tra
 *Inventory — keep tabs on malts, hops, yeast, and adjuncts with expiration tracking*
 
 ![Settings](docs/screenshots/settings.jpg)
-*Settings — manage beer styles, inventory enforcement, scheduled SFTP backups, in-app updates, and host reboots*
+*Settings — manage beer styles, unit system, inventory enforcement, scheduled SFTP backups, in-app updates, and host reboots*
 
 ## Brew session lifecycle
 
@@ -44,8 +44,9 @@ logging) leave `plannedDate` null.
 - **Response & Stage History** — Every brew session records a timestamped log each time the status changes, always visible on the session page
 - **Tasting Notes & Photo** — Attach a photo, star rating, and tasting notes to any session
 - **Fermentation Tracker** — Record temperature, gravity, and pH readings over time with an interactive chart
-- **Ingredient Inventory** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates
+- **Ingredient Inventory** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. The unit field is a dropdown filtered by your unit system preference
 - **Beer Styles** — Define your own style list (Settings) used as a dropdown when creating recipes
+- **Unit System** — Choose Imperial, Metric, or Both in Settings → Brewing. Controls which units appear in the inventory form; existing items keep their stored units
 - **Dashboard** — At-a-glance view of active fermentations and recent sessions
 
 ## Tech Stack
@@ -363,6 +364,33 @@ When you create a session in `scheduled` state, `brewDate` holds your *intended*
 ```json
 { "name": "American IPA", "sortOrder": 1 }
 ```
+
+---
+
+### Settings — Unit System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/settings/unit-system` | Get the current unit system preference |
+| PUT | `/api/settings/unit-system` | Set the unit system preference |
+
+**GET /api/settings/unit-system** response:
+```json
+{ "system": "imperial" }
+```
+
+**PUT /api/settings/unit-system** body:
+```json
+{ "system": "metric" }
+```
+`system`: `imperial` | `metric` | `both`
+
+Unit lists by system:
+- `imperial` — lbs, oz, gal, qt, pt, fl oz, tsp, tbsp, pkg, each
+- `metric` — kg, g, L, mL, tsp, tbsp, pkg, each
+- `both` — all of the above combined
+
+The preference is stored in the database and defaults to `imperial` on a fresh install. Changing it only affects the dropdown options shown in the inventory form — existing inventory items keep whatever unit was stored when they were created.
 
 ---
 

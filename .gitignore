@@ -57,3 +57,7 @@ attached_assets/
 
 # Local agent metadata
 .agents/
+
+# Mockup sandbox — design exploration only, not part of the product
+artifacts/mockup-sandbox/src/components/mockups/
+artifacts/mockup-sandbox/src/.generated/

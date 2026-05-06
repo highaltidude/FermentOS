@@ -61,3 +61,6 @@ attached_assets/
 # Mockup sandbox — design exploration only, not part of the product
 artifacts/mockup-sandbox/src/components/mockups/
 artifacts/mockup-sandbox/src/.generated/
+
+# Runtime data files — written by the app on the host, not version-controlled
+artifacts/api-server/update-history.json

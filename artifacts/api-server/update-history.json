@@ -1,6 +1,13 @@
 {
   "entries": [
     {
+      "hash": "4e8f176",
+      "message": "feat: ingredient autocomplete when adding to recipes",
+      "commitDate": "2026-05-04 18:05:43 +0000",
+      "deployedAt": "2026-05-05T00:01:46.865Z",
+      "branch": "main"
+    },
+    {
       "hash": "60a9fc9",
       "message": "ui: add FermentOS wordmark below logo; rename Inventory → Ingredients",
       "commitDate": "2026-05-04 17:42:02 +0000",

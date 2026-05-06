@@ -12,11 +12,11 @@ A self-hosted web app for home brewers to manage recipes, log brew sessions, tra
 | ![Recipes](docs/screenshots/recipes.jpg) | ![Brew Log](docs/screenshots/brew-sessions.jpg) |
 | Browse and search your recipe book | Track every batch from grain to glass |
 
-![Inventory](docs/screenshots/inventory.jpg)
-*Inventory — keep tabs on malts, hops, yeast, and adjuncts with expiration tracking*
+![Ingredients](docs/screenshots/inventory.jpg)
+*Ingredients — keep tabs on malts, hops, yeast, and adjuncts with expiration tracking*
 
 ![Settings](docs/screenshots/settings.jpg)
-*Settings — manage beer styles, unit system, inventory enforcement, scheduled SFTP backups, in-app updates, and host reboots*
+*Settings — manage beer styles, unit system, ingredient enforcement, scheduled SFTP backups, API access, in-app updates, and host reboots*
 
 ## Brew session lifecycle
 
@@ -44,7 +44,7 @@ logging) leave `plannedDate` null.
 - **Response & Stage History** — Every brew session records a timestamped log each time the status changes, always visible on the session page
 - **Tasting Notes & Photo** — Attach a photo, star rating, and tasting notes to any session
 - **Fermentation Tracker** — Record temperature, gravity, and pH readings over time with an interactive chart
-- **Ingredient Inventory** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. The unit field is a dropdown filtered by your unit system preference
+- **Ingredients** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. The unit field is a dropdown filtered by your unit system preference
 - **Beer Styles** — Define your own style list (Settings) used as a dropdown when creating recipes
 - **Unit System** — Choose Imperial, Metric, or Both in Settings → Brewing. Controls which units appear in the inventory form; existing items keep their stored units
 - **Dashboard** — At-a-glance view of active fermentations and recent sessions

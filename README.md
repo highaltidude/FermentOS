@@ -192,7 +192,31 @@ serve -s artifacts/fermentos/dist/public -l 3000
 
 All endpoints are prefixed with `/api`. Replace `<host>` with your host's address (e.g. `http://192.168.1.239:8080`).
 
-No authentication is required — the API is designed for trusted local network use.
+### Authentication
+
+By default no authentication is required — the API is designed for trusted local network use.
+
+You can optionally enable **API token lockdown** under **Settings → Security → API Access**. When enabled, all external clients (scripts, Home Assistant, integrations) must supply a token. Browser requests from the FermentOS UI itself continue to work without a token.
+
+**Generating a token:** Settings → Security → API Access → enter a name → Create Token. Copy the token immediately — it is only shown once.
+
+**Using a token** (either header works):
+```
+Authorization: Bearer <token>
+X-Api-Key: <token>
+```
+
+**Home Assistant example:**
+```yaml
+sensor:
+  - platform: rest
+    name: "FermentOS Active Brews"
+    resource: http://192.168.1.239:8080/api/dashboard/summary
+    headers:
+      Authorization: "Bearer <token>"
+    value_template: "{{ value_json.activeBrews }}"
+    scan_interval: 300
+```
 
 ---
 

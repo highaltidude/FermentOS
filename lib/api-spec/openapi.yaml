@@ -753,7 +753,7 @@ components:
 
     BrewStatus:
       type: string
-      enum: [scheduled, brewing, fermenting, conditioning, packaged, complete]
+      enum: [brew_day, fermenting, conditioning, packaged]
 
     IngredientType:
       type: string

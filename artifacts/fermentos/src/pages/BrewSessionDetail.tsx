@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, Play } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star } from "lucide-react";
 import {
   useGetBrewSession,
   useUpdateBrewSession,
@@ -22,20 +22,21 @@ import {
 } from "recharts";
 
 const STATUS_COLORS: Record<string, string> = {
-  scheduled: "bg-slate-100 text-slate-700 border-slate-200",
-  brewing: "bg-amber-100 text-amber-800 border-amber-200",
+  brew_day: "bg-amber-100 text-amber-800 border-amber-200",
   fermenting: "bg-green-100 text-green-800 border-green-200",
   conditioning: "bg-blue-100 text-blue-800 border-blue-200",
   packaged: "bg-purple-100 text-purple-800 border-purple-200",
-  complete: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-// Full set of statuses (for the edit-form select).
-const STATUSES = ["scheduled", "brewing", "fermenting", "conditioning", "packaged", "complete"];
-// Stage progression bar — "scheduled" is excluded because it's a pre-brew
-// state, not an active stage of the brew. Scheduled sessions show a dedicated
-// "Start brew" CTA instead.
-const STATUS_ORDER = ["brewing", "fermenting", "conditioning", "packaged", "complete"];
+const STATUS_LABELS: Record<string, string> = {
+  brew_day: "Brew Day",
+  fermenting: "Fermenting",
+  conditioning: "Conditioning",
+  packaged: "Packaged",
+};
+
+const STATUSES = ["brew_day", "fermenting", "conditioning", "packaged"];
+const STATUS_ORDER = ["brew_day", "fermenting", "conditioning", "packaged"];
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: string; onStatusChange: (s: string) => void; isPending?: boolean }) {
   const idx = STATUS_ORDER.indexOf(status);
@@ -49,7 +50,7 @@ function StatusProgress({ status, onStatusChange, isPending }: { status: string;
             className={`flex items-center gap-1 rounded px-1 py-0.5 transition-colors group ${s === status ? "cursor-default" : "hover:bg-muted cursor-pointer"} ${isPending ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             <div className={`w-2 h-2 rounded-full transition-colors ${i <= idx ? "bg-primary" : "bg-muted-foreground/30"} ${s !== status && !isPending ? "group-hover:bg-primary/60" : ""}`} />
-            <span className={`${i <= idx ? "text-foreground font-medium" : "text-muted-foreground"} ${s !== status && !isPending ? "group-hover:text-foreground" : ""}`}>{s}</span>
+            <span className={`${i <= idx ? "text-foreground font-medium" : "text-muted-foreground"} ${s !== status && !isPending ? "group-hover:text-foreground" : ""}`}>{STATUS_LABELS[s] ?? s}</span>
           </button>
           {i < STATUS_ORDER.length - 1 && <div className={`w-4 h-px ${i < idx ? "bg-primary" : "bg-muted-foreground/30"}`} />}
         </div>
@@ -113,7 +114,7 @@ export default function BrewSessionDetail() {
 
   const quickStatusMutation = useUpdateBrewSession({
     mutation: {
-      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); toast({ title: `Status → ${data.status}` }); },
+      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); toast({ title: `Status → ${STATUS_LABELS[data.status] ?? data.status}` }); },
     },
   });
 
@@ -125,31 +126,6 @@ export default function BrewSessionDetail() {
         recipeName: session.recipeName,
         status: newStatus as any,
         brewDate: session.brewDate,
-        batchSizeGallons: session.batchSizeGallons,
-        originalGravityActual: session.originalGravityActual ?? undefined,
-        finalGravityActual: session.finalGravityActual ?? undefined,
-        abvActual: session.abvActual ?? undefined,
-        rating: session.rating ?? undefined,
-        notes: session.notes ?? undefined,
-      },
-    });
-  };
-
-  // Transition a "scheduled" session into "brewing". The previously scheduled
-  // brewDate is preserved in plannedDate so analytics can compare intent vs
-  // actual; brewDate is overwritten with today (the real start) so duration
-  // math anchors on when fermentables actually hit the kettle.
-  const handleStartBrew = () => {
-    if (!session) return;
-    if (!confirm(`Start this brew now?\n\nThe brew date will be set to today and the original planned date (${formatDate(session.brewDate)}) will be saved for reference.`)) return;
-    const today = new Date().toISOString().split("T")[0]!;
-    quickStatusMutation.mutate({
-      id,
-      data: {
-        recipeName: session.recipeName,
-        status: "brewing" as any,
-        brewDate: today,
-        plannedDate: session.brewDate,
         batchSizeGallons: session.batchSizeGallons,
         originalGravityActual: session.originalGravityActual ?? undefined,
         finalGravityActual: session.finalGravityActual ?? undefined,
@@ -358,7 +334,7 @@ export default function BrewSessionDetail() {
         {!editing ? (
           <>
             <div className="flex items-center gap-2 mb-3">
-              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[session.status]}`}>{session.status}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[session.status] ?? ""}`}>{STATUS_LABELS[session.status] ?? session.status}</span>
               {session.rating && (
                 <span className="flex items-center gap-0.5">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -367,29 +343,14 @@ export default function BrewSessionDetail() {
                 </span>
               )}
             </div>
-            {session.status === "scheduled" ? (
-              <div className="mb-3 flex items-start gap-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">Not started yet</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Scheduled for {formatDate(session.brewDate)}. Start the brew to begin the stage timeline — today's date will be saved as the actual brew date.
-                  </div>
-                </div>
-                <Button size="sm" onClick={handleStartBrew} disabled={quickStatusMutation.isPending} className="shrink-0">
-                  <Play className="w-3.5 h-3.5 mr-1.5" />
-                  Start brew
-                </Button>
-              </div>
-            ) : (
-              <div className="mb-3 overflow-x-auto">
-                <StatusProgress status={session.status} onStatusChange={handleStatusClick} isPending={quickStatusMutation.isPending} />
-              </div>
-            )}
+            <div className="mb-3 overflow-x-auto">
+              <StatusProgress status={session.status} onStatusChange={handleStatusClick} isPending={quickStatusMutation.isPending} />
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
               <div>
-                <div className="text-xs text-muted-foreground">{session.status === "scheduled" ? "Scheduled For" : "Brew Date"}</div>
+                <div className="text-xs text-muted-foreground">Brew Date</div>
                 <div className="text-sm font-medium">{formatDate(session.brewDate)}</div>
-                {session.plannedDate && session.status !== "scheduled" && (
+                {session.plannedDate && (
                   <div className="text-[10px] text-muted-foreground mt-0.5">planned {formatDate(session.plannedDate)}</div>
                 )}
               </div>
@@ -407,7 +368,7 @@ export default function BrewSessionDetail() {
               <div><label className="text-xs text-muted-foreground mb-1 block">Status</label>
                 <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><label className="text-xs text-muted-foreground mb-1 block">Brew Date</label><Input type="date" value={editForm.brewDate} onChange={(e) => setEditForm({ ...editForm, brewDate: e.target.value })} /></div>
@@ -565,7 +526,7 @@ export default function BrewSessionDetail() {
                   <div key={entry.id} className="flex items-start gap-3 pl-1 group">
                     <div className="w-3.5 h-3.5 rounded-full bg-primary border-2 border-background ring-1 ring-primary shrink-0 mt-0.5 z-10" />
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_COLORS[entry.status]}`}>{entry.status}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_COLORS[entry.status] ?? ""}`}>{STATUS_LABELS[entry.status] ?? entry.status}</span>
                       <span className="text-xs text-muted-foreground">
                         {new Date(entry.changedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
                       </span>

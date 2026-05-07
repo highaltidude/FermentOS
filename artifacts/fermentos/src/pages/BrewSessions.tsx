@@ -6,20 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const STATUS_COLORS: Record<string, string> = {
-  scheduled: "bg-slate-100 text-slate-700 border-slate-200",
-  brewing: "bg-amber-100 text-amber-800 border-amber-200",
+  brew_day: "bg-amber-100 text-amber-800 border-amber-200",
   fermenting: "bg-green-100 text-green-800 border-green-200",
   conditioning: "bg-blue-100 text-blue-800 border-blue-200",
   packaged: "bg-purple-100 text-purple-800 border-purple-200",
-  complete: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-// Filter pills include "scheduled" as a separate bucket so the user can find
-// brews they've drafted but not started. The actual stage progression bar (in
-// BrewSessionDetail) excludes it because it's a pre-brew state, not a stage.
-const STATUS_ORDER = ["scheduled", "brewing", "fermenting", "conditioning", "packaged", "complete"];
+const STATUS_LABELS: Record<string, string> = {
+  brew_day: "Brew Day",
+  fermenting: "Fermenting",
+  conditioning: "Conditioning",
+  packaged: "Packaged",
+};
 
-// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
+const STATUS_ORDER = ["brew_day", "fermenting", "conditioning", "packaged"];
+
 function formatDate(d: string) {
   const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
   return new Date(y!, (m ?? 1) - 1, day ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -54,7 +55,7 @@ export default function BrewSessions() {
             key={s}
             onClick={() => setStatusFilter(s === statusFilter ? undefined : s)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}
-          >{s}</button>
+          >{STATUS_LABELS[s] ?? s}</button>
         ))}
       </div>
 
@@ -71,8 +72,8 @@ export default function BrewSessions() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-foreground truncate">{session.recipeName}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_COLORS[session.status]}`}>
-                      {session.status}
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_COLORS[session.status] ?? ""}`}>
+                      {STATUS_LABELS[session.status] ?? session.status}
                     </span>
                     {session.rating && (
                       <span className="text-xs text-muted-foreground ml-auto">{"★".repeat(session.rating)}</span>

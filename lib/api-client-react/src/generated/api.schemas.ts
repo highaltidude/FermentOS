@@ -16,12 +16,10 @@ export interface ErrorResponse {
 export type BrewStatus = (typeof BrewStatus)[keyof typeof BrewStatus];
 
 export const BrewStatus = {
-  scheduled: "scheduled",
-  brewing: "brewing",
+  brew_day: "brew_day",
   fermenting: "fermenting",
   conditioning: "conditioning",
   packaged: "packaged",
-  complete: "complete",
 } as const;
 
 export type IngredientType =

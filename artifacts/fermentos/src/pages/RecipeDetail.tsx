@@ -488,7 +488,7 @@ export default function RecipeDetail() {
       data: {
         recipeId: recipe.id,
         recipeName: recipe.name,
-        status: "brewing",
+        status: "brew_day",
         brewDate: today,
         batchSizeGallons: recipe.batchSizeGallons,
         originalGravityActual: recipe.originalGravity ?? undefined,

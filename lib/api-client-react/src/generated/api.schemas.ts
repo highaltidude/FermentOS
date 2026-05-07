@@ -59,6 +59,9 @@ export interface Recipe {
   abv?: number | null;
   ibu?: number | null;
   colorSrm?: number | null;
+  estimatedBrewTimeMinutes?: number | null;
+  efficiencyPercent?: number | null;
+  caloriesPerServing?: number | null;
   notes?: string | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
@@ -139,6 +142,9 @@ export interface CreateRecipeBody {
   abv?: number | null;
   ibu?: number | null;
   colorSrm?: number | null;
+  estimatedBrewTimeMinutes?: number | null;
+  efficiencyPercent?: number | null;
+  caloriesPerServing?: number | null;
   notes?: string | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
@@ -156,6 +162,9 @@ export interface UpdateRecipeBody {
   abv?: number | null;
   ibu?: number | null;
   colorSrm?: number | null;
+  estimatedBrewTimeMinutes?: number | null;
+  efficiencyPercent?: number | null;
+  caloriesPerServing?: number | null;
   notes?: string | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Clock, Loader2 } from "lucide-react";
 import {
   useGetRecipe,
   useUpdateRecipe,
@@ -14,6 +14,7 @@ import {
   useReorderRecipeSteps,
   useListBeerStyles,
   useListInventory,
+  useCreateBrewSession,
   getGetRecipeQueryKey,
 } from "@workspace/api-client-react";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
@@ -461,6 +462,7 @@ export default function RecipeDetail() {
   const [editing, setEditing] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [showAddStep, setShowAddStep] = useState(false);
+  const [startingBrew, setStartingBrew] = useState(false);
 
   const { data: recipe, isLoading } = useGetRecipe(id, { query: { enabled: !!id, queryKey: getGetRecipeQueryKey(id) } });
 
@@ -470,6 +472,29 @@ export default function RecipeDetail() {
       onError: (err: unknown) => { toast({ title: "Failed to update recipe", description: String(err instanceof Error ? err.message : err), variant: "destructive" }); },
     },
   });
+
+  const createSessionMutation = useCreateBrewSession({
+    mutation: {
+      onSuccess: (session) => { navigate(`/brew-sessions/${session.id}`); toast({ title: "Brew session started!" }); },
+      onError: (err: unknown) => { toast({ title: "Failed to start session", description: String(err instanceof Error ? err.message : err), variant: "destructive" }); setStartingBrew(false); },
+    },
+  });
+
+  const handleStartBrewSession = () => {
+    if (!recipe) return;
+    setStartingBrew(true);
+    const today = new Date().toLocaleDateString("en-CA");
+    createSessionMutation.mutate({
+      data: {
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        status: "brewing",
+        brewDate: today,
+        batchSizeGallons: recipe.batchSizeGallons,
+        originalGravityActual: recipe.originalGravity ?? undefined,
+      },
+    });
+  };
 
   const deleteMutation = useDeleteRecipe({
     mutation: {
@@ -485,7 +510,12 @@ export default function RecipeDetail() {
     },
   });
 
-  const [form, setForm] = useState({ name: "", style: "", batchSizeGallons: "", originalGravity: "", finalGravity: "", abv: "", ibu: "", colorSrm: "", notes: "", daysPlanned: "", daysBrewing: "", daysFermenting: "", daysConditioning: "", daysPackaged: "" });
+  const [form, setForm] = useState({
+    name: "", style: "", batchSizeGallons: "", originalGravity: "", finalGravity: "",
+    abv: "", ibu: "", colorSrm: "", estimatedBrewTimeMinutes: "", efficiencyPercent: "",
+    caloriesPerServing: "", notes: "", daysPlanned: "", daysBrewing: "", daysFermenting: "",
+    daysConditioning: "", daysPackaged: "",
+  });
 
   const startEdit = () => {
     if (recipe) {
@@ -498,6 +528,9 @@ export default function RecipeDetail() {
         abv: recipe.abv != null ? String(recipe.abv) : "",
         ibu: recipe.ibu != null ? String(recipe.ibu) : "",
         colorSrm: recipe.colorSrm != null ? String(recipe.colorSrm) : "",
+        estimatedBrewTimeMinutes: recipe.estimatedBrewTimeMinutes != null ? String(recipe.estimatedBrewTimeMinutes) : "",
+        efficiencyPercent: recipe.efficiencyPercent != null ? String(recipe.efficiencyPercent) : "",
+        caloriesPerServing: recipe.caloriesPerServing != null ? String(recipe.caloriesPerServing) : "",
         notes: recipe.notes ?? "",
         daysPlanned: recipe.daysPlanned != null ? String(recipe.daysPlanned) : "",
         daysBrewing: recipe.daysBrewing != null ? String(recipe.daysBrewing) : "",
@@ -521,6 +554,9 @@ export default function RecipeDetail() {
         abv: form.abv ? Number(form.abv) : undefined,
         ibu: form.ibu ? Number(form.ibu) : undefined,
         colorSrm: form.colorSrm ? Number(form.colorSrm) : undefined,
+        estimatedBrewTimeMinutes: form.estimatedBrewTimeMinutes ? Number(form.estimatedBrewTimeMinutes) : undefined,
+        efficiencyPercent: form.efficiencyPercent ? Number(form.efficiencyPercent) : undefined,
+        caloriesPerServing: form.caloriesPerServing ? Number(form.caloriesPerServing) : undefined,
         notes: form.notes || undefined,
         daysPlanned: form.daysPlanned ? Number(form.daysPlanned) : undefined,
         daysBrewing: form.daysBrewing ? Number(form.daysBrewing) : undefined,
@@ -533,6 +569,17 @@ export default function RecipeDetail() {
 
   if (isLoading) return <div className="p-6"><Skeleton className="h-8 w-48 mb-4" /><Skeleton className="h-64 w-full" /></div>;
   if (!recipe) return <div className="p-6 text-muted-foreground">Recipe not found.</div>;
+
+  const formatBrewTime = (min: number) => {
+    if (min < 60) return `${min}m`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
+
+  const buGu = (recipe.ibu != null && recipe.originalGravity != null && recipe.originalGravity > 1)
+    ? (recipe.ibu / ((recipe.originalGravity - 1) * 1000)).toFixed(2)
+    : null;
 
   const grouped: Record<string, typeof recipe.ingredients> = {};
   (recipe.ingredients ?? []).forEach((ing) => {
@@ -549,6 +596,10 @@ export default function RecipeDetail() {
         {!editing ? (
           <>
             <h1 className="text-xl font-bold text-foreground flex-1">{recipe.name}</h1>
+            <Button size="sm" onClick={handleStartBrewSession} disabled={startingBrew} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              {startingBrew ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Beer className="w-3.5 h-3.5 mr-1.5" />}
+              Start Brew Session
+            </Button>
             <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="w-3.5 h-3.5 mr-1.5" />Edit</Button>
             <Button variant="destructive" size="sm" onClick={() => { if (confirm("Delete this recipe?")) deleteMutation.mutate({ id }); }}>
               <Trash2 className="w-3.5 h-3.5" />
@@ -572,14 +623,18 @@ export default function RecipeDetail() {
               <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">{recipe.style}</span>
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-3">
-              {[
+              {([
                 { label: "Batch Size", value: `${recipe.batchSizeGallons} gal` },
-                { label: "OG", value: recipe.originalGravity?.toFixed(3) },
-                { label: "FG", value: recipe.finalGravity?.toFixed(3) },
-                { label: "ABV", value: recipe.abv ? `${recipe.abv.toFixed(1)}%` : null },
-                { label: "IBU", value: recipe.ibu },
-                { label: "Color (SRM)", value: recipe.colorSrm },
-              ].map(({ label, value }) => value != null && (
+                { label: "OG", value: recipe.originalGravity?.toFixed(3) ?? null },
+                { label: "FG", value: recipe.finalGravity?.toFixed(3) ?? null },
+                { label: "ABV", value: recipe.abv != null ? `${recipe.abv.toFixed(1)}%` : null },
+                { label: "IBU", value: recipe.ibu != null ? String(recipe.ibu) : null },
+                { label: "Color (SRM)", value: recipe.colorSrm != null ? String(recipe.colorSrm) : null },
+                { label: "Efficiency", value: recipe.efficiencyPercent != null ? `${recipe.efficiencyPercent.toFixed(0)}%` : null },
+                { label: "Brew Time", value: recipe.estimatedBrewTimeMinutes != null ? formatBrewTime(recipe.estimatedBrewTimeMinutes) : null },
+                { label: "BU:GU", value: buGu },
+                { label: "Cal/Serving", value: recipe.caloriesPerServing != null ? String(recipe.caloriesPerServing) : null },
+              ] as { label: string; value: string | null }[]).map(({ label, value }) => value != null && (
                 <div key={label} className="text-center">
                   <div className="text-xs text-muted-foreground mb-0.5">{label}</div>
                   <div className="text-sm font-semibold text-foreground">{value}</div>
@@ -628,6 +683,9 @@ export default function RecipeDetail() {
               <div><label className="text-xs text-muted-foreground mb-1 block">ABV %</label><Input type="number" step="0.1" value={form.abv} onChange={(e) => setForm({ ...form, abv: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">IBU</label><Input type="number" value={form.ibu} onChange={(e) => setForm({ ...form, ibu: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">Color (SRM)</label><Input type="number" step="0.1" value={form.colorSrm} onChange={(e) => setForm({ ...form, colorSrm: e.target.value })} /></div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Brew Time (min)</label><Input type="number" min="0" value={form.estimatedBrewTimeMinutes} onChange={(e) => setForm({ ...form, estimatedBrewTimeMinutes: e.target.value })} placeholder="e.g., 270" /></div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Efficiency %</label><Input type="number" step="0.1" min="0" max="100" value={form.efficiencyPercent} onChange={(e) => setForm({ ...form, efficiencyPercent: e.target.value })} placeholder="e.g., 75" /></div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Cal/Serving</label><Input type="number" min="0" value={form.caloriesPerServing} onChange={(e) => setForm({ ...form, caloriesPerServing: e.target.value })} placeholder="e.g., 180" /></div>
             </div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Notes</label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></div>
             <div>

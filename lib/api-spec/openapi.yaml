@@ -789,6 +789,15 @@ components:
         colorSrm:
           type: number
           nullable: true
+        estimatedBrewTimeMinutes:
+          type: integer
+          nullable: true
+        efficiencyPercent:
+          type: number
+          nullable: true
+        caloriesPerServing:
+          type: integer
+          nullable: true
         notes:
           type: string
           nullable: true
@@ -925,6 +934,15 @@ components:
         colorSrm:
           type: number
           nullable: true
+        estimatedBrewTimeMinutes:
+          type: integer
+          nullable: true
+        efficiencyPercent:
+          type: number
+          nullable: true
+        caloriesPerServing:
+          type: integer
+          nullable: true
         notes:
           type: string
           nullable: true
@@ -968,6 +986,15 @@ components:
           nullable: true
         colorSrm:
           type: number
+          nullable: true
+        estimatedBrewTimeMinutes:
+          type: integer
+          nullable: true
+        efficiencyPercent:
+          type: number
+          nullable: true
+        caloriesPerServing:
+          type: integer
           nullable: true
         notes:
           type: string

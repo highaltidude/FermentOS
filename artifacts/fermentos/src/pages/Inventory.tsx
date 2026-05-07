@@ -55,15 +55,21 @@ const emptyForm = (defaultUnit = "lbs") => ({
 
 type InventoryFormData = ReturnType<typeof emptyForm>;
 
+// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
+function parseLocalDate(d: string): Date {
+  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, day ?? 1);
+}
+
 function isExpiringSoon(expiryDate: string | null | undefined) {
   if (!expiryDate) return false;
-  const diff = new Date(expiryDate).getTime() - Date.now();
+  const diff = parseLocalDate(expiryDate).getTime() - Date.now();
   return diff > 0 && diff < 1000 * 60 * 60 * 24 * 30;
 }
 
 function isExpired(expiryDate: string | null | undefined) {
   if (!expiryDate) return false;
-  return new Date(expiryDate).getTime() < Date.now();
+  return parseLocalDate(expiryDate).getTime() < Date.now();
 }
 
 interface InventoryFormProps {
@@ -270,7 +276,7 @@ export default function Inventory() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">{item.amount} {item.unit}</span>
                       {item.supplier && <span>{item.supplier}</span>}
-                      {item.expiryDate && <span>Exp: {new Date(item.expiryDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>}
+                      {item.expiryDate && <span>Exp: {parseLocalDate(item.expiryDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>}
                       {item.notes && <span className="truncate">{item.notes}</span>}
                     </div>
                   </div>

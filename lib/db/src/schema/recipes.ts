@@ -18,8 +18,8 @@ export const recipesTable = pgTable("recipes", {
   daysFermenting: integer("days_fermenting"),
   daysConditioning: integer("days_conditioning"),
   daysPackaged: integer("days_packaged"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const insertRecipeSchema = createInsertSchema(recipesTable).omit({ id: true, createdAt: true, updatedAt: true });

@@ -3,21 +3,18 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { recipesTable } from "./recipes";
 
-// "scheduled" replaces the older "planned" status. The api-server migrates any
-// legacy rows on startup (see migrateLegacyStatuses in app init).
-export const brewStatusEnum = ["scheduled", "brewing", "fermenting", "conditioning", "packaged", "complete"] as const;
+// Lifecycle stages: brew_day → fermenting → conditioning → packaged.
+// On startup the api-server runs migrateLegacyStatuses() which converts any
+// rows from older schemas (planned, scheduled, brewing, complete) into the
+// new values.
+export const brewStatusEnum = ["brew_day", "fermenting", "conditioning", "packaged"] as const;
 
 export const brewSessionsTable = pgTable("brew_sessions", {
   id: serial("id").primaryKey(),
   recipeId: integer("recipe_id").references(() => recipesTable.id, { onDelete: "set null" }),
   recipeName: text("recipe_name").notNull(),
-  status: text("status", { enum: brewStatusEnum }).notNull().default("scheduled"),
-  // Actual brew day (when fermentables hit the kettle). For scheduled sessions
-  // this is the intended date; when the user starts the brew it is overwritten
-  // with today's date and the original intent is preserved in plannedDate.
+  status: text("status", { enum: brewStatusEnum }).notNull().default("brew_day"),
   brewDate: date("brew_date").notNull(),
-  // Set when a scheduled session is started so historical analytics can compare
-  // intended vs actual start dates. Null for sessions that were never scheduled.
   plannedDate: date("planned_date"),
   packagedDate: date("packaged_date"),
   batchSizeGallons: real("batch_size_gallons").notNull(),

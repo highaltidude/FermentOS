@@ -20,27 +20,25 @@ A self-hosted web app for home brewers to manage recipes, log brew sessions, tra
 
 ## Brew session lifecycle
 
-Brew sessions move through six statuses. `scheduled` is a *pre-brew* state — the
-session has been drafted but no fermentables have hit the kettle yet — so it
-sits outside the stage progression bar on the session detail page:
+Brew sessions move through four stages in a linear progression:
 
 ```
-scheduled  ──▶  brewing  ──▶  fermenting  ──▶  conditioning  ──▶  packaged  ──▶  complete
-(pre-brew)      └─────────────── tracked stage timeline ──────────────────────────────────┘
+brew_day  ──▶  fermenting  ──▶  conditioning  ──▶  packaged
 ```
 
-When a session is `scheduled`, the `brewDate` field stores the **intended**
-brew day and the detail page shows a **Start brew** button instead of the
-stage bar. Clicking *Start brew* flips the status to `brewing`, sets
-`brewDate` to today (the actual start), and copies the originally planned
-date into a new `plannedDate` field so you can compare intent vs reality
-later. Sessions started directly in `brewing` (the default for one-shot
-logging) leave `plannedDate` null.
+All new sessions start at **Brew Day**. The stage bar on the session detail
+page lets you advance (or revert) to any stage with a single click. Every
+status change is recorded in a timestamped history log visible on the session
+page.
+
+`brewDate` records the actual day grain hit the kettle. The optional
+`plannedDate` field is preserved for sessions that were previously in a
+"scheduled" state before the v2 lifecycle simplification.
 
 ## Features
 
 - **Recipe Manager** — Create and store beer recipes with full ingredient lists, gravity targets, ABV, IBU, and color
-- **Brew Log** — Log brew sessions, track status from grain to glass (`scheduled` → brewing → fermenting → conditioning → packaged → complete)
+- **Brew Log** — Log brew sessions, track status from grain to glass (brew_day → fermenting → conditioning → packaged)
 - **Response & Stage History** — Every brew session records a timestamped log each time the status changes, always visible on the session page
 - **Tasting Notes & Photo** — Attach a photo, star rating, and tasting notes to any session
 - **Fermentation Tracker** — Record temperature, gravity, and pH readings over time with an interactive chart

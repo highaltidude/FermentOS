@@ -27,14 +27,7 @@ export const GetDashboardSummaryResponse = zod.object({
       id: zod.number(),
       recipeId: zod.number().nullish(),
       recipeName: zod.string(),
-      status: zod.enum([
-        "scheduled",
-        "brewing",
-        "fermenting",
-        "conditioning",
-        "packaged",
-        "complete",
-      ]),
+      status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
       brewDate: zod.string().date(),
       plannedDate: zod
         .string()
@@ -64,14 +57,7 @@ export const GetDashboardSummaryResponse = zod.object({
 export const GetActiveBrewsResponseItem = zod.object({
   id: zod.number(),
   recipeName: zod.string(),
-  status: zod.enum([
-    "scheduled",
-    "brewing",
-    "fermenting",
-    "conditioning",
-    "packaged",
-    "complete",
-  ]),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   daysSinceBrew: zod.number(),
   latestTemperature: zod.number().nullish(),
@@ -581,14 +567,7 @@ export const ReorderRecipeStepsResponse = zod.array(
  */
 export const ListBrewSessionsQueryParams = zod.object({
   status: zod
-    .enum([
-      "scheduled",
-      "brewing",
-      "fermenting",
-      "conditioning",
-      "packaged",
-      "complete",
-    ])
+    .enum(["brew_day", "fermenting", "conditioning", "packaged"])
     .optional(),
   recipeId: zod.coerce.number().optional(),
 });
@@ -597,14 +576,7 @@ export const ListBrewSessionsResponseItem = zod.object({
   id: zod.number(),
   recipeId: zod.number().nullish(),
   recipeName: zod.string(),
-  status: zod.enum([
-    "scheduled",
-    "brewing",
-    "fermenting",
-    "conditioning",
-    "packaged",
-    "complete",
-  ]),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
     .string()
@@ -633,14 +605,7 @@ export const ListBrewSessionsResponse = zod.array(ListBrewSessionsResponseItem);
 export const CreateBrewSessionBody = zod.object({
   recipeId: zod.number().nullish(),
   recipeName: zod.string(),
-  status: zod.enum([
-    "scheduled",
-    "brewing",
-    "fermenting",
-    "conditioning",
-    "packaged",
-    "complete",
-  ]),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod.string().date().nullish(),
   packagedDate: zod.string().date().nullish(),
@@ -664,14 +629,7 @@ export const GetBrewSessionResponse = zod
     id: zod.number(),
     recipeId: zod.number().nullish(),
     recipeName: zod.string(),
-    status: zod.enum([
-      "scheduled",
-      "brewing",
-      "fermenting",
-      "conditioning",
-      "packaged",
-      "complete",
-    ]),
+    status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
     brewDate: zod.string().date(),
     plannedDate: zod
       .string()
@@ -710,12 +668,10 @@ export const GetBrewSessionResponse = zod
           id: zod.number(),
           brewSessionId: zod.number(),
           status: zod.enum([
-            "scheduled",
-            "brewing",
+            "brew_day",
             "fermenting",
             "conditioning",
             "packaged",
-            "complete",
           ]),
           changedAt: zod.string().datetime({}),
           notes: zod.string().nullish(),
@@ -735,14 +691,7 @@ export const UpdateBrewSessionBody = zod.object({
   recipeId: zod.number().nullish(),
   recipeName: zod.string().optional(),
   status: zod
-    .enum([
-      "scheduled",
-      "brewing",
-      "fermenting",
-      "conditioning",
-      "packaged",
-      "complete",
-    ])
+    .enum(["brew_day", "fermenting", "conditioning", "packaged"])
     .optional(),
   brewDate: zod.string().date().optional(),
   plannedDate: zod.string().date().nullish(),
@@ -760,14 +709,7 @@ export const UpdateBrewSessionResponse = zod.object({
   id: zod.number(),
   recipeId: zod.number().nullish(),
   recipeName: zod.string(),
-  status: zod.enum([
-    "scheduled",
-    "brewing",
-    "fermenting",
-    "conditioning",
-    "packaged",
-    "complete",
-  ]),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
     .string()

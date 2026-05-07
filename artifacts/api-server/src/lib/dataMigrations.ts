@@ -15,22 +15,39 @@ export async function migrateLegacyStatuses(): Promise<void> {
     sql`ALTER TABLE brew_sessions ADD COLUMN IF NOT EXISTS planned_date date`,
   );
 
-  // The "planned" status was renamed to "scheduled" to better reflect that the
-  // brew has not actually started yet. Update any pre-rename rows so the new
-  // app code (which only knows about "scheduled") doesn't render unknown
-  // statuses with broken styling.
-  const sessions = await db.execute(
-    sql`UPDATE brew_sessions SET status = 'scheduled' WHERE status = 'planned'`,
+  // ── Lifecycle simplification (v2) ─────────────────────────────────────
+  // Old stages: planned → scheduled → brewing → fermenting → conditioning
+  //             → packaged → complete
+  // New stages: brew_day → fermenting → conditioning → packaged
+  //
+  // Mapping:
+  //   planned   → brew_day  (was a draft/scheduled state, treated as not-yet-started)
+  //   scheduled → brew_day  (same)
+  //   brewing   → brew_day  (was the active brew-day stage, now renamed)
+  //   complete  → packaged  (terminal state consolidated into packaged)
+  //   fermenting, conditioning, packaged — unchanged
+  const sessionsBrew = await db.execute(
+    sql`UPDATE brew_sessions SET status = 'brew_day' WHERE status IN ('planned', 'scheduled', 'brewing')`,
   );
-  const log = await db.execute(
-    sql`UPDATE brew_session_status_log SET status = 'scheduled' WHERE status = 'planned'`,
+  const logBrew = await db.execute(
+    sql`UPDATE brew_session_status_log SET status = 'brew_day' WHERE status IN ('planned', 'scheduled', 'brewing')`,
   );
-  const sessionCount = (sessions as { rowCount?: number }).rowCount ?? 0;
-  const logCount = (log as { rowCount?: number }).rowCount ?? 0;
-  if (sessionCount > 0 || logCount > 0) {
-    logger.info(
-      { sessions: sessionCount, statusLog: logCount },
-      "Migrated legacy 'planned' → 'scheduled' rows",
-    );
+  const sessionsComplete = await db.execute(
+    sql`UPDATE brew_sessions SET status = 'packaged' WHERE status = 'complete'`,
+  );
+  const logComplete = await db.execute(
+    sql`UPDATE brew_session_status_log SET status = 'packaged' WHERE status = 'complete'`,
+  );
+
+  const brewCount = ((sessionsBrew as { rowCount?: number }).rowCount ?? 0) +
+    ((logBrew as { rowCount?: number }).rowCount ?? 0);
+  const completeCount = ((sessionsComplete as { rowCount?: number }).rowCount ?? 0) +
+    ((logComplete as { rowCount?: number }).rowCount ?? 0);
+
+  if (brewCount > 0) {
+    logger.info({ rows: brewCount }, "Migrated legacy planned/scheduled/brewing → brew_day");
+  }
+  if (completeCount > 0) {
+    logger.info({ rows: completeCount }, "Migrated legacy complete → packaged");
   }
 }

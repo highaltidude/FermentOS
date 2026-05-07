@@ -8,7 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-const STATUSES = ["scheduled", "brewing", "fermenting", "conditioning", "packaged", "complete"];
+const STATUSES = ["brew_day", "fermenting", "conditioning", "packaged"];
+const STATUS_LABELS: Record<string, string> = {
+  brew_day: "Brew Day",
+  fermenting: "Fermenting",
+  conditioning: "Conditioning",
+  packaged: "Packaged",
+};
 
 export default function NewBrewSession() {
   const [, navigate] = useLocation();
@@ -16,7 +22,7 @@ export default function NewBrewSession() {
   const { data: recipes } = useListRecipes({});
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("none");
   const [form, setForm] = useState({
-    recipeName: "", status: "brewing", brewDate: new Date().toISOString().split("T")[0],
+    recipeName: "", status: "brew_day", brewDate: new Date().toISOString().split("T")[0],
     batchSizeGallons: "5.5", originalGravityActual: "", finalGravityActual: "", notes: "",
   });
 
@@ -117,7 +123,7 @@ export default function NewBrewSession() {
             <label className="text-xs text-muted-foreground mb-1 block">Status</label>
             <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>

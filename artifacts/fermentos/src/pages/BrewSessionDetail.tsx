@@ -145,6 +145,7 @@ export default function BrewSessionDetail() {
   const addReadingMutation = useAddFermentationReading({
     mutation: {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); setShowReadingForm(false); toast({ title: "Reading logged" }); },
+      onError: () => toast({ title: "Failed to log reading", description: "Please check your values and try again.", variant: "destructive" }),
     },
   });
 
@@ -286,10 +287,13 @@ export default function BrewSessionDetail() {
 
   const handleAddReading = (e: React.FormEvent) => {
     e.preventDefault();
+    // datetime-local inputs give "YYYY-MM-DDTHH:MM" (no timezone). Convert to
+    // a full ISO string so the server's zod.string().datetime() validator accepts it.
+    const readingAtIso = new Date(readingForm.readingAt).toISOString();
     addReadingMutation.mutate({
       id,
       data: {
-        readingAt: readingForm.readingAt,
+        readingAt: readingAtIso,
         temperatureFahrenheit: readingForm.temperatureFahrenheit ? Number(readingForm.temperatureFahrenheit) : undefined,
         gravity: readingForm.gravity ? Number(readingForm.gravity) : undefined,
         ph: readingForm.ph ? Number(readingForm.ph) : undefined,

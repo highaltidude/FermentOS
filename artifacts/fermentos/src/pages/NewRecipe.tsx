@@ -77,7 +77,8 @@ export default function NewRecipe() {
   const qc = useQueryClient();
 
   const [form, setForm] = useState({
-    name: "", style: "", batchSizeGallons: "5.5", originalGravity: "", finalGravity: "", abv: "", ibu: "", colorSrm: "", notes: "",
+    name: "", style: "", batchSizeGallons: "5.5", originalGravity: "", finalGravity: "", abv: "", ibu: "",
+    colorSrm: "", estimatedBrewTimeMinutes: "", efficiencyPercent: "", caloriesPerServing: "", notes: "",
     daysPlanned: "", daysBrewing: "", daysFermenting: "", daysConditioning: "", daysPackaged: "",
   });
 
@@ -124,6 +125,9 @@ export default function NewRecipe() {
         abv: form.abv ? Number(form.abv) : undefined,
         ibu: form.ibu ? Number(form.ibu) : undefined,
         colorSrm: form.colorSrm ? Number(form.colorSrm) : undefined,
+        estimatedBrewTimeMinutes: form.estimatedBrewTimeMinutes ? Number(form.estimatedBrewTimeMinutes) : undefined,
+        efficiencyPercent: form.efficiencyPercent ? Number(form.efficiencyPercent) : undefined,
+        caloriesPerServing: form.caloriesPerServing ? Number(form.caloriesPerServing) : undefined,
         notes: form.notes || undefined,
         daysPlanned: form.daysPlanned ? Number(form.daysPlanned) : undefined,
         daysBrewing: form.daysBrewing ? Number(form.daysBrewing) : undefined,
@@ -209,6 +213,12 @@ export default function NewRecipe() {
               <Input type="number" step="0.1" value={form.abv} onChange={(e) => setForm({ ...form, abv: e.target.value })} placeholder="6.9" /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">IBU</label>
               <Input type="number" value={form.ibu} onChange={(e) => setForm({ ...form, ibu: e.target.value })} placeholder="65" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Brew Time (min)</label>
+              <Input type="number" min="0" value={form.estimatedBrewTimeMinutes} onChange={(e) => setForm({ ...form, estimatedBrewTimeMinutes: e.target.value })} placeholder="e.g., 270" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Efficiency %</label>
+              <Input type="number" step="0.1" min="0" max="100" value={form.efficiencyPercent} onChange={(e) => setForm({ ...form, efficiencyPercent: e.target.value })} placeholder="e.g., 75" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Cal/Serving</label>
+              <Input type="number" min="0" value={form.caloriesPerServing} onChange={(e) => setForm({ ...form, caloriesPerServing: e.target.value })} placeholder="e.g., 180" /></div>
           </div>
           <div><label className="text-xs text-muted-foreground mb-1 block">Notes</label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} placeholder="Brew notes, tips, observations..." /></div>

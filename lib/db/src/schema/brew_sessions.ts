@@ -28,8 +28,8 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   notes: text("notes"),
   tastingNotes: text("tasting_notes"),
   photoPath: text("photo_path"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const insertBrewSessionSchema = createInsertSchema(brewSessionsTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -39,7 +39,7 @@ export type BrewSession = typeof brewSessionsTable.$inferSelect;
 export const fermentationReadingsTable = pgTable("fermentation_readings", {
   id: serial("id").primaryKey(),
   brewSessionId: integer("brew_session_id").notNull().references(() => brewSessionsTable.id, { onDelete: "cascade" }),
-  readingAt: timestamp("reading_at").notNull(),
+  readingAt: timestamp("reading_at", { withTimezone: true }).notNull(),
   temperatureFahrenheit: real("temperature_fahrenheit"),
   gravity: real("gravity"),
   ph: real("ph"),
@@ -54,7 +54,7 @@ export const brewSessionStatusLogTable = pgTable("brew_session_status_log", {
   id: serial("id").primaryKey(),
   brewSessionId: integer("brew_session_id").notNull().references(() => brewSessionsTable.id, { onDelete: "cascade" }),
   status: text("status", { enum: brewStatusEnum }).notNull(),
-  changedAt: timestamp("changed_at").notNull().defaultNow(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
   notes: text("notes"),
 });
 

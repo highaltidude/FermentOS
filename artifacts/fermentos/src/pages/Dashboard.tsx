@@ -37,16 +37,19 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: n
   );
 }
 
-function formatDate(d: string | Date) {
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// Parse a YYYY-MM-DD date string as local midnight (not UTC midnight) so the
+// displayed date never shifts by one day in negative-offset timezones.
+function parseLocalDate(d: string): Date {
+  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, day ?? 1);
 }
 
-// brewDate from the API is a YYYY-MM-DD string. Parse as local-midnight to
-// produce a stable, timezone-safe label like "Mon, May 4".
+function formatDate(d: string) {
+  return parseLocalDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function formatScheduleDate(d: string) {
-  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
-  const date = new Date(y!, (m ?? 1) - 1, day ?? 1);
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return parseLocalDate(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function formatDaysUntil(days: number): { label: string; tone: string } {

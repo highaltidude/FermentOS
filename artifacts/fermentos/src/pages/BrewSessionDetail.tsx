@@ -58,10 +58,18 @@ function StatusProgress({ status, onStatusChange, isPending }: { status: string;
   );
 }
 
-function formatDate(d: string | Date) {
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
+// Only used for calendar date fields (brewDate, plannedDate, packagedDate).
+function parseLocalDate(d: string): Date {
+  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, day ?? 1);
 }
 
+function formatDate(d: string) {
+  return parseLocalDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// readingAt is a full ISO timestamp — use new Date() directly (timezone info is included).
 function formatReadingTime(d: string | Date) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

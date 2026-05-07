@@ -37,9 +37,11 @@ const emptyForm = () => ({
 
 type EquipmentFormData = ReturnType<typeof emptyForm>;
 
+// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
 function formatDate(d: string | null | undefined) {
   if (!d) return null;
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, day ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 interface EquipmentFormProps {

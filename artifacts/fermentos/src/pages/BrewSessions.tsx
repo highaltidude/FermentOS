@@ -19,8 +19,10 @@ const STATUS_COLORS: Record<string, string> = {
 // BrewSessionDetail) excludes it because it's a pre-brew state, not a stage.
 const STATUS_ORDER = ["scheduled", "brewing", "fermenting", "conditioning", "packaged", "complete"];
 
-function formatDate(d: string | Date) {
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
+function formatDate(d: string) {
+  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, day ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default function BrewSessions() {

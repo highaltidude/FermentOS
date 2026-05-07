@@ -70,9 +70,23 @@ function formatDate(d: string) {
   return parseLocalDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// readingAt is a full ISO timestamp — use new Date() directly (timezone info is included).
+// datetime-local has no timezone, so we intentionally format local time for input
+// and convert back to UTC on submit.
+
+// Format a Date as YYYY-MM-DDTHH:mm in the user's local timezone for datetime-local inputs.
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Convert a datetime-local value (YYYY-MM-DDTHH:mm, no timezone) to a UTC ISO string.
+function fromDatetimeLocalValue(value: string): string {
+  return new Date(value).toISOString();
+}
+
+// readingAt is a full ISO timestamp — display in local time with date and time.
 function formatReadingTime(d: string | Date) {
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export default function BrewSessionDetail() {
@@ -84,7 +98,7 @@ export default function BrewSessionDetail() {
 
   const [editing, setEditing] = useState(false);
   const [showReadingForm, setShowReadingForm] = useState(false);
-  const [readingForm, setReadingForm] = useState({ readingAt: new Date().toISOString().slice(0, 16), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
+  const [readingForm, setReadingForm] = useState({ readingAt: toDatetimeLocalValue(new Date()), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
   const [editForm, setEditForm] = useState<any>({});
   const [tastingNotes, setTastingNotes] = useState("");
   const [tastingEditing, setTastingEditing] = useState(false);
@@ -287,9 +301,7 @@ export default function BrewSessionDetail() {
 
   const handleAddReading = (e: React.FormEvent) => {
     e.preventDefault();
-    // datetime-local inputs give "YYYY-MM-DDTHH:MM" (no timezone). Convert to
-    // a full ISO string so the server's zod.string().datetime() validator accepts it.
-    const readingAtIso = new Date(readingForm.readingAt).toISOString();
+    const readingAtIso = fromDatetimeLocalValue(readingForm.readingAt);
     addReadingMutation.mutate({
       id,
       data: {
@@ -577,7 +589,7 @@ export default function BrewSessionDetail() {
       <div className="bg-card border border-card-border rounded-lg">
         <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Fermentation Readings</h2>
-          <Button size="sm" variant="outline" onClick={() => setShowReadingForm(!showReadingForm)}>
+          <Button size="sm" variant="outline" onClick={() => { setReadingForm((f) => ({ ...f, readingAt: toDatetimeLocalValue(new Date()) })); setShowReadingForm(!showReadingForm); }}>
             <Plus className="w-3.5 h-3.5 mr-1" />Log Reading
           </Button>
         </div>
@@ -606,7 +618,7 @@ export default function BrewSessionDetail() {
             <div className="space-y-1">
               {[...session.readings].reverse().map((reading) => (
                 <div key={reading.id} className="flex items-center gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
-                  <span className="text-xs text-muted-foreground w-20 shrink-0">{formatDate(reading.readingAt)}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{formatReadingTime(reading.readingAt)}</span>
                   <div className="flex items-center gap-3 flex-1">
                     {reading.temperatureFahrenheit != null && (
                       <span className="flex items-center gap-1 text-amber-700">

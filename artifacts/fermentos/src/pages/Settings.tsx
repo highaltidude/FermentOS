@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home } from "lucide-react";
 import {
   useListBeerStyles,
   useCreateBeerStyle,
@@ -2001,7 +2001,7 @@ export default function Settings() {
   };
 
   const [tab, setTab] = useState<SettingsTab>("brewing");
-  const [systemSection, setSystemSection] = useState<"health" | "updates" | "backups" | "power">("health");
+  const [systemSection, setSystemSection] = useState<"health" | "updates" | "backups" | "connectivity" | "power">("health");
 
   const beerStylesCard = (
     <div className="bg-card border border-card-border rounded-lg">
@@ -2129,13 +2129,14 @@ export default function Settings() {
       {tab === "system" && (
         <div className="space-y-4">
           {/* System sub-tabs */}
-          <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+          <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit flex-wrap">
             {(
               [
-                { id: "health",  label: "Health",  icon: <Activity className="w-3.5 h-3.5" /> },
-                { id: "updates", label: "Updates", icon: <RefreshCw className="w-3.5 h-3.5" /> },
-                { id: "backups", label: "Backups", icon: <Database className="w-3.5 h-3.5" /> },
-                { id: "power",   label: "Power",   icon: <Power className="w-3.5 h-3.5" /> },
+                { id: "health",       label: "Health",       icon: <Activity className="w-3.5 h-3.5" /> },
+                { id: "updates",      label: "Updates",      icon: <RefreshCw className="w-3.5 h-3.5" /> },
+                { id: "connectivity", label: "Connectivity", icon: <Wifi className="w-3.5 h-3.5" /> },
+                { id: "backups",      label: "Backups",      icon: <Database className="w-3.5 h-3.5" /> },
+                { id: "power",        label: "Power",        icon: <Power className="w-3.5 h-3.5" /> },
               ] as const
             ).map((s) => (
               <button
@@ -2169,32 +2170,104 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Updates */}
+          {/* Updates — version, update actions, release notes, rollback/history only */}
           {systemSection === "updates" && (
-            <div className="space-y-4">
-              <div className="bg-card border border-card-border rounded-lg">
-                <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-muted-foreground" />
-                  <div>
-                    <h2 className="text-sm font-semibold text-foreground">App Updates</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Pull the latest version from GitHub. Release notes, rollback, and deploy history are below the primary action.</p>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <SystemUpdatePanel />
+            <div className="bg-card border border-card-border rounded-lg">
+              <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">App Updates</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Current version, update check, release notes, rollback, and deployment history.</p>
                 </div>
               </div>
+              <div className="p-4">
+                <SystemUpdatePanel />
+              </div>
+            </div>
+          )}
 
+          {/* Connectivity — API tokens, webhooks, MQTT, device integrations */}
+          {systemSection === "connectivity" && (
+            <div className="space-y-4">
+              {/* API Access — functional today */}
               <div className="bg-card border border-card-border rounded-lg">
                 <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
                   <Lock className="w-4 h-4 text-muted-foreground" />
                   <div>
                     <h2 className="text-sm font-semibold text-foreground">API Access</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Optionally require a bearer token for external clients. Browser requests from this UI keep working without a token.</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Manage bearer tokens for external clients — scripts, Home Assistant, mobile apps. Browser sessions from this UI are always allowed.</p>
                   </div>
                 </div>
                 <div className="p-4">
                   <ApiAccessPanel />
+                </div>
+              </div>
+
+              {/* Webhooks — placeholder */}
+              <div className="bg-card border border-card-border rounded-lg opacity-60 pointer-events-none select-none">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Webhook className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Webhooks</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Push brew events to any HTTP endpoint.</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">Planned</span>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Fire HTTP callbacks when stage changes, fermentation alerts trigger, or a session completes. Integrate with n8n, Make, Zapier, or your own automation scripts.</p>
+                </div>
+              </div>
+
+              {/* MQTT — placeholder */}
+              <div className="bg-card border border-card-border rounded-lg opacity-60 pointer-events-none select-none">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">MQTT</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Publish sensor readings and events to a broker.</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">Planned</span>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Connect to Mosquitto or any MQTT broker. Pair with Home Assistant MQTT discovery or Node-RED for real-time dashboard tiles and automations.</p>
+                </div>
+              </div>
+
+              {/* Tilt / iSpindel — placeholder */}
+              <div className="bg-card border border-card-border rounded-lg opacity-60 pointer-events-none select-none">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Gauge className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Tilt / iSpindel Hydrometers</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Stream live gravity and temperature into fermentation tracking.</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">Planned</span>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Receive Bluetooth or Wi-Fi readings from Tilt, Plaato, or iSpindel and log them automatically — no manual gravity readings needed during active fermentation.</p>
+                </div>
+              </div>
+
+              {/* Home Assistant — placeholder */}
+              <div className="bg-card border border-card-border rounded-lg opacity-60 pointer-events-none select-none">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Home className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Home Assistant</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">Expose brew data as HA entities via MQTT discovery or REST.</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">Planned</span>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Surface active brew sessions, fermentation temperature, gravity, and alerts as sensors and events inside your Home Assistant dashboard — without any cloud dependency.</p>
                 </div>
               </div>
             </div>

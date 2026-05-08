@@ -210,6 +210,28 @@ type BackupStatus = {
 
 type BackupBeforeUpdate = "none" | "sftp" | "local";
 
+type LocalBackupFile = {
+  name: string;
+  size: number;
+  modifiedAt: string;
+  createdAt: string;
+};
+
+type BackupAuditResult = {
+  totalTables: number;
+  backedUp: string[];
+  excluded: string[];
+  missing: string[];
+  orphaned: string[];
+  coveragePercent: number;
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function DatabaseBackupPanel() {
   const BASE = import.meta.env.BASE_URL;
   const [sftp, setSftp] = useState<SftpForm>({ host: "", port: "22", username: "", password: "", remotePath: "", prefix: "fermentos" });
@@ -227,6 +249,13 @@ function DatabaseBackupPanel() {
   const [configOpen, setConfigOpen] = useState(false);
   const restoreFileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [localFiles, setLocalFiles] = useState<LocalBackupFile[]>([]);
+  const [localFilesDir, setLocalFilesDir] = useState<string>("");
+  const [localFilesLoading, setLocalFilesLoading] = useState(false);
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
+  const [restoringFile, setRestoringFile] = useState<string | null>(null);
+  const [audit, setAudit] = useState<BackupAuditResult | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -255,7 +284,63 @@ function DatabaseBackupPanel() {
     }
   }, [BASE]);
 
-  useEffect(() => { loadConfig(); }, [loadConfig]);
+  const fetchLocalFiles = useCallback(async () => {
+    setLocalFilesLoading(true);
+    try {
+      const res = await fetch(`${BASE}api/backup/local-files`);
+      if (res.ok) {
+        const data = await res.json() as { files: LocalBackupFile[]; dir: string };
+        setLocalFiles(data.files);
+        setLocalFilesDir(data.dir);
+      }
+    } catch { /* ignore */ } finally { setLocalFilesLoading(false); }
+  }, [BASE]);
+
+  const fetchAudit = useCallback(async () => {
+    setAuditLoading(true);
+    try {
+      const res = await fetch(`${BASE}api/backup/audit`);
+      if (res.ok) setAudit(await res.json() as BackupAuditResult);
+    } catch { /* ignore */ } finally { setAuditLoading(false); }
+  }, [BASE]);
+
+  const handleDownloadLocalFile = (filename: string) => {
+    window.location.href = `${BASE}api/backup/local-files/${encodeURIComponent(filename)}/download`;
+  };
+
+  const handleDeleteLocalFile = async (filename: string) => {
+    if (!confirm(`Delete backup "${filename}"?\n\nThis will permanently remove the file from disk. This cannot be undone.`)) return;
+    setDeletingFile(filename);
+    try {
+      const res = await fetch(`${BASE}api/backup/local-files/${encodeURIComponent(filename)}`, { method: "DELETE" });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      toast({ title: "Backup deleted", description: filename });
+      await fetchLocalFiles();
+    } catch (e) {
+      toast({ title: "Delete failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally { setDeletingFile(null); }
+  };
+
+  const handleRestoreLocalFile = async (filename: string) => {
+    if (!confirm(
+      `Restore from "${filename}"?\n\n` +
+      `This will replace all current FermentOS data with the selected backup.\n\n` +
+      `This cannot be undone.`,
+    )) return;
+    setRestoringFile(filename);
+    try {
+      const res = await fetch(`${BASE}api/backup/local-files/${encodeURIComponent(filename)}/restore`, { method: "POST" });
+      const data = await res.json() as { ok?: boolean; message?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      toast({ title: "Database restored", description: data.message ?? "Restore complete. Restart the app for a fully clean state." });
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      toast({ title: "Restore failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally { setRestoringFile(null); }
+  };
+
+  useEffect(() => { loadConfig(); fetchLocalFiles(); fetchAudit(); }, [loadConfig, fetchLocalFiles, fetchAudit]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -509,6 +594,143 @@ function DatabaseBackupPanel() {
         )}
       </div>
 
+      {/* Local Backups */}
+      <div className="border-t border-border pt-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <FolderOpen className="w-3.5 h-3.5" />
+            Local Backups
+          </div>
+          <Button size="sm" variant="ghost" onClick={fetchLocalFiles} disabled={localFilesLoading} className="h-7 px-2">
+            {localFilesLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+        {localFilesDir && (
+          <p className="text-[11px] text-muted-foreground font-mono leading-snug">{localFilesDir}</p>
+        )}
+        {localFilesLoading && localFiles.length === 0 ? (
+          <div className="space-y-1">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-md" />)}</div>
+        ) : localFiles.length === 0 ? (
+          <div className="text-xs text-muted-foreground text-center py-5 border border-dashed border-border rounded-md">
+            No .sql files found in local backup directory.
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {localFiles.map((f) => (
+              <div key={f.name} className="flex items-center gap-2 text-xs rounded-md border border-border px-3 py-2 bg-muted/20">
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-[11px] truncate">{f.name}</div>
+                  <div className="text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                    <span>{formatFileSize(f.size)}</span>
+                    <span>·</span>
+                    <span>{new Date(f.modifiedAt).toLocaleString()}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <Button
+                    size="sm" variant="ghost" className="h-7 w-7 p-0"
+                    title="Download" onClick={() => handleDownloadLocalFile(f.name)}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost"
+                    className="h-7 w-7 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                    title="Restore from this backup"
+                    onClick={() => handleRestoreLocalFile(f.name)}
+                    disabled={restoringFile === f.name || deletingFile === f.name}
+                  >
+                    {restoringFile === f.name ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost"
+                    className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    title="Delete"
+                    onClick={() => handleDeleteLocalFile(f.name)}
+                    disabled={deletingFile === f.name || restoringFile === f.name}
+                  >
+                    {deletingFile === f.name ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Backup Audit */}
+      <div className="border-t border-border pt-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Activity className="w-3.5 h-3.5" />
+            Backup Audit
+          </div>
+          <Button size="sm" variant="ghost" onClick={fetchAudit} disabled={auditLoading} className="h-7 px-2">
+            {auditLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+
+        {audit === null ? (
+          <div className="space-y-1">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-7 rounded-md" />)}</div>
+        ) : (
+          <div className="space-y-3">
+            {audit.missing.length > 0 && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold">Unprotected tables detected — updates are disabled.</span>
+                  {" "}Add{" "}
+                  <span className="font-mono">{audit.missing.join(", ")}</span>
+                  {" "}to <code className="font-mono">BACKUP_REGISTRY</code> or{" "}
+                  <code className="font-mono">EXCLUDED_TABLES</code> in{" "}
+                  <code className="font-mono">lib/db/src/backup-registry.ts</code>.
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md border border-border px-3 py-2 space-y-0.5">
+                <div className="text-muted-foreground">Coverage</div>
+                <div className={`text-base font-semibold tabular-nums ${audit.coveragePercent === 100 ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                  {audit.coveragePercent}%
+                </div>
+              </div>
+              <div className="rounded-md border border-border px-3 py-2 space-y-0.5">
+                <div className="text-muted-foreground">Total tables</div>
+                <div className="text-base font-semibold tabular-nums">{audit.totalTables}</div>
+              </div>
+              <div className="rounded-md border border-border px-3 py-2 space-y-0.5">
+                <div className="text-muted-foreground">Backed up</div>
+                <div className="text-base font-semibold tabular-nums text-green-600 dark:text-green-400">{audit.backedUp.length}</div>
+              </div>
+              <div className="rounded-md border border-border px-3 py-2 space-y-0.5">
+                <div className="text-muted-foreground">Missing</div>
+                <div className={`text-base font-semibold tabular-nums ${audit.missing.length > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  {audit.missing.length}
+                </div>
+              </div>
+            </div>
+
+            {audit.excluded.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                Intentionally excluded: {audit.excluded.join(", ")}
+              </p>
+            )}
+            {audit.orphaned.length > 0 && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                Stale registry entries (no matching table): {audit.orphaned.join(", ")}
+              </p>
+            )}
+            {audit.coveragePercent === 100 && audit.missing.length === 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle className="w-3.5 h-3.5" />
+                All tables are covered — backups are complete.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Restore — destructive, visually separated */}
       <div className="border-t-2 border-destructive/15 pt-4 space-y-3">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive/70 uppercase tracking-wide">
@@ -688,6 +910,7 @@ function SystemUpdatePanel() {
   const [releases, setReleases] = useState<ReleaseNote[]>([]);
   const [releasesError, setReleasesError] = useState<string | null>(null);
   const [releasesOpen, setReleasesOpen] = useState(false);
+  const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
   const startHashRef = useRef<string | null>(null);
   // Snapshot of the api-server's PROCESS_STARTED_AT taken right before we
   // request a restart. The poller treats "startedAt has changed" as the
@@ -726,6 +949,16 @@ function SystemUpdatePanel() {
     } catch { /* ignore */ }
   }, [BASE]);
 
+  const fetchAuditCoverage = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE}api/backup/audit`);
+      if (res.ok) {
+        const data = await res.json() as BackupAuditResult;
+        setAuditCoverage(data.coveragePercent);
+      }
+    } catch { /* ignore — audit failure shouldn't block the updates panel */ }
+  }, [BASE]);
+
   const fetchReleases = useCallback(async () => {
     try {
       const res = await fetch(`${BASE}api/admin/release-notes`);
@@ -747,7 +980,7 @@ function SystemUpdatePanel() {
     } catch { /* ignore — history is non-critical */ }
   }, [BASE]);
 
-  useEffect(() => { fetchVersion(); fetchPreBackup(); fetchHistory(); fetchReleases(); }, [fetchVersion, fetchPreBackup, fetchHistory, fetchReleases]);
+  useEffect(() => { fetchVersion(); fetchPreBackup(); fetchHistory(); fetchReleases(); fetchAuditCoverage(); }, [fetchVersion, fetchPreBackup, fetchHistory, fetchReleases, fetchAuditCoverage]);
   // Auto-expand release notes the first time we learn there's an update
   // available — saves a click for the most useful moment.
   useEffect(() => {
@@ -1205,6 +1438,17 @@ function SystemUpdatePanel() {
         </div>
       )}
 
+      {auditCoverage !== null && auditCoverage < 100 && phase === "idle" && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            Backup coverage is <strong>{auditCoverage}%</strong> — update is disabled until all schema tables
+            are in <code className="font-mono">BACKUP_REGISTRY</code> or <code className="font-mono">EXCLUDED_TABLES</code>.
+            Fix this in Settings → Backups → Backup Audit.
+          </span>
+        </div>
+      )}
+
       {preBackup !== "none" && phase === "idle" && !restartPending && (
         <div className="flex items-start gap-2 text-xs text-muted-foreground rounded-md border border-dashed border-border p-3">
           <Database className="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground" />
@@ -1218,7 +1462,7 @@ function SystemUpdatePanel() {
       {phase === "idle" && (
         <div className="flex flex-wrap gap-2">
           {version.updateAvailable ? (
-            <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled}>
+            <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled || (auditCoverage !== null && auditCoverage < 100)}>
               <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
               Update now
             </Button>

@@ -10,6 +10,7 @@ import authRouter from "./auth";
 import settingsRouter from "./settings";
 import systemRouter from "./system";
 import backupRouter from "./backup";
+import haRouter from "./ha";
 import { apiAuth } from "../middlewares/apiAuth";
 
 const router: IRouter = Router();
@@ -29,5 +30,6 @@ router.use("/admin", adminRouter);
 router.use(settingsRouter);
 router.use(systemRouter);
 router.use(backupRouter);
+router.use("/ha", haRouter);
 
 export default router;

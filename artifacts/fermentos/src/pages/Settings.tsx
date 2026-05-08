@@ -226,6 +226,149 @@ type BackupAuditResult = {
   coveragePercent: number;
 };
 
+function HomeAssistantPanel() {
+  const { toast } = useToast();
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const copy = useCallback((key: string, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      toast({ title: "Copied to clipboard" });
+      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 2000);
+    }).catch(() => toast({ title: "Copy failed", variant: "destructive" }));
+  }, [toast]);
+
+  const endpointUrl = `http://${window.location.hostname}/api/ha/status`;
+
+  const restSensorYaml = `rest:
+  - resource: ${endpointUrl}
+    scan_interval: 60
+    sensor:
+      - name: "FermentOS Active Brews"
+        unique_id: fermentos_active_brews
+        value_template: "{{ value_json.fermentos.active }}"
+        state_class: measurement
+      - name: "FermentOS Current Brew"
+        unique_id: fermentos_current_brew
+        value_template: >-
+          {{ value_json.current_brew.name
+             if value_json.current_brew is not none
+             else 'No active brew' }}
+      - name: "FermentOS Brew Status"
+        unique_id: fermentos_brew_status
+        value_template: >-
+          {{ value_json.current_brew.status
+             if value_json.current_brew is not none
+             else 'none' }}
+      - name: "FermentOS Brew Temperature"
+        unique_id: fermentos_brew_temperature
+        value_template: >-
+          {{ value_json.current_brew.temperature_f
+             if value_json.current_brew is not none
+             else '' }}
+        unit_of_measurement: "°F"
+        state_class: measurement
+      - name: "FermentOS Brew Gravity"
+        unique_id: fermentos_brew_gravity
+        value_template: >-
+          {{ value_json.current_brew.gravity
+             if value_json.current_brew is not none
+             else '' }}
+        state_class: measurement
+      - name: "FermentOS Days In Progress"
+        unique_id: fermentos_brew_days
+        value_template: >-
+          {{ value_json.current_brew.days_in_progress
+             if value_json.current_brew is not none
+             else '' }}
+        unit_of_measurement: "days"
+        state_class: measurement`;
+
+  const lovelaceCardYaml = `type: markdown
+title: 🍺 FermentOS
+content: >-
+  {% if states('sensor.fermentos_current_brew') != 'No active brew' %}
+  ## {{ states('sensor.fermentos_current_brew') }}
+
+  **Status:** {{ states('sensor.fermentos_brew_status') | replace('_', ' ') | title }}
+
+  **Day:** {{ states('sensor.fermentos_brew_days') }}
+
+  {% if states('sensor.fermentos_brew_temperature') != '' %}
+  **Temp:** {{ states('sensor.fermentos_brew_temperature') }}°F
+  {% endif %}
+
+  {% if states('sensor.fermentos_brew_gravity') != '' %}
+  **Gravity:** {{ states('sensor.fermentos_brew_gravity') }}
+  {% endif %}
+
+  **Active brews:** {{ states('sensor.fermentos_active_brews') }}
+  {% else %}
+  *No active brew.*
+
+  **Active brews:** {{ states('sensor.fermentos_active_brews') }}
+  {% endif %}`;
+
+  return (
+    <div className="bg-card border border-card-border rounded-lg">
+      <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+        <Home className="w-4 h-4 text-muted-foreground" />
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Home Assistant</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">REST sensor endpoint for HA dashboards and automations.</p>
+        </div>
+      </div>
+      <div className="p-4 space-y-4">
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status Endpoint</p>
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+            <code className="text-[11px] font-mono flex-1 truncate text-foreground">{endpointUrl}</code>
+            <button
+              onClick={() => copy("url", endpointUrl)}
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              title="Copy URL"
+            >
+              {copiedKey === "url" ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            Always accessible — no Bearer token needed even when API auth is enabled.
+            Returns <code className="font-mono">current_brew: null</code> when all sessions are packaged or no active brew exists.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">REST Sensor Config <span className="normal-case font-normal">(configuration.yaml)</span></p>
+            <button
+              onClick={() => copy("sensor", restSensorYaml)}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {copiedKey === "sensor" ? <CheckCircle className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+              Copy
+            </button>
+          </div>
+          <pre className="text-[10px] font-mono leading-relaxed bg-muted/40 rounded-md border border-border px-3 py-2.5 overflow-x-auto whitespace-pre text-foreground/80">{restSensorYaml}</pre>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Lovelace Card</p>
+            <button
+              onClick={() => copy("card", lovelaceCardYaml)}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {copiedKey === "card" ? <CheckCircle className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+              Copy
+            </button>
+          </div>
+          <pre className="text-[10px] font-mono leading-relaxed bg-muted/40 rounded-md border border-border px-3 py-2.5 overflow-x-auto whitespace-pre text-foreground/80">{lovelaceCardYaml}</pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -2498,22 +2641,8 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* Home Assistant — placeholder */}
-              <div className="bg-card border border-card-border rounded-lg opacity-60 pointer-events-none select-none">
-                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Home className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <h2 className="text-sm font-semibold text-foreground">Home Assistant</h2>
-                      <p className="text-xs text-muted-foreground mt-0.5">Expose brew data as HA entities via MQTT discovery or REST.</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">Planned</span>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Surface active brew sessions, fermentation temperature, gravity, and alerts as sensors and events inside your Home Assistant dashboard — without any cloud dependency.</p>
-                </div>
-              </div>
+              {/* Home Assistant — REST sensor */}
+              <HomeAssistantPanel />
             </div>
           )}
 

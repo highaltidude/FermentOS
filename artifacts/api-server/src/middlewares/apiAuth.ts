@@ -19,6 +19,10 @@ const ALWAYS_ALLOWED_PREFIXES = [
   // for this install's service user, or a self-contained installer script).
   "/api/admin/repair-script",
   "/api/admin/sudoers-line",
+  // Home Assistant REST sensor endpoint — read-only, no secrets, must be
+  // reachable from HA without a Bearer token so polling works even when
+  // API auth is enabled.
+  "/api/ha/status",
 ];
 
 let cachedRequired: boolean | null = null;

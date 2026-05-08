@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity } from "lucide-react";
 import {
   useListBeerStyles,
   useCreateBeerStyle,
@@ -106,8 +106,25 @@ function SystemStatsPanel() {
 
   const primaryNet = stats.network[0];
 
+  const maxUsage = Math.max(
+    stats.cpu.usagePercent ?? 0,
+    stats.memory.usedPercent,
+    stats.disk?.usedPercent ?? 0,
+  );
+  const statusBadge = maxUsage > 85
+    ? { label: "Critical", cls: "bg-destructive/15 text-destructive border-destructive/30", Icon: AlertCircle }
+    : maxUsage > 60
+    ? { label: "Warning", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30", Icon: AlertTriangle }
+    : { label: "Healthy", cls: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30", Icon: CheckCircle };
+
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${statusBadge.cls}`}>
+          <statusBadge.Icon className="w-3 h-3" />
+          {statusBadge.label}
+        </span>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <StatCard icon={<Cpu className="w-3.5 h-3.5" />} label="CPU">
           <div className="space-y-1">
@@ -207,6 +224,7 @@ function DatabaseBackupPanel() {
   const [running, setRunning] = useState<null | "sftp" | "local">(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const restoreFileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -333,126 +351,23 @@ function DatabaseBackupPanel() {
   if (!configLoaded) return <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-9 rounded-md" />)}</div>;
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">SFTP Server</div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
-            <label className={labelClass}>Host</label>
-            <Input className={fieldClass} placeholder="192.168.1.10" value={sftp.host} onChange={(e) => setSftp({ ...sftp, host: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelClass}>Port</label>
-            <Input className={fieldClass} type="number" placeholder="22" value={sftp.port} onChange={(e) => setSftp({ ...sftp, port: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelClass}>Username</label>
-            <Input className={fieldClass} placeholder="pi" value={sftp.username} onChange={(e) => setSftp({ ...sftp, username: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelClass}>Password</label>
-            <Input className={fieldClass} type="password" placeholder="••••••••" value={sftp.password} onChange={(e) => setSftp({ ...sftp, password: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelClass}>Remote Path</label>
-            <Input className={fieldClass} placeholder="/backups" value={sftp.remotePath} onChange={(e) => setSftp({ ...sftp, remotePath: e.target.value })} />
-          </div>
-          <div className="col-span-3">
-            <label className={labelClass}>Filename Prefix</label>
-            <Input className={fieldClass} placeholder="fermentos" value={sftp.prefix} onChange={(e) => setSftp({ ...sftp, prefix: e.target.value })} />
-          </div>
-        </div>
+    <div className="space-y-4">
 
-        {testResult && (
-          <div className={`flex items-center gap-2 text-sm rounded-md px-3 py-2 ${testResult.ok ? "bg-green-500/10 text-green-700 dark:text-green-400" : "bg-destructive/10 text-destructive"}`}>
-            {testResult.ok ? <CheckCircle className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
-            {testResult.message}
+      {/* Backup status + primary actions */}
+      <div className="space-y-2">
+        {status.lastRun ? (
+          <div className={`flex items-center gap-2 text-xs rounded-md px-3 py-2 border ${status.lastResult === "success" ? "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400" : "border-destructive/30 bg-destructive/10 text-destructive"}`}>
+            {status.lastResult === "success"
+              ? <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+            <span>Last backup: {new Date(status.lastRun).toLocaleString()} — {status.lastMessage}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md px-3 py-2 border border-dashed border-border">
+            <Database className="w-3.5 h-3.5 shrink-0" />
+            <span>No backup recorded yet.</span>
           </div>
         )}
-
-        <div className="flex gap-2 flex-wrap">
-          <Button size="sm" variant="outline" onClick={handleTest} disabled={testing || !sftp.host}>
-            {testing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 mr-1.5" />}
-            Test Connection
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
-            Save Config
-          </Button>
-        </div>
-      </div>
-
-      <div className="border-t border-border pt-4 space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Local Backup</div>
-        <div>
-          <label className={labelClass}>Local Backup Directory</label>
-          <Input
-            className={fieldClass}
-            placeholder="/home/user/fermentos-backups"
-            value={localPath}
-            onChange={(e) => setLocalPath(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Used for "Save Local" backups and the pre-update safety backup. Created automatically if missing.
-          </p>
-        </div>
-      </div>
-
-      <div className="border-t border-border pt-4 space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Retention</div>
-        <div className="flex items-center gap-3">
-          <select
-            value={retentionDays}
-            onChange={(e) => setRetentionDays(Number(e.target.value))}
-            className="text-sm rounded-md border border-input bg-background px-2 py-1.5"
-          >
-            <option value={0}>Keep forever</option>
-            {Array.from({ length: 30 }, (_, i) => i + 1).map((d) => (
-              <option key={d} value={d}>Delete after {d} day{d === 1 ? "" : "s"}</option>
-            ))}
-          </select>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          When enabled, old backup files matching the configured prefix are pruned after every successful backup. Applies to both SFTP and local destinations. Other files in the same folder are left alone.
-        </p>
-      </div>
-
-      <div className="border-t border-border pt-4 space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Schedule</div>
-        <div className="flex gap-2 flex-wrap">
-          {(["none", "daily", "weekly"] as const).map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setSchedule(opt)}
-              className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${schedule === opt ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
-            >
-              {opt === "none" ? "Disabled" : opt === "daily" ? "Daily (2 AM)" : "Weekly (Sun 2 AM)"}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">Scheduled backups push to SFTP. Schedule uses the server's local time. Changes take effect after saving.</p>
-      </div>
-
-      <div className="border-t border-border pt-4 space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pre-Update Backup</div>
-        <div className="flex gap-2 flex-wrap">
-          {(["none", "local", "sftp"] as const).map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setBackupBeforeUpdate(opt)}
-              className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${backupBeforeUpdate === opt ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
-            >
-              {opt === "none" ? "Off" : opt === "local" ? "Save Local" : "Push to SFTP"}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          When set, an update started from <em>App Update</em> below will first create a backup. If the backup fails, the update is aborted so you don't lose data.
-        </p>
-      </div>
-
-      <div className="border-t border-border pt-4 space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Manual Actions</div>
         <div className="flex gap-2 flex-wrap">
           <Button size="sm" variant="outline" onClick={() => handleRunNow("sftp")} disabled={running !== null || !sftp.host}>
             {running === "sftp" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
@@ -467,23 +382,143 @@ function DatabaseBackupPanel() {
             Download SQL Dump
           </Button>
         </div>
-        {status.lastRun && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {status.lastResult === "success"
-              ? <CheckCircle className="w-3.5 h-3.5 text-green-600 shrink-0" />
-              : <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />}
-            <span>Last backup: {new Date(status.lastRun).toLocaleString()} — {status.lastMessage}</span>
+      </div>
+
+      {/* Schedule & Retention side by side */}
+      <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-muted-foreground">Schedule</div>
+          <div className="flex flex-col gap-1">
+            {(["none", "daily", "weekly"] as const).map((opt) => (
+              <button
+                key={opt}
+                onClick={() => setSchedule(opt)}
+                className={`px-2.5 py-1.5 rounded-md text-xs border transition-colors text-left ${schedule === opt ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+              >
+                {opt === "none" ? "Disabled" : opt === "daily" ? "Daily (2 AM)" : "Weekly (Sun 2 AM)"}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">Pushes to SFTP. Uses server local time.</p>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-muted-foreground">Retention</div>
+          <select
+            value={retentionDays}
+            onChange={(e) => setRetentionDays(Number(e.target.value))}
+            className="w-full text-sm rounded-md border border-input bg-background px-2 py-1.5"
+          >
+            <option value={0}>Keep forever</option>
+            {Array.from({ length: 30 }, (_, i) => i + 1).map((d) => (
+              <option key={d} value={d}>Delete after {d} day{d === 1 ? "" : "s"}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-muted-foreground">Pruned after each backup. Applies to both SFTP and local; other files untouched.</p>
+        </div>
+      </div>
+
+      {/* Configure Backup Destinations (collapsible) */}
+      <div className="border-t border-border pt-3">
+        <button
+          type="button"
+          onClick={() => setConfigOpen((v) => !v)}
+          className="w-full flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+        >
+          {configOpen ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+          <span className="font-medium">Configure Backup Destinations</span>
+          {sftp.host && !configOpen && <span className="ml-auto font-mono text-[10px]">{sftp.host}</span>}
+        </button>
+
+        {configOpen && (
+          <div className="mt-3 space-y-4">
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">SFTP Server</div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className={labelClass}>Host</label>
+                  <Input className={fieldClass} placeholder="192.168.1.10" value={sftp.host} onChange={(e) => setSftp({ ...sftp, host: e.target.value })} />
+                </div>
+                <div>
+                  <label className={labelClass}>Port</label>
+                  <Input className={fieldClass} type="number" placeholder="22" value={sftp.port} onChange={(e) => setSftp({ ...sftp, port: e.target.value })} />
+                </div>
+                <div>
+                  <label className={labelClass}>Username</label>
+                  <Input className={fieldClass} placeholder="pi" value={sftp.username} onChange={(e) => setSftp({ ...sftp, username: e.target.value })} />
+                </div>
+                <div>
+                  <label className={labelClass}>Password</label>
+                  <Input className={fieldClass} type="password" placeholder="••••••••" value={sftp.password} onChange={(e) => setSftp({ ...sftp, password: e.target.value })} />
+                </div>
+                <div>
+                  <label className={labelClass}>Remote Path</label>
+                  <Input className={fieldClass} placeholder="/backups" value={sftp.remotePath} onChange={(e) => setSftp({ ...sftp, remotePath: e.target.value })} />
+                </div>
+                <div className="col-span-3">
+                  <label className={labelClass}>Filename Prefix</label>
+                  <Input className={fieldClass} placeholder="fermentos" value={sftp.prefix} onChange={(e) => setSftp({ ...sftp, prefix: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Local Backup Directory</div>
+              <Input
+                className={fieldClass}
+                placeholder="/home/user/fermentos-backups"
+                value={localPath}
+                onChange={(e) => setLocalPath(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Used for "Save Local" and pre-update safety backups. Created automatically if missing.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pre-Update Backup</div>
+              <div className="flex gap-2 flex-wrap">
+                {(["none", "local", "sftp"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setBackupBeforeUpdate(opt)}
+                    className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${backupBeforeUpdate === opt ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+                  >
+                    {opt === "none" ? "Off" : opt === "local" ? "Save Local" : "Push to SFTP"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Run before each update. If the backup fails, the update is aborted.</p>
+            </div>
+
+            {testResult && (
+              <div className={`flex items-center gap-2 text-sm rounded-md px-3 py-2 ${testResult.ok ? "bg-green-500/10 text-green-700 dark:text-green-400" : "bg-destructive/10 text-destructive"}`}>
+                {testResult.ok ? <CheckCircle className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+                {testResult.message}
+              </div>
+            )}
+
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={handleTest} disabled={testing || !sftp.host}>
+                {testing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 mr-1.5" />}
+                Test SFTP Connection
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
+                Save Config
+              </Button>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="border-t border-border pt-4 space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Restore from Backup</div>
+      {/* Restore — destructive, visually separated */}
+      <div className="border-t-2 border-destructive/15 pt-4 space-y-3">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive/70 uppercase tracking-wide">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Restore from Backup
+        </div>
         <div className="flex items-start gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/5">
           <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
           <div className="text-xs text-muted-foreground">
-            Restoring replaces <span className="text-foreground font-medium">all current data</span> with the contents of an SQL dump
-            (the file produced by <em>Download SQL Dump</em>). Useful for moving to a fresh host install or rolling back after a bad change.
+            Restoring replaces <span className="text-foreground font-medium">all current data</span> with the contents of an SQL dump (the file produced by <em>Download SQL Dump</em>). Useful for moving to a fresh host or rolling back after a bad change. This cannot be undone.
           </div>
         </div>
         <input
@@ -496,20 +531,16 @@ function DatabaseBackupPanel() {
             if (f) handleRestoreFile(f);
           }}
         />
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => restoreFileRef.current?.click()}
-            disabled={restoring}
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            {restoring
-              ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-              : <Upload className="w-3.5 h-3.5 mr-1.5" />}
-            {restoring ? "Restoring…" : "Choose .sql file & restore"}
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => restoreFileRef.current?.click()}
+          disabled={restoring}
+          className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          {restoring ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
+          {restoring ? "Restoring…" : "Choose .sql file & restore"}
+        </Button>
       </div>
     </div>
   );
@@ -1439,6 +1470,142 @@ function RebootPanel() {
   );
 }
 
+function RestartAppPanel() {
+  const BASE = import.meta.env.BASE_URL;
+  const [phase, setPhase] = useState<"idle" | "restarting" | "complete" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [logTail, setLogTail] = useState("");
+  const probeRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startedAtRef = useRef<string | null>(null);
+  const restartStartedAtRef = useRef<number | null>(null);
+
+  const stopProbe = () => {
+    if (probeRef.current) { clearInterval(probeRef.current); probeRef.current = null; }
+  };
+
+  useEffect(() => () => stopProbe(), []);
+
+  const handleRestart = async () => {
+    if (!confirm("Restart the fermentos service?\n\nThe app will be unreachable for ~5–15 seconds.")) return;
+    stopProbe();
+    setPhase("restarting");
+    setErrorMsg(null);
+    setLogTail("");
+    restartStartedAtRef.current = Date.now();
+
+    try {
+      const vr = await fetch(`${BASE}api/admin/version`, { cache: "no-store" });
+      if (vr.ok) {
+        const v = await vr.json() as VersionInfo;
+        startedAtRef.current = v.startedAt ?? null;
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const res = await fetch(`${BASE}api/admin/restart-service`, { method: "POST" });
+      const body = await res.json().catch(() => ({} as { error?: string }));
+      if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+    } catch (e) {
+      setPhase("error");
+      setErrorMsg(e instanceof Error ? e.message : String(e));
+      return;
+    }
+
+    probeRef.current = setInterval(async () => {
+      const [logRes, verRes] = await Promise.allSettled([
+        fetch(`${BASE}api/admin/update-log`).then((r) => r.ok ? r.json() as Promise<{ log: string | null }> : Promise.reject()),
+        fetch(`${BASE}api/admin/version`, { cache: "no-store" }).then((r) => r.ok ? r.json() as Promise<VersionInfo> : Promise.reject()),
+      ]);
+
+      if (logRes.status === "fulfilled" && logRes.value.log) {
+        setLogTail(logRes.value.log.split("\n").slice(-6).join("\n"));
+      }
+
+      if (verRes.status === "fulfilled") {
+        const v = verRes.value;
+        const processChanged = !!startedAtRef.current && !!v.startedAt && v.startedAt !== startedAtRef.current;
+        const fallbackClear = v.startedAt === undefined && v.restartPending === false;
+        if (processChanged || fallbackClear) {
+          setPhase("complete");
+          stopProbe();
+          return;
+        }
+      }
+
+      if (restartStartedAtRef.current && Date.now() - restartStartedAtRef.current > RESTART_TIMEOUT_MS) {
+        stopProbe();
+        setPhase("error");
+        setErrorMsg("Restart timed out — the service did not come back within 90 seconds. Check your sudoers config or run `sudo systemctl restart fermentos` from the host shell.");
+      }
+    }, 2000);
+  };
+
+  if (phase === "restarting") {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-start gap-2 text-sm rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 p-3">
+          <Loader2 className="w-4 h-4 animate-spin shrink-0 mt-0.5" />
+          <div>
+            <div className="font-medium">Service restarting…</div>
+            <div className="text-xs opacity-80">The app will be back in ~5–15 seconds.</div>
+          </div>
+        </div>
+        {logTail && (
+          <pre className="text-[10px] leading-snug font-mono text-muted-foreground bg-muted/40 border border-border rounded p-2 max-h-24 overflow-auto whitespace-pre-wrap">{logTail}</pre>
+        )}
+      </div>
+    );
+  }
+
+  if (phase === "complete") {
+    return (
+      <div className="flex items-start gap-3 text-sm rounded-md border border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400 p-3">
+        <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className="flex-1 space-y-2">
+          <div className="font-medium">Service restarted — reload to reconnect cleanly.</div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => window.location.reload()}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Reload now
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setPhase("idle"); setLogTail(""); }}>Dismiss</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div className="flex items-start gap-2 text-sm rounded-md border border-destructive/30 bg-destructive/10 text-destructive p-3">
+        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <div className="font-medium">Restart failed</div>
+          {errorMsg && <div className="text-xs opacity-80 break-words mt-0.5">{errorMsg}</div>}
+          <Button size="sm" variant="outline" className="mt-2" onClick={() => { setPhase("idle"); setErrorMsg(null); }}>Dismiss</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 text-xs text-muted-foreground rounded-md border border-dashed border-border p-3">
+        <RefreshCw className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span>Restarts the fermentos service without rebooting the host. Use this after config changes or if the app feels stuck. The page will be offline for ~5–15 seconds.</span>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleRestart}
+        className="border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+      >
+        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+        Restart App
+      </Button>
+    </div>
+  );
+}
+
 type ApiToken = {
   id: number;
   name: string;
@@ -1834,6 +2001,7 @@ export default function Settings() {
   };
 
   const [tab, setTab] = useState<SettingsTab>("brewing");
+  const [systemSection, setSystemSection] = useState<"health" | "updates" | "backups" | "power">("health");
 
   const beerStylesCard = (
     <div className="bg-card border border-card-border rounded-lg">
@@ -1959,70 +2127,125 @@ export default function Settings() {
       )}
 
       {tab === "system" && (
-        <div className="space-y-5">
-          <div className="bg-card border border-card-border rounded-lg">
-            <div className="px-4 py-3 border-b border-card-border">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">App Update</h2>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">Check for the latest version on GitHub and apply updates. Configure pre-update backups in Backup Options below.</p>
-            </div>
-            <div className="p-4">
-              <SystemUpdatePanel />
-            </div>
+        <div className="space-y-4">
+          {/* System sub-tabs */}
+          <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+            {(
+              [
+                { id: "health",  label: "Health",  icon: <Activity className="w-3.5 h-3.5" /> },
+                { id: "updates", label: "Updates", icon: <RefreshCw className="w-3.5 h-3.5" /> },
+                { id: "backups", label: "Backups", icon: <Database className="w-3.5 h-3.5" /> },
+                { id: "power",   label: "Power",   icon: <Power className="w-3.5 h-3.5" /> },
+              ] as const
+            ).map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSystemSection(s.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  systemSection === s.id
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s.icon}
+                {s.label}
+              </button>
+            ))}
           </div>
 
-          <div className="bg-card border border-card-border rounded-lg">
-            <div className="px-4 py-3 border-b border-card-border">
-              <div className="flex items-center gap-2">
-                <Power className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Reboot Host</h2>
+          {/* Health */}
+          {systemSection === "health" && (
+            <div className="bg-card border border-card-border rounded-lg">
+              <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                <Activity className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">System Health</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Live CPU, memory, disk, and network. Auto-refreshes every 5 s.</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">Restart the host. The app will be offline for about a minute.</p>
+              <div className="p-4">
+                <SystemStatsPanel />
+              </div>
             </div>
-            <div className="p-4">
-              <RebootPanel />
-            </div>
-          </div>
+          )}
 
-          <div className="bg-card border border-card-border rounded-lg">
-            <div className="px-4 py-3 border-b border-card-border">
-              <div className="flex items-center gap-2">
+          {/* Updates */}
+          {systemSection === "updates" && (
+            <div className="space-y-4">
+              <div className="bg-card border border-card-border rounded-lg">
+                <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">App Updates</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Pull the latest version from GitHub. Release notes, rollback, and deploy history are below the primary action.</p>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <SystemUpdatePanel />
+                </div>
+              </div>
+
+              <div className="bg-card border border-card-border rounded-lg">
+                <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">API Access</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Optionally require a bearer token for external clients. Browser requests from this UI keep working without a token.</p>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <ApiAccessPanel />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Backups */}
+          {systemSection === "backups" && (
+            <div className="bg-card border border-card-border rounded-lg">
+              <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
                 <Database className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Backup Options</h2>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Backups</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Manual exports, scheduled SFTP push, local save, retention, and restore. SFTP configuration is in "Configure Backup Destinations" below.</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">Export the database manually, save locally, or push to an SFTP server on a schedule. Configure retention and pre-update safety backups.</p>
-            </div>
-            <div className="p-4">
-              <DatabaseBackupPanel />
-            </div>
-          </div>
-
-          <div className="bg-card border border-card-border rounded-lg">
-            <div className="px-4 py-3 border-b border-card-border">
-              <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">API Access</h2>
+              <div className="p-4">
+                <DatabaseBackupPanel />
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Optionally require an API token for external clients (scripts, integrations, mobile apps). Browser requests from this site keep working without a token. This is a homelab-grade lock — sufficient to deflect casual probes, not a substitute for network-level security.
-              </p>
             </div>
-            <div className="p-4">
-              <ApiAccessPanel />
-            </div>
-          </div>
+          )}
 
-          <div className="bg-card border border-card-border rounded-lg">
-            <div className="px-4 py-3 border-b border-card-border">
-              <h2 className="text-sm font-semibold text-foreground">System Stats</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Live host system performance — CPU, memory, disk, and network.</p>
+          {/* Power */}
+          {systemSection === "power" && (
+            <div className="space-y-4">
+              <div className="bg-card border border-card-border rounded-lg border-amber-500/20">
+                <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Restart App</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Restart only the fermentos service. No host reboot — app is back in ~15 seconds.</p>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <RestartAppPanel />
+                </div>
+              </div>
+
+              <div className="bg-card border border-card-border rounded-lg border-destructive/20">
+                <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                  <Power className="w-4 h-4 text-destructive" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Reboot Host</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Full host reboot. App will be offline for ~30–90 seconds. Use Restart App instead for most situations.</p>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <RebootPanel />
+                </div>
+              </div>
             </div>
-            <div className="p-4">
-              <SystemStatsPanel />
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

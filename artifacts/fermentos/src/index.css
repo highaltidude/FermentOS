@@ -136,58 +136,60 @@
 }
 
 .dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255,255,255, .08);
+  --badge-outline: rgba(255,255,255, .04);
 
   --opaque-button-border-intensity: 9;
 
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255,255,255, .03);
+  --elevate-2: rgba(255,255,255, .07);
 
-  --background: 20 20% 10%;
-  --foreground: 35 20% 85%;
-  --border: 20 15% 20%;
-  --card: 20 15% 15%;
-  --card-foreground: 35 20% 85%;
-  --card-border: 20 15% 25%;
-  --sidebar: 20 18% 12%;
-  --sidebar-foreground: 35 20% 85%;
-  --sidebar-border: 20 15% 20%;
-  --sidebar-primary: 35 90% 55%;
-  --sidebar-primary-foreground: 20 20% 10%;
-  --sidebar-accent: 20 15% 25%;
-  --sidebar-accent-foreground: 35 90% 55%;
-  --sidebar-ring: 35 90% 55%;
-  --popover: 20 15% 15%;
-  --popover-foreground: 35 20% 85%;
-  --popover-border: 20 15% 25%;
-  --primary: 35 90% 55%;
-  --primary-foreground: 20 20% 10%;
-  --secondary: 20 15% 25%;
-  --secondary-foreground: 35 20% 85%;
-  --muted: 20 15% 20%;
-  --muted-foreground: 30 15% 60%;
-  --accent: 20 15% 25%;
-  --accent-foreground: 35 20% 85%;
-  --destructive: 0 60% 40%;
-  --destructive-foreground: 35 20% 85%;
-  --input: 20 15% 25%;
-  --ring: 35 90% 55%;
+  /* Warm charcoal palette — industrial brewery feel, not pure black */
+  --background: 15 10% 8%;          /* #161312 — deep warm charcoal */
+  --foreground: 30 17% 95%;         /* #F5F3F1 — warm white, not harsh */
+  --border: 21 14% 20%;             /* #3A312C — subtle warm border */
+  --card: 22 13% 13%;               /* #241F1C — elevated card surface */
+  --card-foreground: 30 17% 95%;
+  --card-border: 21 14% 23%;        /* slightly lighter than border for card edges */
+  --sidebar: 20 11% 11%;            /* #1E1A18 — sidebar slightly lighter than bg */
+  --sidebar-foreground: 30 17% 95%;
+  --sidebar-border: 21 14% 18%;
+  --sidebar-primary: 35 76% 48%;    /* #D98C1D — amber accent */
+  --sidebar-primary-foreground: 15 10% 8%;
+  --sidebar-accent: 21 14% 20%;
+  --sidebar-accent-foreground: 35 76% 58%;
+  --sidebar-ring: 35 76% 48%;
+  --popover: 22 13% 13%;
+  --popover-foreground: 30 17% 95%;
+  --popover-border: 21 14% 23%;
+  --primary: 35 76% 48%;            /* #D98C1D — amber primary */
+  --primary-foreground: 15 10% 8%;
+  --secondary: 21 12% 18%;
+  --secondary-foreground: 30 15% 88%;
+  --muted: 21 12% 15%;
+  --muted-foreground: 26 10% 65%;   /* #B8AFA8 — warm gray secondary text */
+  --accent: 21 12% 18%;
+  --accent-foreground: 30 15% 88%;
+  --destructive: 0 65% 45%;
+  --destructive-foreground: 30 17% 95%;
+  --input: 21 14% 20%;
+  --ring: 35 76% 48%;
 
-  --chart-1: 35 90% 55%;
-  --chart-2: 190 70% 50%;
-  --chart-3: 140 60% 50%;
-  --chart-4: 280 50% 55%;
-  --chart-5: 15 80% 60%;
+  /* Chart colors — amber, teal, hop green, purple, orange */
+  --chart-1: 35 76% 55%;
+  --chart-2: 190 65% 48%;
+  --chart-3: 89 46% 48%;            /* #7CB342 — hop green */
+  --chart-4: 280 45% 55%;
+  --chart-5: 15 80% 58%;
 
-  --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.5);
-  --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.5);
-  --shadow-sm: 0px 2px 0px 0px hsl(0 0% 0% / 0.5), 0px 1px 2px -1px hsl(0 0% 0% / 0.5);
-  --shadow: 0px 2px 0px 0px hsl(0 0% 0% / 0.5), 0px 1px 2px -1px hsl(0 0% 0% / 0.5);
-  --shadow-md: 0px 2px 0px 0px hsl(0 0% 0% / 0.5), 0px 2px 4px -1px hsl(0 0% 0% / 0.5);
-  --shadow-lg: 0px 2px 0px 0px hsl(0 0% 0% / 0.5), 0px 4px 6px -1px hsl(0 0% 0% / 0.5);
-  --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.5), 0px 8px 10px -1px hsl(0 0% 0% / 0.5);
-  --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.5);
+  --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-sm: 0px 2px 0px 0px hsl(0 0% 0% / 0.6), 0px 1px 2px -1px hsl(0 0% 0% / 0.5);
+  --shadow: 0px 2px 0px 0px hsl(0 0% 0% / 0.6), 0px 1px 2px -1px hsl(0 0% 0% / 0.5);
+  --shadow-md: 0px 2px 0px 0px hsl(0 0% 0% / 0.6), 0px 2px 4px -1px hsl(0 0% 0% / 0.5);
+  --shadow-lg: 0px 2px 0px 0px hsl(0 0% 0% / 0.6), 0px 4px 6px -1px hsl(0 0% 0% / 0.5);
+  --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.6), 0px 8px 10px -1px hsl(0 0% 0% / 0.5);
+  --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.6);
 }
 
 @layer base {

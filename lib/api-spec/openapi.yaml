@@ -1580,7 +1580,10 @@ components:
         notes:
           type: string
           nullable: true
-      required: [id, brewSessionId, readingAt]
+        source:
+          type: string
+          enum: [manual, ispindel]
+      required: [id, brewSessionId, readingAt, source]
 
     CreateFermentationReadingBody:
       type: object

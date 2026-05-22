@@ -220,6 +220,14 @@ export interface StatusLogEntry {
   notes?: string | null;
 }
 
+export type FermentationReadingSource =
+  (typeof FermentationReadingSource)[keyof typeof FermentationReadingSource];
+
+export const FermentationReadingSource = {
+  manual: "manual",
+  ispindel: "ispindel",
+} as const;
+
 export interface FermentationReading {
   id: number;
   brewSessionId: number;
@@ -228,6 +236,7 @@ export interface FermentationReading {
   gravity?: number | null;
   ph?: number | null;
   notes?: string | null;
+  source: FermentationReadingSource;
 }
 
 export type BrewSessionWithReadings = BrewSession & {

@@ -113,6 +113,7 @@ export default function BrewSessionDetail() {
   const [expandedRawId, setExpandedRawId] = useState<number | null>(null);
   const [showAssignPanel, setShowAssignPanel] = useState(false);
   const [assignDeviceId, setAssignDeviceId] = useState<string>("");
+  const [readingFilter, setReadingFilter] = useState<"all" | "sensor" | "manual">("all");
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -854,7 +855,26 @@ export default function BrewSessionDetail() {
       {/* Fermentation Readings */}
       <div className="bg-card border border-card-border rounded-lg">
         <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Fermentation Readings</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-foreground">Fermentation Readings</h2>
+            {session.readings && session.readings.length > 0 && (
+              <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+                {(["all", "sensor", "manual"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setReadingFilter(f)}
+                    className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                      readingFilter === f
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {f === "all" ? "All" : f === "sensor" ? "📡 Sensor" : "✍️ Manual"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <Button size="sm" variant="outline" onClick={() => { setReadingForm((f) => ({ ...f, readingAt: toDatetimeLocalValue(new Date()) })); setShowReadingForm(!showReadingForm); }}>
             <Plus className="w-3.5 h-3.5 mr-1" />Log Reading
           </Button>
@@ -880,34 +900,65 @@ export default function BrewSessionDetail() {
             </form>
           )}
 
-          {session.readings && session.readings.length > 0 ? (
-            <div className="space-y-1">
-              {[...session.readings].reverse().map((reading) => (
-                <div key={reading.id} className="flex items-center gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
-                  <span className="text-xs text-muted-foreground shrink-0">{formatReadingTime(reading.readingAt)}</span>
-                  <div className="flex items-center gap-3 flex-1">
-                    {reading.temperatureFahrenheit != null && (
-                      <span className="flex items-center gap-1 text-amber-700">
-                        <Thermometer className="w-3.5 h-3.5" />{reading.temperatureFahrenheit}°F
-                      </span>
-                    )}
-                    {reading.gravity != null && (
-                      <span className="flex items-center gap-1 text-blue-700">
-                        <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}
-                      </span>
-                    )}
-                    {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
-                    {reading.notes && <span className="text-muted-foreground text-xs truncate">{reading.notes}</span>}
-                  </div>
-                  <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : !showReadingForm ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No readings logged yet</p>
-          ) : null}
+          {(() => {
+            const allReadings = session.readings ?? [];
+            const filtered = readingFilter === "all"
+              ? allReadings
+              : allReadings.filter((r) => (r as any).source === (readingFilter === "sensor" ? "ispindel" : "manual"));
+            const reversed = [...filtered].reverse();
+
+            if (reversed.length === 0) {
+              return !showReadingForm ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {readingFilter === "all" ? "No readings logged yet" : `No ${readingFilter === "sensor" ? "sensor" : "manual"} readings`}
+                </p>
+              ) : null;
+            }
+
+            return (
+              <div className="space-y-1">
+                {reversed.map((reading) => {
+                  const src = (reading as any).source as "manual" | "ispindel" | undefined;
+                  return (
+                    <div key={reading.id} className="flex items-start gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
+                      <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
+                        <span className="text-xs text-muted-foreground">{formatReadingTime(reading.readingAt)}</span>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
+                          src === "ispindel"
+                            ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}>
+                          {src === "ispindel" ? "📡 iSpindel" : "✍️ Manual"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 flex-1 flex-wrap">
+                        {reading.temperatureFahrenheit != null && (
+                          <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                            <Thermometer className="w-3.5 h-3.5" />{reading.temperatureFahrenheit.toFixed(1)}°F
+                          </span>
+                        )}
+                        {reading.gravity != null && (
+                          <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
+                            <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}
+                          </span>
+                        )}
+                        {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
+                        {reading.notes && src !== "ispindel" && (
+                          <span className="text-muted-foreground text-xs truncate">{reading.notes}</span>
+                        )}
+                        {reading.notes && src === "ispindel" && (
+                          <span className="text-muted-foreground text-xs truncate font-mono">{reading.notes}</span>
+                        )}
+                      </div>
+                      <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

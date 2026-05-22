@@ -190,7 +190,7 @@ router.post("/brew-sessions/:id/readings", async (req, res) => {
 
   const [reading] = await db
     .insert(fermentationReadingsTable)
-    .values({ ...body.data, brewSessionId: params.data.id, readingAt: new Date(body.data.readingAt) })
+    .values({ ...body.data, brewSessionId: params.data.id, readingAt: new Date(body.data.readingAt), source: "manual" })
     .returning();
   return res.status(201).json(reading);
 });

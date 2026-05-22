@@ -26,6 +26,10 @@ tags:
     description: Dashboard and summary data
   - name: settings
     description: App settings (beer styles, etc.)
+  - name: sensors
+    description: Sensor device management (iSpindel, Tilt, RAPT Pill, etc.)
+  - name: integrations
+    description: Third-party device integrations and telemetry ingest
 paths:
   /healthz:
     get:
@@ -727,6 +731,258 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  # ── Sensor devices ────────────────────────────────────────────────────────
+  /sensors/devices:
+    get:
+      operationId: listSensorDevices
+      tags: [sensors]
+      summary: List all registered sensor devices with latest reading and assignment
+      responses:
+        "200":
+          description: Sensor device list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SensorDeviceWithStatus"
+    post:
+      operationId: createSensorDevice
+      tags: [sensors]
+      summary: Register a new sensor device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSensorDeviceBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorDevice"
+
+  /sensors/devices/{id}:
+    get:
+      operationId: getSensorDevice
+      tags: [sensors]
+      summary: Get a single sensor device with latest reading and assignment
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Sensor device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorDeviceWithStatus"
+        "404":
+          description: Not found
+    put:
+      operationId: updateSensorDevice
+      tags: [sensors]
+      summary: Update a sensor device (rename, notes, enabled)
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSensorDeviceBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorDevice"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSensorDevice
+      tags: [sensors]
+      summary: Delete a sensor device and all its readings
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /sensors/devices/{id}/assign:
+    post:
+      operationId: assignSensorDevice
+      tags: [sensors]
+      summary: Assign a sensor device to a brew session
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignDeviceBody"
+      responses:
+        "200":
+          description: Assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorDeviceWithStatus"
+    delete:
+      operationId: unassignSensorDevice
+      tags: [sensors]
+      summary: Unassign a sensor device from its current brew session
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Unassigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorDeviceWithStatus"
+
+  /sensors/devices/{id}/readings:
+    get:
+      operationId: listSensorReadings
+      tags: [sensors]
+      summary: List recent readings for a device
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Readings list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SensorReading"
+
+  /brew-sessions/{id}/sensor-telemetry:
+    get:
+      operationId: getBrewSensorTelemetry
+      tags: [sensors]
+      summary: Get sensor telemetry and fermentation insights for a brew session
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Brew telemetry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewSensorTelemetry"
+
+  # ── iSpindel integration ───────────────────────────────────────────────────
+  /integrations/ispindel:
+    post:
+      operationId: ingestISpindelReading
+      tags: [integrations]
+      summary: Receive telemetry from an iSpindel device (no auth required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ISpindelPayload"
+      responses:
+        "200":
+          description: Reading accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "403":
+          description: Invalid token
+
+  /integrations/ispindel/settings:
+    get:
+      operationId: getISpindelSettings
+      tags: [integrations]
+      summary: Get iSpindel integration settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ISpindelSettings"
+    put:
+      operationId: updateISpindelSettings
+      tags: [integrations]
+      summary: Update iSpindel integration settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ISpindelSettings"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ISpindelSettings"
+
+  /integrations/ispindel/simulate:
+    post:
+      operationId: simulateISpindelReading
+      tags: [integrations]
+      summary: Simulate an iSpindel reading for developer testing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulateReadingBody"
+      responses:
+        "200":
+          description: Simulated reading accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  readingId:
+                    type: integer
+                required: [ok, readingId]
+
+  /integrations/ispindel/status:
+    get:
+      operationId: getISpindelStatus
+      tags: [integrations]
+      summary: Home Assistant friendly — all active sensor devices with latest telemetry
+      responses:
+        "200":
+          description: Active device statuses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SensorDeviceWithStatus"
+                required: [devices]
 
 components:
   parameters:
@@ -1606,3 +1862,246 @@ components:
         photoPath:
           type: string
       required: [photoPath]
+
+    # ── Sensor schemas ─────────────────────────────────────────────────────
+    SensorDevice:
+      type: object
+      properties:
+        id:
+          type: integer
+        deviceType:
+          type: string
+        deviceName:
+          type: string
+        deviceKey:
+          type: string
+        enabled:
+          type: boolean
+        notes:
+          type: string
+          nullable: true
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, deviceType, deviceName, deviceKey, enabled, createdAt, updatedAt]
+
+    SensorReading:
+      type: object
+      properties:
+        id:
+          type: integer
+        deviceId:
+          type: integer
+        brewSessionId:
+          type: integer
+          nullable: true
+        gravity:
+          type: number
+          nullable: true
+        temperature:
+          type: number
+          nullable: true
+        temperatureUnit:
+          type: string
+          nullable: true
+        angle:
+          type: number
+          nullable: true
+        battery:
+          type: number
+          nullable: true
+        rssi:
+          type: integer
+          nullable: true
+        reportedInterval:
+          type: integer
+          nullable: true
+        receivedAt:
+          type: string
+          format: date-time
+      required: [id, deviceId, receivedAt]
+
+    SensorAlert:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [gravity_stalled, temp_out_of_range, battery_low, device_offline]
+        message:
+          type: string
+        triggeredAt:
+          type: string
+          format: date-time
+      required: [type, message, triggeredAt]
+
+    FermentationInsights:
+      type: object
+      properties:
+        startingGravity:
+          type: number
+          nullable: true
+        currentGravity:
+          type: number
+          nullable: true
+        gravityDrop:
+          type: number
+          nullable: true
+        attenuationPercent:
+          type: number
+          nullable: true
+        fermentationStatus:
+          type: string
+          enum: [likely_active, slowing, stable, possibly_complete, insufficient_data]
+        velocityLast24h:
+          type: number
+          nullable: true
+          description: Gravity points dropped per day over the last 24 h
+      required: [fermentationStatus]
+
+    SensorDeviceWithStatus:
+      type: object
+      properties:
+        device:
+          $ref: "#/components/schemas/SensorDevice"
+        latestReading:
+          $ref: "#/components/schemas/SensorReading"
+          nullable: true
+        assignedBrewSessionId:
+          type: integer
+          nullable: true
+        assignedBrewName:
+          type: string
+          nullable: true
+        connectionStatus:
+          type: string
+          enum: [connected, warning, offline, unknown]
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SensorAlert"
+      required: [device, connectionStatus, alerts]
+
+    BrewSensorTelemetry:
+      type: object
+      properties:
+        brewSessionId:
+          type: integer
+        device:
+          $ref: "#/components/schemas/SensorDevice"
+          nullable: true
+        latestReading:
+          $ref: "#/components/schemas/SensorReading"
+          nullable: true
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SensorReading"
+        insights:
+          $ref: "#/components/schemas/FermentationInsights"
+          nullable: true
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SensorAlert"
+      required: [brewSessionId, readings, alerts]
+
+    ISpindelPayload:
+      type: object
+      properties:
+        name:
+          type: string
+        ID:
+          type: integer
+        token:
+          type: string
+        temperature:
+          type: number
+        temp_units:
+          type: string
+        angle:
+          type: number
+        gravity:
+          type: number
+        battery:
+          type: number
+        interval:
+          type: integer
+        RSSI:
+          type: integer
+
+    ISpindelSettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        token:
+          type: string
+          nullable: true
+          description: If set, inbound payloads must include this token value
+      required: [enabled]
+
+    SimulateReadingBody:
+      type: object
+      properties:
+        deviceId:
+          type: integer
+          nullable: true
+          description: Existing device id. If omitted a temporary device is used.
+        brewSessionId:
+          type: integer
+          nullable: true
+        deviceName:
+          type: string
+        gravity:
+          type: number
+        temperature:
+          type: number
+        temperatureUnit:
+          type: string
+        battery:
+          type: number
+        angle:
+          type: number
+        rssi:
+          type: integer
+      required: [gravity, temperature]
+
+    CreateSensorDeviceBody:
+      type: object
+      properties:
+        deviceType:
+          type: string
+          default: ispindel
+        deviceName:
+          type: string
+        deviceKey:
+          type: string
+        notes:
+          type: string
+      required: [deviceName, deviceKey]
+
+    UpdateSensorDeviceBody:
+      type: object
+      properties:
+        deviceName:
+          type: string
+        deviceKey:
+          type: string
+        enabled:
+          type: boolean
+        notes:
+          type: string
+
+    AssignDeviceBody:
+      type: object
+      properties:
+        brewSessionId:
+          type: integer
+      required: [brewSessionId]

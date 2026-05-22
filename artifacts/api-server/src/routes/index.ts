@@ -11,6 +11,8 @@ import settingsRouter from "./settings";
 import systemRouter from "./system";
 import backupRouter from "./backup";
 import haRouter from "./ha";
+import sensorsRouter from "./sensors";
+import integrationsRouter from "./integrations";
 import { apiAuth } from "../middlewares/apiAuth";
 
 const router: IRouter = Router();
@@ -31,5 +33,7 @@ router.use(settingsRouter);
 router.use(systemRouter);
 router.use(backupRouter);
 router.use("/ha", haRouter);
+router.use(sensorsRouter);
+router.use("/integrations", integrationsRouter);
 
 export default router;

@@ -18,7 +18,9 @@ import type {
 
 import type {
   ActiveBrew,
+  AssignDeviceBody,
   BeerStyle,
+  BrewSensorTelemetry,
   BrewSession,
   BrewSessionWithReadings,
   CreateBeerStyleBody,
@@ -29,22 +31,33 @@ import type {
   CreateRecipeBody,
   CreateRecipeIngredientBody,
   CreateRecipeStepBody,
+  CreateSensorDeviceBody,
   DashboardSummary,
   Equipment,
   ErrorResponse,
   FermentationReading,
+  GetISpindelStatus200,
   GetUpcomingBrewsParams,
   HealthStatus,
+  ISpindelPayload,
+  ISpindelSettings,
+  IngestISpindelReading200,
   InventoryItem,
   ListBrewSessionsParams,
   ListEquipmentParams,
   ListInventoryParams,
   ListRecipesParams,
+  ListSensorReadingsParams,
   Recipe,
   RecipeIngredient,
   RecipeStep,
   RecipeWithIngredients,
   ReorderRecipeStepsBody,
+  SensorDevice,
+  SensorDeviceWithStatus,
+  SensorReading,
+  SimulateISpindelReading200,
+  SimulateReadingBody,
   StyleCount,
   UnitSystemBody,
   UnitSystemResponse,
@@ -55,6 +68,7 @@ import type {
   UpdateRecipeBody,
   UpdateRecipeIngredientBody,
   UpdateRecipeStepBody,
+  UpdateSensorDeviceBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -3578,3 +3592,1205 @@ export const useDeleteEquipment = <
 > => {
   return useMutation(getDeleteEquipmentMutationOptions(options));
 };
+
+/**
+ * @summary List all registered sensor devices with latest reading and assignment
+ */
+export const getListSensorDevicesUrl = () => {
+  return `/api/sensors/devices`;
+};
+
+export const listSensorDevices = async (
+  options?: RequestInit,
+): Promise<SensorDeviceWithStatus[]> => {
+  return customFetch<SensorDeviceWithStatus[]>(getListSensorDevicesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSensorDevicesQueryKey = () => {
+  return [`/api/sensors/devices`] as const;
+};
+
+export const getListSensorDevicesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSensorDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSensorDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSensorDevicesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSensorDevices>>
+  > = ({ signal }) => listSensorDevices({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSensorDevices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSensorDevicesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSensorDevices>>
+>;
+export type ListSensorDevicesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all registered sensor devices with latest reading and assignment
+ */
+
+export function useListSensorDevices<
+  TData = Awaited<ReturnType<typeof listSensorDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSensorDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSensorDevicesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Register a new sensor device
+ */
+export const getCreateSensorDeviceUrl = () => {
+  return `/api/sensors/devices`;
+};
+
+export const createSensorDevice = async (
+  createSensorDeviceBody: CreateSensorDeviceBody,
+  options?: RequestInit,
+): Promise<SensorDevice> => {
+  return customFetch<SensorDevice>(getCreateSensorDeviceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSensorDeviceBody),
+  });
+};
+
+export const getCreateSensorDeviceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSensorDevice>>,
+    TError,
+    { data: BodyType<CreateSensorDeviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSensorDevice>>,
+  TError,
+  { data: BodyType<CreateSensorDeviceBody> },
+  TContext
+> => {
+  const mutationKey = ["createSensorDevice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSensorDevice>>,
+    { data: BodyType<CreateSensorDeviceBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSensorDevice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSensorDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSensorDevice>>
+>;
+export type CreateSensorDeviceMutationBody = BodyType<CreateSensorDeviceBody>;
+export type CreateSensorDeviceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Register a new sensor device
+ */
+export const useCreateSensorDevice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSensorDevice>>,
+    TError,
+    { data: BodyType<CreateSensorDeviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSensorDevice>>,
+  TError,
+  { data: BodyType<CreateSensorDeviceBody> },
+  TContext
+> => {
+  return useMutation(getCreateSensorDeviceMutationOptions(options));
+};
+
+/**
+ * @summary Get a single sensor device with latest reading and assignment
+ */
+export const getGetSensorDeviceUrl = (id: number) => {
+  return `/api/sensors/devices/${id}`;
+};
+
+export const getSensorDevice = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SensorDeviceWithStatus> => {
+  return customFetch<SensorDeviceWithStatus>(getGetSensorDeviceUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSensorDeviceQueryKey = (id: number) => {
+  return [`/api/sensors/devices/${id}`] as const;
+};
+
+export const getGetSensorDeviceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSensorDevice>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSensorDevice>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSensorDeviceQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSensorDevice>>> = ({
+    signal,
+  }) => getSensorDevice(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSensorDevice>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSensorDeviceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSensorDevice>>
+>;
+export type GetSensorDeviceQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a single sensor device with latest reading and assignment
+ */
+
+export function useGetSensorDevice<
+  TData = Awaited<ReturnType<typeof getSensorDevice>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSensorDevice>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSensorDeviceQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a sensor device (rename, notes, enabled)
+ */
+export const getUpdateSensorDeviceUrl = (id: number) => {
+  return `/api/sensors/devices/${id}`;
+};
+
+export const updateSensorDevice = async (
+  id: number,
+  updateSensorDeviceBody: UpdateSensorDeviceBody,
+  options?: RequestInit,
+): Promise<SensorDevice> => {
+  return customFetch<SensorDevice>(getUpdateSensorDeviceUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateSensorDeviceBody),
+  });
+};
+
+export const getUpdateSensorDeviceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSensorDevice>>,
+    TError,
+    { id: number; data: BodyType<UpdateSensorDeviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSensorDevice>>,
+  TError,
+  { id: number; data: BodyType<UpdateSensorDeviceBody> },
+  TContext
+> => {
+  const mutationKey = ["updateSensorDevice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSensorDevice>>,
+    { id: number; data: BodyType<UpdateSensorDeviceBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateSensorDevice(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSensorDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSensorDevice>>
+>;
+export type UpdateSensorDeviceMutationBody = BodyType<UpdateSensorDeviceBody>;
+export type UpdateSensorDeviceMutationError = ErrorType<void>;
+
+/**
+ * @summary Update a sensor device (rename, notes, enabled)
+ */
+export const useUpdateSensorDevice = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSensorDevice>>,
+    TError,
+    { id: number; data: BodyType<UpdateSensorDeviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSensorDevice>>,
+  TError,
+  { id: number; data: BodyType<UpdateSensorDeviceBody> },
+  TContext
+> => {
+  return useMutation(getUpdateSensorDeviceMutationOptions(options));
+};
+
+/**
+ * @summary Delete a sensor device and all its readings
+ */
+export const getDeleteSensorDeviceUrl = (id: number) => {
+  return `/api/sensors/devices/${id}`;
+};
+
+export const deleteSensorDevice = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteSensorDeviceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSensorDeviceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSensorDevice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSensorDevice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteSensorDevice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSensorDevice>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteSensorDevice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSensorDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSensorDevice>>
+>;
+
+export type DeleteSensorDeviceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a sensor device and all its readings
+ */
+export const useDeleteSensorDevice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSensorDevice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSensorDevice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteSensorDeviceMutationOptions(options));
+};
+
+/**
+ * @summary Assign a sensor device to a brew session
+ */
+export const getAssignSensorDeviceUrl = (id: number) => {
+  return `/api/sensors/devices/${id}/assign`;
+};
+
+export const assignSensorDevice = async (
+  id: number,
+  assignDeviceBody: AssignDeviceBody,
+  options?: RequestInit,
+): Promise<SensorDeviceWithStatus> => {
+  return customFetch<SensorDeviceWithStatus>(getAssignSensorDeviceUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(assignDeviceBody),
+  });
+};
+
+export const getAssignSensorDeviceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof assignSensorDevice>>,
+    TError,
+    { id: number; data: BodyType<AssignDeviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof assignSensorDevice>>,
+  TError,
+  { id: number; data: BodyType<AssignDeviceBody> },
+  TContext
+> => {
+  const mutationKey = ["assignSensorDevice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof assignSensorDevice>>,
+    { id: number; data: BodyType<AssignDeviceBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return assignSensorDevice(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AssignSensorDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof assignSensorDevice>>
+>;
+export type AssignSensorDeviceMutationBody = BodyType<AssignDeviceBody>;
+export type AssignSensorDeviceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Assign a sensor device to a brew session
+ */
+export const useAssignSensorDevice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof assignSensorDevice>>,
+    TError,
+    { id: number; data: BodyType<AssignDeviceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof assignSensorDevice>>,
+  TError,
+  { id: number; data: BodyType<AssignDeviceBody> },
+  TContext
+> => {
+  return useMutation(getAssignSensorDeviceMutationOptions(options));
+};
+
+/**
+ * @summary Unassign a sensor device from its current brew session
+ */
+export const getUnassignSensorDeviceUrl = (id: number) => {
+  return `/api/sensors/devices/${id}/assign`;
+};
+
+export const unassignSensorDevice = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SensorDeviceWithStatus> => {
+  return customFetch<SensorDeviceWithStatus>(getUnassignSensorDeviceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUnassignSensorDeviceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unassignSensorDevice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unassignSensorDevice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["unassignSensorDevice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unassignSensorDevice>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return unassignSensorDevice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnassignSensorDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unassignSensorDevice>>
+>;
+
+export type UnassignSensorDeviceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Unassign a sensor device from its current brew session
+ */
+export const useUnassignSensorDevice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unassignSensorDevice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unassignSensorDevice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getUnassignSensorDeviceMutationOptions(options));
+};
+
+/**
+ * @summary List recent readings for a device
+ */
+export const getListSensorReadingsUrl = (
+  id: number,
+  params?: ListSensorReadingsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/sensors/devices/${id}/readings?${stringifiedParams}`
+    : `/api/sensors/devices/${id}/readings`;
+};
+
+export const listSensorReadings = async (
+  id: number,
+  params?: ListSensorReadingsParams,
+  options?: RequestInit,
+): Promise<SensorReading[]> => {
+  return customFetch<SensorReading[]>(getListSensorReadingsUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSensorReadingsQueryKey = (
+  id: number,
+  params?: ListSensorReadingsParams,
+) => {
+  return [
+    `/api/sensors/devices/${id}/readings`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListSensorReadingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSensorReadings>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: ListSensorReadingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSensorReadings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListSensorReadingsQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSensorReadings>>
+  > = ({ signal }) =>
+    listSensorReadings(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSensorReadings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSensorReadingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSensorReadings>>
+>;
+export type ListSensorReadingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List recent readings for a device
+ */
+
+export function useListSensorReadings<
+  TData = Awaited<ReturnType<typeof listSensorReadings>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: ListSensorReadingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSensorReadings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSensorReadingsQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get sensor telemetry and fermentation insights for a brew session
+ */
+export const getGetBrewSensorTelemetryUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/sensor-telemetry`;
+};
+
+export const getBrewSensorTelemetry = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BrewSensorTelemetry> => {
+  return customFetch<BrewSensorTelemetry>(getGetBrewSensorTelemetryUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBrewSensorTelemetryQueryKey = (id: number) => {
+  return [`/api/brew-sessions/${id}/sensor-telemetry`] as const;
+};
+
+export const getGetBrewSensorTelemetryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBrewSensorTelemetry>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewSensorTelemetry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBrewSensorTelemetryQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBrewSensorTelemetry>>
+  > = ({ signal }) => getBrewSensorTelemetry(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBrewSensorTelemetry>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBrewSensorTelemetryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBrewSensorTelemetry>>
+>;
+export type GetBrewSensorTelemetryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get sensor telemetry and fermentation insights for a brew session
+ */
+
+export function useGetBrewSensorTelemetry<
+  TData = Awaited<ReturnType<typeof getBrewSensorTelemetry>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewSensorTelemetry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBrewSensorTelemetryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Receive telemetry from an iSpindel device (no auth required)
+ */
+export const getIngestISpindelReadingUrl = () => {
+  return `/api/integrations/ispindel`;
+};
+
+export const ingestISpindelReading = async (
+  iSpindelPayload: ISpindelPayload,
+  options?: RequestInit,
+): Promise<IngestISpindelReading200> => {
+  return customFetch<IngestISpindelReading200>(getIngestISpindelReadingUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(iSpindelPayload),
+  });
+};
+
+export const getIngestISpindelReadingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestISpindelReading>>,
+    TError,
+    { data: BodyType<ISpindelPayload> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof ingestISpindelReading>>,
+  TError,
+  { data: BodyType<ISpindelPayload> },
+  TContext
+> => {
+  const mutationKey = ["ingestISpindelReading"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof ingestISpindelReading>>,
+    { data: BodyType<ISpindelPayload> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return ingestISpindelReading(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IngestISpindelReadingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof ingestISpindelReading>>
+>;
+export type IngestISpindelReadingMutationBody = BodyType<ISpindelPayload>;
+export type IngestISpindelReadingMutationError = ErrorType<void>;
+
+/**
+ * @summary Receive telemetry from an iSpindel device (no auth required)
+ */
+export const useIngestISpindelReading = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestISpindelReading>>,
+    TError,
+    { data: BodyType<ISpindelPayload> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof ingestISpindelReading>>,
+  TError,
+  { data: BodyType<ISpindelPayload> },
+  TContext
+> => {
+  return useMutation(getIngestISpindelReadingMutationOptions(options));
+};
+
+/**
+ * @summary Get iSpindel integration settings
+ */
+export const getGetISpindelSettingsUrl = () => {
+  return `/api/integrations/ispindel/settings`;
+};
+
+export const getISpindelSettings = async (
+  options?: RequestInit,
+): Promise<ISpindelSettings> => {
+  return customFetch<ISpindelSettings>(getGetISpindelSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetISpindelSettingsQueryKey = () => {
+  return [`/api/integrations/ispindel/settings`] as const;
+};
+
+export const getGetISpindelSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getISpindelSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getISpindelSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetISpindelSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getISpindelSettings>>
+  > = ({ signal }) => getISpindelSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getISpindelSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetISpindelSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getISpindelSettings>>
+>;
+export type GetISpindelSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get iSpindel integration settings
+ */
+
+export function useGetISpindelSettings<
+  TData = Awaited<ReturnType<typeof getISpindelSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getISpindelSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetISpindelSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update iSpindel integration settings
+ */
+export const getUpdateISpindelSettingsUrl = () => {
+  return `/api/integrations/ispindel/settings`;
+};
+
+export const updateISpindelSettings = async (
+  iSpindelSettings: ISpindelSettings,
+  options?: RequestInit,
+): Promise<ISpindelSettings> => {
+  return customFetch<ISpindelSettings>(getUpdateISpindelSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(iSpindelSettings),
+  });
+};
+
+export const getUpdateISpindelSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateISpindelSettings>>,
+    TError,
+    { data: BodyType<ISpindelSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateISpindelSettings>>,
+  TError,
+  { data: BodyType<ISpindelSettings> },
+  TContext
+> => {
+  const mutationKey = ["updateISpindelSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateISpindelSettings>>,
+    { data: BodyType<ISpindelSettings> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateISpindelSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateISpindelSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateISpindelSettings>>
+>;
+export type UpdateISpindelSettingsMutationBody = BodyType<ISpindelSettings>;
+export type UpdateISpindelSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update iSpindel integration settings
+ */
+export const useUpdateISpindelSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateISpindelSettings>>,
+    TError,
+    { data: BodyType<ISpindelSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateISpindelSettings>>,
+  TError,
+  { data: BodyType<ISpindelSettings> },
+  TContext
+> => {
+  return useMutation(getUpdateISpindelSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Simulate an iSpindel reading for developer testing
+ */
+export const getSimulateISpindelReadingUrl = () => {
+  return `/api/integrations/ispindel/simulate`;
+};
+
+export const simulateISpindelReading = async (
+  simulateReadingBody: SimulateReadingBody,
+  options?: RequestInit,
+): Promise<SimulateISpindelReading200> => {
+  return customFetch<SimulateISpindelReading200>(
+    getSimulateISpindelReadingUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(simulateReadingBody),
+    },
+  );
+};
+
+export const getSimulateISpindelReadingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof simulateISpindelReading>>,
+    TError,
+    { data: BodyType<SimulateReadingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof simulateISpindelReading>>,
+  TError,
+  { data: BodyType<SimulateReadingBody> },
+  TContext
+> => {
+  const mutationKey = ["simulateISpindelReading"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof simulateISpindelReading>>,
+    { data: BodyType<SimulateReadingBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return simulateISpindelReading(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SimulateISpindelReadingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof simulateISpindelReading>>
+>;
+export type SimulateISpindelReadingMutationBody = BodyType<SimulateReadingBody>;
+export type SimulateISpindelReadingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Simulate an iSpindel reading for developer testing
+ */
+export const useSimulateISpindelReading = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof simulateISpindelReading>>,
+    TError,
+    { data: BodyType<SimulateReadingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof simulateISpindelReading>>,
+  TError,
+  { data: BodyType<SimulateReadingBody> },
+  TContext
+> => {
+  return useMutation(getSimulateISpindelReadingMutationOptions(options));
+};
+
+/**
+ * @summary Home Assistant friendly — all active sensor devices with latest telemetry
+ */
+export const getGetISpindelStatusUrl = () => {
+  return `/api/integrations/ispindel/status`;
+};
+
+export const getISpindelStatus = async (
+  options?: RequestInit,
+): Promise<GetISpindelStatus200> => {
+  return customFetch<GetISpindelStatus200>(getGetISpindelStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetISpindelStatusQueryKey = () => {
+  return [`/api/integrations/ispindel/status`] as const;
+};
+
+export const getGetISpindelStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getISpindelStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getISpindelStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetISpindelStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getISpindelStatus>>
+  > = ({ signal }) => getISpindelStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getISpindelStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetISpindelStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getISpindelStatus>>
+>;
+export type GetISpindelStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Home Assistant friendly — all active sensor devices with latest telemetry
+ */
+
+export function useGetISpindelStatus<
+  TData = Awaited<ReturnType<typeof getISpindelStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getISpindelStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetISpindelStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

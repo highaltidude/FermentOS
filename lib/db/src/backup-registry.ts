@@ -20,6 +20,9 @@ export const BACKUP_REGISTRY = [
   "beer_styles",
   "app_config",
   "api_tokens",
+  "sensor_devices",
+  "sensor_readings",
+  "sensor_device_brew_assignments",
 ] as const;
 
 export type BackedUpTable = (typeof BACKUP_REGISTRY)[number];

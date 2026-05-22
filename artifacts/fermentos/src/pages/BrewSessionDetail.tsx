@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, ChevronDown, ChevronRight, Activity } from "lucide-react";
 import {
   useGetBrewSession,
   useUpdateBrewSession,
@@ -106,6 +106,8 @@ export default function BrewSessionDetail() {
   const [tastingEditing, setTastingEditing] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
+  const [showSensorHistory, setShowSensorHistory] = useState(false);
+  const [expandedRawId, setExpandedRawId] = useState<number | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -662,6 +664,72 @@ export default function BrewSessionDetail() {
                   {a.message}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* iSpindel Readings History */}
+      {telemetry?.device && (telemetry as any).readings && (telemetry as any).readings.length > 0 && (
+        <div className="bg-card border border-card-border rounded-lg">
+          <button
+            type="button"
+            className="w-full px-4 py-3 flex items-center justify-between text-sm font-semibold text-foreground hover:bg-muted/20 transition-colors"
+            onClick={() => setShowSensorHistory((v) => !v)}
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-muted-foreground" />
+              iSpindel Readings
+              <span className="text-xs text-muted-foreground font-normal">({(telemetry as any).readings.length} for this brew)</span>
+            </div>
+            {showSensorHistory ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {showSensorHistory && (
+            <div className="border-t border-card-border overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/30 border-b border-border">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap">Received</th>
+                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Gravity</th>
+                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Temp</th>
+                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Angle</th>
+                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Battery</th>
+                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">RSSI</th>
+                    <th className="w-6 px-2 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {[...(telemetry as any).readings].reverse().map((r: any) => (
+                    <>
+                      <tr key={r.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
+                          {new Date(r.receivedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-blue-700 dark:text-blue-400">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>
+                        <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? `${Number(r.temperature).toFixed(1)}${r.temperatureUnit === "F" ? "°F" : "°C"}` : "—"}</td>
+                        <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>
+                        <td className="px-2 py-1.5 text-right">{r.battery != null ? `${Number(r.battery).toFixed(2)}V` : "—"}</td>
+                        <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rssi != null ? `${r.rssi} dBm` : "—"}</td>
+                        <td className="px-2 py-1.5">
+                          {r.rawPayload && (
+                            <button type="button" onClick={() => setExpandedRawId(expandedRawId === r.id ? null : r.id)}
+                              className="text-muted-foreground hover:text-foreground transition-colors" title="Raw payload">
+                              {expandedRawId === r.id ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {expandedRawId === r.id && r.rawPayload && (
+                        <tr key={`${r.id}-raw`}>
+                          <td colSpan={7} className="px-3 pb-2 bg-muted/10">
+                            <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(r.rawPayload, null, 2)}</pre>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

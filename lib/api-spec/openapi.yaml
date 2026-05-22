@@ -984,6 +984,55 @@ paths:
                       $ref: "#/components/schemas/SensorDeviceWithStatus"
                 required: [devices]
 
+  /integrations/ispindel/devices/{deviceId}/readings:
+    get:
+      operationId: listISpindelDeviceReadings
+      tags: [integrations]
+      summary: List paginated readings for an iSpindel device
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: brewId
+          in: query
+          schema:
+            type: integer
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: Paginated readings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ISpindelReadingsPage"
+
 components:
   parameters:
     IdParam:
@@ -1923,10 +1972,29 @@ components:
         reportedInterval:
           type: integer
           nullable: true
+        rawPayload:
+          type: object
+          additionalProperties: true
+          nullable: true
         receivedAt:
           type: string
           format: date-time
       required: [id, deviceId, receivedAt]
+
+    ISpindelReadingsPage:
+      type: object
+      properties:
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SensorReading"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required: [readings, total, limit, offset]
 
     SensorAlert:
       type: object

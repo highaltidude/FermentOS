@@ -40,11 +40,13 @@ import type {
   GetUpcomingBrewsParams,
   HealthStatus,
   ISpindelPayload,
+  ISpindelReadingsPage,
   ISpindelSettings,
   IngestISpindelReading200,
   InventoryItem,
   ListBrewSessionsParams,
   ListEquipmentParams,
+  ListISpindelDeviceReadingsParams,
   ListInventoryParams,
   ListRecipesParams,
   ListSensorReadingsParams,
@@ -4787,6 +4789,127 @@ export function useGetISpindelStatus<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetISpindelStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List paginated readings for an iSpindel device
+ */
+export const getListISpindelDeviceReadingsUrl = (
+  deviceId: number,
+  params?: ListISpindelDeviceReadingsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/integrations/ispindel/devices/${deviceId}/readings?${stringifiedParams}`
+    : `/api/integrations/ispindel/devices/${deviceId}/readings`;
+};
+
+export const listISpindelDeviceReadings = async (
+  deviceId: number,
+  params?: ListISpindelDeviceReadingsParams,
+  options?: RequestInit,
+): Promise<ISpindelReadingsPage> => {
+  return customFetch<ISpindelReadingsPage>(
+    getListISpindelDeviceReadingsUrl(deviceId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListISpindelDeviceReadingsQueryKey = (
+  deviceId: number,
+  params?: ListISpindelDeviceReadingsParams,
+) => {
+  return [
+    `/api/integrations/ispindel/devices/${deviceId}/readings`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListISpindelDeviceReadingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listISpindelDeviceReadings>>,
+  TError = ErrorType<unknown>,
+>(
+  deviceId: number,
+  params?: ListISpindelDeviceReadingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listISpindelDeviceReadings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListISpindelDeviceReadingsQueryKey(deviceId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listISpindelDeviceReadings>>
+  > = ({ signal }) =>
+    listISpindelDeviceReadings(deviceId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!deviceId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listISpindelDeviceReadings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListISpindelDeviceReadingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listISpindelDeviceReadings>>
+>;
+export type ListISpindelDeviceReadingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List paginated readings for an iSpindel device
+ */
+
+export function useListISpindelDeviceReadings<
+  TData = Awaited<ReturnType<typeof listISpindelDeviceReadings>>,
+  TError = ErrorType<unknown>,
+>(
+  deviceId: number,
+  params?: ListISpindelDeviceReadingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listISpindelDeviceReadings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListISpindelDeviceReadingsQueryOptions(
+    deviceId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

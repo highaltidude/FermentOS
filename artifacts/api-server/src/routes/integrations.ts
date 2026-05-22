@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, appConfigTable, fermentationReadingsTable } from "@workspace/db";
-import { eq, desc, isNull, and } from "drizzle-orm";
+import { eq, desc, isNull, and, count, gte, lte } from "drizzle-orm";
 import { calcConnectionStatus, buildAlerts } from "./sensors";
 
 const router = Router();
@@ -282,6 +282,40 @@ router.get("/ispindel/status", async (_req, res) => {
   );
 
   return res.json({ devices: results });
+});
+
+// ── GET /ispindel/devices/:deviceId/readings ───────────────────────────────
+router.get("/ispindel/devices/:deviceId/readings", async (req, res) => {
+  const deviceId = Number(req.params.deviceId);
+  if (!deviceId) return res.status(400).json({ error: "Invalid deviceId" });
+
+  const limit = Math.min(Number(req.query.limit ?? 50), 200);
+  const offset = Number(req.query.offset ?? 0);
+  const sort = req.query.sort === "asc" ? "asc" : "desc";
+  const startRaw = req.query.start ? new Date(String(req.query.start)) : null;
+  const endRaw = req.query.end ? new Date(String(req.query.end)) : null;
+  const brewId = req.query.brewId ? Number(req.query.brewId) : null;
+
+  const conditions: ReturnType<typeof eq>[] = [eq(sensorReadingsTable.deviceId, deviceId)];
+  if (startRaw && !isNaN(startRaw.getTime())) conditions.push(gte(sensorReadingsTable.receivedAt, startRaw));
+  if (endRaw && !isNaN(endRaw.getTime())) conditions.push(lte(sensorReadingsTable.receivedAt, endRaw));
+  if (brewId) conditions.push(eq(sensorReadingsTable.brewSessionId, brewId));
+  const where = and(...conditions);
+
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(sensorReadingsTable)
+    .where(where);
+
+  const readings = await db
+    .select()
+    .from(sensorReadingsTable)
+    .where(where)
+    .orderBy(sort === "asc" ? sensorReadingsTable.receivedAt : desc(sensorReadingsTable.receivedAt))
+    .limit(limit)
+    .offset(offset);
+
+  return res.json({ readings, total: Number(total), limit, offset });
 });
 
 export default router;

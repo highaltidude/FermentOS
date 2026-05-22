@@ -15,6 +15,21 @@ export async function migrateLegacyStatuses(): Promise<void> {
     sql`ALTER TABLE brew_sessions ADD COLUMN IF NOT EXISTS planned_date date`,
   );
 
+  // ── Fermentation reading source column (v3) ───────────────────────────
+  // Add source column with a default of 'manual', then backfill any rows
+  // that were mirrored from iSpindel (identified by the old '[iSpindel]'
+  // note prefix written by the pre-source-column mirroring code).
+  await db.execute(
+    sql`ALTER TABLE fermentation_readings ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'manual'`,
+  );
+  const backfilled = await db.execute(
+    sql`UPDATE fermentation_readings SET source = 'ispindel' WHERE source = 'manual' AND notes LIKE '[iSpindel]%'`,
+  );
+  const backfilledCount = (backfilled as { rowCount?: number }).rowCount ?? 0;
+  if (backfilledCount > 0) {
+    logger.info({ rows: backfilledCount }, "Backfilled fermentation_readings.source = ispindel for legacy iSpindel mirrors");
+  }
+
   // ── Lifecycle simplification (v2) ─────────────────────────────────────
   // Old stages: planned → scheduled → brewing → fermenting → conditioning
   //             → packaged → complete

@@ -661,6 +661,7 @@ export const GetBrewSessionResponse = zod
           gravity: zod.number().nullish(),
           ph: zod.number().nullish(),
           notes: zod.string().nullish(),
+          source: zod.enum(["manual", "ispindel"]),
         }),
       ),
       statusLog: zod.array(
@@ -753,6 +754,7 @@ export const ListFermentationReadingsResponseItem = zod.object({
   gravity: zod.number().nullish(),
   ph: zod.number().nullish(),
   notes: zod.string().nullish(),
+  source: zod.enum(["manual", "ispindel"]),
 });
 export const ListFermentationReadingsResponse = zod.array(
   ListFermentationReadingsResponseItem,

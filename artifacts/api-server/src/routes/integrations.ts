@@ -114,7 +114,8 @@ async function ingestReading(opts: {
       readingAt: new Date(),
       temperatureFahrenheit: tempF,
       gravity: opts.gravity ?? null,
-      notes: `[iSpindel] ${opts.deviceName}`,
+      notes: opts.deviceName ?? null,
+      source: "ispindel",
     });
   }
 

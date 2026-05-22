@@ -33,6 +33,8 @@ export const insertBrewSessionSchema = createInsertSchema(brewSessionsTable).omi
 export type InsertBrewSession = z.infer<typeof insertBrewSessionSchema>;
 export type BrewSession = typeof brewSessionsTable.$inferSelect;
 
+export const fermentationReadingSourceEnum = ["manual", "ispindel"] as const;
+
 export const fermentationReadingsTable = pgTable("fermentation_readings", {
   id: serial("id").primaryKey(),
   brewSessionId: integer("brew_session_id").notNull().references(() => brewSessionsTable.id, { onDelete: "cascade" }),
@@ -41,6 +43,7 @@ export const fermentationReadingsTable = pgTable("fermentation_readings", {
   gravity: real("gravity"),
   ph: real("ph"),
   notes: text("notes"),
+  source: text("source", { enum: fermentationReadingSourceEnum }).notNull().default("manual"),
 });
 
 export const insertFermentationReadingSchema = createInsertSchema(fermentationReadingsTable).omit({ id: true });

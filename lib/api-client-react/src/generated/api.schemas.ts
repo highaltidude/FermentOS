@@ -448,6 +448,8 @@ export interface SensorDevice {
   updatedAt: string;
 }
 
+export type SensorReadingRawPayload = { [key: string]: unknown } | null;
+
 export interface SensorReading {
   id: number;
   deviceId: number;
@@ -459,7 +461,15 @@ export interface SensorReading {
   battery?: number | null;
   rssi?: number | null;
   reportedInterval?: number | null;
+  rawPayload?: SensorReadingRawPayload;
   receivedAt: string;
+}
+
+export interface ISpindelReadingsPage {
+  readings: SensorReading[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export type SensorAlertType =
@@ -621,3 +631,20 @@ export type SimulateISpindelReading200 = {
 export type GetISpindelStatus200 = {
   devices: SensorDeviceWithStatus[];
 };
+
+export type ListISpindelDeviceReadingsParams = {
+  limit?: number;
+  offset?: number;
+  start?: string;
+  end?: string;
+  brewId?: number;
+  sort?: ListISpindelDeviceReadingsSort;
+};
+
+export type ListISpindelDeviceReadingsSort =
+  (typeof ListISpindelDeviceReadingsSort)[keyof typeof ListISpindelDeviceReadingsSort];
+
+export const ListISpindelDeviceReadingsSort = {
+  asc: "asc",
+  desc: "desc",
+} as const;

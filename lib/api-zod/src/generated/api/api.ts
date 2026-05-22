@@ -1022,6 +1022,7 @@ export const ListSensorDevicesResponseItem = zod.object({
       battery: zod.number().nullish(),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
+      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
       receivedAt: zod.string().datetime({}),
     })
     .nullish(),
@@ -1088,6 +1089,7 @@ export const GetSensorDeviceResponse = zod.object({
       battery: zod.number().nullish(),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
+      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
       receivedAt: zod.string().datetime({}),
     })
     .nullish(),
@@ -1176,6 +1178,7 @@ export const AssignSensorDeviceResponse = zod.object({
       battery: zod.number().nullish(),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
+      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
       receivedAt: zod.string().datetime({}),
     })
     .nullish(),
@@ -1227,6 +1230,7 @@ export const UnassignSensorDeviceResponse = zod.object({
       battery: zod.number().nullish(),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
+      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
       receivedAt: zod.string().datetime({}),
     })
     .nullish(),
@@ -1271,6 +1275,7 @@ export const ListSensorReadingsResponseItem = zod.object({
   battery: zod.number().nullish(),
   rssi: zod.number().nullish(),
   reportedInterval: zod.number().nullish(),
+  rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
   receivedAt: zod.string().datetime({}),
 });
 export const ListSensorReadingsResponse = zod.array(
@@ -1311,6 +1316,7 @@ export const GetBrewSensorTelemetryResponse = zod.object({
       battery: zod.number().nullish(),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
+      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
       receivedAt: zod.string().datetime({}),
     })
     .nullish(),
@@ -1326,6 +1332,7 @@ export const GetBrewSensorTelemetryResponse = zod.object({
       battery: zod.number().nullish(),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
+      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
       receivedAt: zod.string().datetime({}),
     }),
   ),
@@ -1464,6 +1471,7 @@ export const GetISpindelStatusResponse = zod.object({
           battery: zod.number().nullish(),
           rssi: zod.number().nullish(),
           reportedInterval: zod.number().nullish(),
+          rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
           receivedAt: zod.string().datetime({}),
         })
         .nullish(),
@@ -1489,4 +1497,52 @@ export const GetISpindelStatusResponse = zod.object({
       ),
     }),
   ),
+});
+
+/**
+ * @summary List paginated readings for an iSpindel device
+ */
+export const ListISpindelDeviceReadingsParams = zod.object({
+  deviceId: zod.coerce.number(),
+});
+
+export const listISpindelDeviceReadingsQueryLimitDefault = 50;
+export const listISpindelDeviceReadingsQueryOffsetDefault = 0;
+export const listISpindelDeviceReadingsQuerySortDefault = `desc`;
+
+export const ListISpindelDeviceReadingsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .default(listISpindelDeviceReadingsQueryLimitDefault),
+  offset: zod.coerce
+    .number()
+    .default(listISpindelDeviceReadingsQueryOffsetDefault),
+  start: zod.coerce.string().datetime({}).optional(),
+  end: zod.coerce.string().datetime({}).optional(),
+  brewId: zod.coerce.number().optional(),
+  sort: zod
+    .enum(["asc", "desc"])
+    .default(listISpindelDeviceReadingsQuerySortDefault),
+});
+
+export const ListISpindelDeviceReadingsResponse = zod.object({
+  readings: zod.array(
+    zod.object({
+      id: zod.number(),
+      deviceId: zod.number(),
+      brewSessionId: zod.number().nullish(),
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      angle: zod.number().nullish(),
+      battery: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      reportedInterval: zod.number().nullish(),
+      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
+      receivedAt: zod.string().datetime({}),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
 });

@@ -120,7 +120,7 @@ async function ingestReading(opts: {
 
 // ── POST /integrations/ispindel ────────────────────────────────────────────
 // Whitelisted from apiAuth so real devices can POST without a Bearer token.
-router.post("/integrations/ispindel", async (req, res) => {
+router.post("/ispindel", async (req, res) => {
   // Check if integration is enabled
   const enabled = await getConfig(CONFIG_ISPINDEL_ENABLED);
   if (enabled === "false") {
@@ -163,7 +163,7 @@ router.post("/integrations/ispindel", async (req, res) => {
 });
 
 // ── GET /integrations/ispindel/settings ───────────────────────────────────
-router.get("/integrations/ispindel/settings", async (_req, res) => {
+router.get("/ispindel/settings", async (_req, res) => {
   const [enabled, token] = await Promise.all([
     getConfig(CONFIG_ISPINDEL_ENABLED),
     getConfig(CONFIG_ISPINDEL_TOKEN),
@@ -175,7 +175,7 @@ router.get("/integrations/ispindel/settings", async (_req, res) => {
 });
 
 // ── PUT /integrations/ispindel/settings ───────────────────────────────────
-router.put("/integrations/ispindel/settings", async (req, res) => {
+router.put("/ispindel/settings", async (req, res) => {
   const { enabled, token } = req.body as { enabled?: boolean; token?: string | null };
   if (enabled !== undefined) {
     await setConfig(CONFIG_ISPINDEL_ENABLED, enabled ? "true" : "false");
@@ -195,7 +195,7 @@ router.put("/integrations/ispindel/settings", async (req, res) => {
 });
 
 // ── POST /integrations/ispindel/simulate ──────────────────────────────────
-router.post("/integrations/ispindel/simulate", async (req, res) => {
+router.post("/ispindel/simulate", async (req, res) => {
   const body = req.body as {
     deviceId?: number | null;
     brewSessionId?: number | null;
@@ -244,7 +244,7 @@ router.post("/integrations/ispindel/simulate", async (req, res) => {
 
 // ── GET /integrations/ispindel/status (HA-friendly) ───────────────────────
 // Whitelisted from apiAuth — same as /api/ha/status.
-router.get("/integrations/ispindel/status", async (_req, res) => {
+router.get("/ispindel/status", async (_req, res) => {
   const devices = await db.select().from(sensorDevicesTable).where(eq(sensorDevicesTable.enabled, true));
 
   const results = await Promise.all(

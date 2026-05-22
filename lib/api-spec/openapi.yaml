@@ -1966,6 +1966,10 @@ components:
         battery:
           type: number
           nullable: true
+        batteryPercentEstimate:
+          type: number
+          nullable: true
+          description: Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)
         rssi:
           type: integer
           nullable: true

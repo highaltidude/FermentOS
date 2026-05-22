@@ -459,6 +459,8 @@ export interface SensorReading {
   temperatureUnit?: string | null;
   angle?: number | null;
   battery?: number | null;
+  /** Estimated battery percentage using a non-linear Li-ion discharge curve (0–100) */
+  batteryPercentEstimate?: number | null;
   rssi?: number | null;
   reportedInterval?: number | null;
   rawPayload?: SensorReadingRawPayload;

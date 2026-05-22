@@ -623,7 +623,12 @@ export default function BrewSessionDetail() {
               {telemetry.latestReading.battery != null && (
                 <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Battery</p>
-                  <p className="text-base font-semibold text-foreground">{Number(telemetry.latestReading.battery).toFixed(0)}%</p>
+                  <p className={`text-base font-semibold ${(telemetry.latestReading as any).batteryPercentEstimate != null && (telemetry.latestReading as any).batteryPercentEstimate < 10 ? "text-destructive" : (telemetry.latestReading as any).batteryPercentEstimate != null && (telemetry.latestReading as any).batteryPercentEstimate < 20 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                    {Number(telemetry.latestReading.battery).toFixed(2)}V
+                  </p>
+                  {(telemetry.latestReading as any).batteryPercentEstimate != null && (
+                    <p className="text-xs text-muted-foreground">~{Math.round((telemetry.latestReading as any).batteryPercentEstimate)}%</p>
+                  )}
                 </div>
               )}
               {telemetry.latestReading.angle != null && (
@@ -708,7 +713,13 @@ export default function BrewSessionDetail() {
                         <td className="px-2 py-1.5 text-right font-mono text-blue-700 dark:text-blue-400">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>
                         <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? `${Number(r.temperature).toFixed(1)}${r.temperatureUnit === "F" ? "°F" : "°C"}` : "—"}</td>
                         <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>
-                        <td className="px-2 py-1.5 text-right">{r.battery != null ? `${Number(r.battery).toFixed(2)}V` : "—"}</td>
+                        <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                          {r.battery != null ? (
+                            <span className={r.batteryPercentEstimate != null && r.batteryPercentEstimate < 10 ? "text-destructive" : r.batteryPercentEstimate != null && r.batteryPercentEstimate < 20 ? "text-amber-600 dark:text-amber-400" : ""}>
+                              {Number(r.battery).toFixed(2)}V{r.batteryPercentEstimate != null ? ` (~${Math.round(r.batteryPercentEstimate)}%)` : ""}
+                            </span>
+                          ) : "—"}
+                        </td>
                         <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rssi != null ? `${r.rssi} dBm` : "—"}</td>
                         <td className="px-2 py-1.5">
                           {r.rawPayload && (

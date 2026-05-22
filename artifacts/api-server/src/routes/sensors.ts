@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, fermentationReadingsTable } from "@workspace/db";
-import { eq, desc, isNull, and, gte } from "drizzle-orm";
+import { eq, desc, isNull, and, gte, lte } from "drizzle-orm";
 
 const router = Router();
 
@@ -217,25 +217,52 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
   const brewId = Number(req.params.id);
   if (!brewId) return res.status(400).json({ error: "Invalid id" });
 
-  // Find the device currently (or most recently) assigned to this brew
-  const [assignment] = await db
+  // Fetch ALL assignment windows for this brew, oldest first.
+  // A brew may have multiple windows if a device was un-assigned and re-assigned,
+  // or if different devices were used at different stages.
+  const assignments = await db
     .select()
     .from(sensorDeviceBrewAssignmentsTable)
     .where(eq(sensorDeviceBrewAssignmentsTable.brewSessionId, brewId))
-    .orderBy(desc(sensorDeviceBrewAssignmentsTable.assignedAt))
-    .limit(1);
+    .orderBy(sensorDeviceBrewAssignmentsTable.assignedAt);
 
-  if (!assignment) {
+  if (assignments.length === 0) {
     return res.json({ brewSessionId: brewId, device: null, latestReading: null, readings: [], insights: null, alerts: [] });
   }
 
-  const [device] = await db.select().from(sensorDevicesTable).where(eq(sensorDevicesTable.id, assignment.deviceId));
-
-  const readings = await db
+  // For device display / connection status use the most recent assignment's device.
+  const latestAssignment = assignments[assignments.length - 1]!;
+  const [device] = await db
     .select()
-    .from(sensorReadingsTable)
-    .where(eq(sensorReadingsTable.brewSessionId, brewId))
-    .orderBy(sensorReadingsTable.receivedAt);
+    .from(sensorDevicesTable)
+    .where(eq(sensorDevicesTable.id, latestAssignment.deviceId));
+
+  // Collect readings for every assignment window.
+  // Filter by (deviceId, receivedAt >= assignedAt [, receivedAt <= unassignedAt]).
+  // This means pre-assignment "test" readings are never included, and readings
+  // from a prior brew's window are correctly excluded from the current brew.
+  type Reading = typeof sensorReadingsTable.$inferSelect;
+  const windowResults = await Promise.all(
+    assignments.map((a) => {
+      const conditions: ReturnType<typeof eq>[] = [
+        eq(sensorReadingsTable.deviceId, a.deviceId),
+        gte(sensorReadingsTable.receivedAt, a.assignedAt),
+      ];
+      if (a.unassignedAt != null) {
+        conditions.push(lte(sensorReadingsTable.receivedAt, a.unassignedAt));
+      }
+      return db
+        .select()
+        .from(sensorReadingsTable)
+        .where(and(...conditions))
+        .orderBy(sensorReadingsTable.receivedAt);
+    }),
+  );
+
+  // Merge and sort all windows by time (handles the rare multi-device case).
+  const readings: Reading[] = windowResults
+    .flat()
+    .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
 
   const latestReading = readings[readings.length - 1] ?? null;
   const insights = calcInsights(readings);

@@ -562,6 +562,7 @@ router.get("/backup/audit", async (req, res) => {
     const coveragePercent = total === 0 ? 100 : Math.round(((total - missing.length) / total) * 100);
 
     const audit: BackupAuditResult = { totalTables: total, backedUp, excluded, missing, orphaned, coveragePercent };
+    res.setHeader("Cache-Control", "no-store");
     return res.json(audit);
   } catch (err) {
     req.log.error({ err }, "Backup audit failed");

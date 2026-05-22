@@ -1786,7 +1786,7 @@ function SystemUpdatePanel() {
             </p>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={fetchVersion} disabled={checking || inProgress}>
+        <Button size="sm" variant="outline" onClick={() => { fetchVersion(); fetchAuditCoverage(); }} disabled={checking || inProgress}>
           {checking ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
           Check for updates
         </Button>
@@ -1948,11 +1948,20 @@ function SystemUpdatePanel() {
       {auditCoverage !== null && auditCoverage < 100 && phase === "idle" && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/8 px-3 py-2 text-xs text-destructive">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <span>
+          <span className="flex-1">
             Backup coverage is <strong>{auditCoverage}%</strong> — update is disabled until all schema tables
             are in <code className="font-mono">BACKUP_REGISTRY</code> or <code className="font-mono">EXCLUDED_TABLES</code>.
             Fix this in Settings → Backups → Backup Audit.
           </span>
+          <button
+            type="button"
+            onClick={fetchAuditCoverage}
+            className="shrink-0 flex items-center gap-1 font-medium underline underline-offset-2 hover:opacity-70 transition-opacity"
+            title="Re-run backup audit"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Re-check
+          </button>
         </div>
       )}
 

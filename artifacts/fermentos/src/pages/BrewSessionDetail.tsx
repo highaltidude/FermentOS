@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, ChevronDown, ChevronRight, Activity } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, ChevronDown, ChevronRight, Activity, Wifi, WifiOff } from "lucide-react";
 import {
   useGetBrewSession,
   useUpdateBrewSession,
@@ -11,6 +11,9 @@ import {
   getGetBrewSessionQueryKey,
   useGetBrewSensorTelemetry,
   getGetBrewSensorTelemetryQueryKey,
+  useListSensorDevices,
+  getListSensorDevicesQueryKey,
+  useAssignSensorDevice,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -108,6 +111,8 @@ export default function BrewSessionDetail() {
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
   const [showSensorHistory, setShowSensorHistory] = useState(false);
   const [expandedRawId, setExpandedRawId] = useState<number | null>(null);
+  const [showAssignPanel, setShowAssignPanel] = useState(false);
+  const [assignDeviceId, setAssignDeviceId] = useState<string>("");
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -126,6 +131,23 @@ export default function BrewSessionDetail() {
 
   const { data: telemetry } = useGetBrewSensorTelemetry(id, {
     query: { enabled: !!id, refetchInterval: 30_000, queryKey: getGetBrewSensorTelemetryQueryKey(id) },
+  });
+
+  const { data: sensorDevices } = useListSensorDevices({
+    query: { enabled: showAssignPanel, queryKey: getListSensorDevicesQueryKey() },
+  });
+
+  const assignMutation = useAssignSensorDevice({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetBrewSensorTelemetryQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() });
+        setShowAssignPanel(false);
+        setAssignDeviceId("");
+        toast({ title: "iSpindel assigned", description: "Readings from this point forward will appear here." });
+      },
+      onError: () => toast({ title: "Failed to assign device", variant: "destructive" }),
+    },
   });
 
   const sensorConnStatus = (() => {
@@ -578,8 +600,68 @@ export default function BrewSessionDetail() {
         </div>
       </div>
 
-      {/* Sensor Telemetry — only shown when an iSpindel/sensor device is assigned */}
-      {telemetry?.device && (
+      {/* Sensor Telemetry */}
+      {telemetry && !telemetry.device ? (
+        <div className="bg-card border border-card-border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <WifiOff className="w-4 h-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">iSpindel</h2>
+          </div>
+
+          {!showAssignPanel ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">No iSpindel assigned to this batch.</p>
+              <Button size="sm" variant="outline" onClick={() => setShowAssignPanel(true)}>
+                <Wifi className="w-3.5 h-3.5 mr-1.5" />
+                Assign iSpindel
+              </Button>
+              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                Assign the iSpindel after the device is floating in the fermenter and sending stable readings.
+                Previous test readings will remain in device history but will not be added to this batch.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Assign the iSpindel after the device is floating in the fermenter and sending stable readings.
+                Previous test readings will remain in device history but will not be added to this batch.
+              </p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={assignDeviceId}
+                  onChange={(e) => setAssignDeviceId(e.target.value)}
+                  className="flex-1 text-xs bg-background border border-input rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">Select a device…</option>
+                  {(sensorDevices ?? []).map((d: any) => (
+                    <option key={d.device.id} value={String(d.device.id)}>
+                      {d.device.deviceName}
+                      {d.assignedBrewName ? ` (→ ${d.assignedBrewName})` : d.connectionStatus === "connected" ? " · live" : ""}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  disabled={!assignDeviceId || assignMutation.isPending}
+                  onClick={() => {
+                    if (!assignDeviceId) return;
+                    assignMutation.mutate({ id: Number(assignDeviceId), data: { brewSessionId: id } });
+                  }}
+                >
+                  <Check className="w-3.5 h-3.5 mr-1" />
+                  Assign
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowAssignPanel(false); setAssignDeviceId(""); }}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+              {(sensorDevices ?? []).length === 0 && (
+                <p className="text-xs text-muted-foreground">No iSpindel devices registered yet. Add one in Settings → Integrations.</p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : telemetry?.device ? (
         <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -672,7 +754,7 @@ export default function BrewSessionDetail() {
             </div>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* iSpindel Readings History */}
       {telemetry?.device && (telemetry as any).readings && (telemetry as any).readings.length > 0 && (

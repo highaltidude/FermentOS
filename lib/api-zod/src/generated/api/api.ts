@@ -994,3 +994,499 @@ export const UpdateEquipmentResponse = zod.object({
 export const DeleteEquipmentParams = zod.object({
   id: zod.coerce.number(),
 });
+
+/**
+ * @summary List all registered sensor devices with latest reading and assignment
+ */
+export const ListSensorDevicesResponseItem = zod.object({
+  device: zod.object({
+    id: zod.number(),
+    deviceType: zod.string(),
+    deviceName: zod.string(),
+    deviceKey: zod.string(),
+    enabled: zod.boolean(),
+    notes: zod.string().nullish(),
+    lastSeenAt: zod.string().datetime({}).nullish(),
+    createdAt: zod.string().datetime({}),
+    updatedAt: zod.string().datetime({}),
+  }),
+  latestReading: zod
+    .object({
+      id: zod.number(),
+      deviceId: zod.number(),
+      brewSessionId: zod.number().nullish(),
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      angle: zod.number().nullish(),
+      battery: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      reportedInterval: zod.number().nullish(),
+      receivedAt: zod.string().datetime({}),
+    })
+    .nullish(),
+  assignedBrewSessionId: zod.number().nullish(),
+  assignedBrewName: zod.string().nullish(),
+  connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
+  alerts: zod.array(
+    zod.object({
+      type: zod.enum([
+        "gravity_stalled",
+        "temp_out_of_range",
+        "battery_low",
+        "device_offline",
+      ]),
+      message: zod.string(),
+      triggeredAt: zod.string().datetime({}),
+    }),
+  ),
+});
+export const ListSensorDevicesResponse = zod.array(
+  ListSensorDevicesResponseItem,
+);
+
+/**
+ * @summary Register a new sensor device
+ */
+export const createSensorDeviceBodyDeviceTypeDefault = `ispindel`;
+
+export const CreateSensorDeviceBody = zod.object({
+  deviceType: zod.string().default(createSensorDeviceBodyDeviceTypeDefault),
+  deviceName: zod.string(),
+  deviceKey: zod.string(),
+  notes: zod.string().optional(),
+});
+
+/**
+ * @summary Get a single sensor device with latest reading and assignment
+ */
+export const GetSensorDeviceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetSensorDeviceResponse = zod.object({
+  device: zod.object({
+    id: zod.number(),
+    deviceType: zod.string(),
+    deviceName: zod.string(),
+    deviceKey: zod.string(),
+    enabled: zod.boolean(),
+    notes: zod.string().nullish(),
+    lastSeenAt: zod.string().datetime({}).nullish(),
+    createdAt: zod.string().datetime({}),
+    updatedAt: zod.string().datetime({}),
+  }),
+  latestReading: zod
+    .object({
+      id: zod.number(),
+      deviceId: zod.number(),
+      brewSessionId: zod.number().nullish(),
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      angle: zod.number().nullish(),
+      battery: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      reportedInterval: zod.number().nullish(),
+      receivedAt: zod.string().datetime({}),
+    })
+    .nullish(),
+  assignedBrewSessionId: zod.number().nullish(),
+  assignedBrewName: zod.string().nullish(),
+  connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
+  alerts: zod.array(
+    zod.object({
+      type: zod.enum([
+        "gravity_stalled",
+        "temp_out_of_range",
+        "battery_low",
+        "device_offline",
+      ]),
+      message: zod.string(),
+      triggeredAt: zod.string().datetime({}),
+    }),
+  ),
+});
+
+/**
+ * @summary Update a sensor device (rename, notes, enabled)
+ */
+export const UpdateSensorDeviceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateSensorDeviceBody = zod.object({
+  deviceName: zod.string().optional(),
+  deviceKey: zod.string().optional(),
+  enabled: zod.boolean().optional(),
+  notes: zod.string().optional(),
+});
+
+export const UpdateSensorDeviceResponse = zod.object({
+  id: zod.number(),
+  deviceType: zod.string(),
+  deviceName: zod.string(),
+  deviceKey: zod.string(),
+  enabled: zod.boolean(),
+  notes: zod.string().nullish(),
+  lastSeenAt: zod.string().datetime({}).nullish(),
+  createdAt: zod.string().datetime({}),
+  updatedAt: zod.string().datetime({}),
+});
+
+/**
+ * @summary Delete a sensor device and all its readings
+ */
+export const DeleteSensorDeviceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Assign a sensor device to a brew session
+ */
+export const AssignSensorDeviceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AssignSensorDeviceBody = zod.object({
+  brewSessionId: zod.number(),
+});
+
+export const AssignSensorDeviceResponse = zod.object({
+  device: zod.object({
+    id: zod.number(),
+    deviceType: zod.string(),
+    deviceName: zod.string(),
+    deviceKey: zod.string(),
+    enabled: zod.boolean(),
+    notes: zod.string().nullish(),
+    lastSeenAt: zod.string().datetime({}).nullish(),
+    createdAt: zod.string().datetime({}),
+    updatedAt: zod.string().datetime({}),
+  }),
+  latestReading: zod
+    .object({
+      id: zod.number(),
+      deviceId: zod.number(),
+      brewSessionId: zod.number().nullish(),
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      angle: zod.number().nullish(),
+      battery: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      reportedInterval: zod.number().nullish(),
+      receivedAt: zod.string().datetime({}),
+    })
+    .nullish(),
+  assignedBrewSessionId: zod.number().nullish(),
+  assignedBrewName: zod.string().nullish(),
+  connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
+  alerts: zod.array(
+    zod.object({
+      type: zod.enum([
+        "gravity_stalled",
+        "temp_out_of_range",
+        "battery_low",
+        "device_offline",
+      ]),
+      message: zod.string(),
+      triggeredAt: zod.string().datetime({}),
+    }),
+  ),
+});
+
+/**
+ * @summary Unassign a sensor device from its current brew session
+ */
+export const UnassignSensorDeviceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UnassignSensorDeviceResponse = zod.object({
+  device: zod.object({
+    id: zod.number(),
+    deviceType: zod.string(),
+    deviceName: zod.string(),
+    deviceKey: zod.string(),
+    enabled: zod.boolean(),
+    notes: zod.string().nullish(),
+    lastSeenAt: zod.string().datetime({}).nullish(),
+    createdAt: zod.string().datetime({}),
+    updatedAt: zod.string().datetime({}),
+  }),
+  latestReading: zod
+    .object({
+      id: zod.number(),
+      deviceId: zod.number(),
+      brewSessionId: zod.number().nullish(),
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      angle: zod.number().nullish(),
+      battery: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      reportedInterval: zod.number().nullish(),
+      receivedAt: zod.string().datetime({}),
+    })
+    .nullish(),
+  assignedBrewSessionId: zod.number().nullish(),
+  assignedBrewName: zod.string().nullish(),
+  connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
+  alerts: zod.array(
+    zod.object({
+      type: zod.enum([
+        "gravity_stalled",
+        "temp_out_of_range",
+        "battery_low",
+        "device_offline",
+      ]),
+      message: zod.string(),
+      triggeredAt: zod.string().datetime({}),
+    }),
+  ),
+});
+
+/**
+ * @summary List recent readings for a device
+ */
+export const ListSensorReadingsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const listSensorReadingsQueryLimitDefault = 100;
+
+export const ListSensorReadingsQueryParams = zod.object({
+  limit: zod.coerce.number().default(listSensorReadingsQueryLimitDefault),
+});
+
+export const ListSensorReadingsResponseItem = zod.object({
+  id: zod.number(),
+  deviceId: zod.number(),
+  brewSessionId: zod.number().nullish(),
+  gravity: zod.number().nullish(),
+  temperature: zod.number().nullish(),
+  temperatureUnit: zod.string().nullish(),
+  angle: zod.number().nullish(),
+  battery: zod.number().nullish(),
+  rssi: zod.number().nullish(),
+  reportedInterval: zod.number().nullish(),
+  receivedAt: zod.string().datetime({}),
+});
+export const ListSensorReadingsResponse = zod.array(
+  ListSensorReadingsResponseItem,
+);
+
+/**
+ * @summary Get sensor telemetry and fermentation insights for a brew session
+ */
+export const GetBrewSensorTelemetryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetBrewSensorTelemetryResponse = zod.object({
+  brewSessionId: zod.number(),
+  device: zod
+    .object({
+      id: zod.number(),
+      deviceType: zod.string(),
+      deviceName: zod.string(),
+      deviceKey: zod.string(),
+      enabled: zod.boolean(),
+      notes: zod.string().nullish(),
+      lastSeenAt: zod.string().datetime({}).nullish(),
+      createdAt: zod.string().datetime({}),
+      updatedAt: zod.string().datetime({}),
+    })
+    .nullish(),
+  latestReading: zod
+    .object({
+      id: zod.number(),
+      deviceId: zod.number(),
+      brewSessionId: zod.number().nullish(),
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      angle: zod.number().nullish(),
+      battery: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      reportedInterval: zod.number().nullish(),
+      receivedAt: zod.string().datetime({}),
+    })
+    .nullish(),
+  readings: zod.array(
+    zod.object({
+      id: zod.number(),
+      deviceId: zod.number(),
+      brewSessionId: zod.number().nullish(),
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      angle: zod.number().nullish(),
+      battery: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      reportedInterval: zod.number().nullish(),
+      receivedAt: zod.string().datetime({}),
+    }),
+  ),
+  insights: zod
+    .object({
+      startingGravity: zod.number().nullish(),
+      currentGravity: zod.number().nullish(),
+      gravityDrop: zod.number().nullish(),
+      attenuationPercent: zod.number().nullish(),
+      fermentationStatus: zod.enum([
+        "likely_active",
+        "slowing",
+        "stable",
+        "possibly_complete",
+        "insufficient_data",
+      ]),
+      velocityLast24h: zod
+        .number()
+        .nullish()
+        .describe("Gravity points dropped per day over the last 24 h"),
+    })
+    .nullish(),
+  alerts: zod.array(
+    zod.object({
+      type: zod.enum([
+        "gravity_stalled",
+        "temp_out_of_range",
+        "battery_low",
+        "device_offline",
+      ]),
+      message: zod.string(),
+      triggeredAt: zod.string().datetime({}),
+    }),
+  ),
+});
+
+/**
+ * @summary Receive telemetry from an iSpindel device (no auth required)
+ */
+export const IngestISpindelReadingBody = zod.object({
+  name: zod.string().optional(),
+  ID: zod.number().optional(),
+  token: zod.string().optional(),
+  temperature: zod.number().optional(),
+  temp_units: zod.string().optional(),
+  angle: zod.number().optional(),
+  gravity: zod.number().optional(),
+  battery: zod.number().optional(),
+  interval: zod.number().optional(),
+  RSSI: zod.number().optional(),
+});
+
+export const IngestISpindelReadingResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Get iSpindel integration settings
+ */
+export const GetISpindelSettingsResponse = zod.object({
+  enabled: zod.boolean(),
+  token: zod
+    .string()
+    .nullish()
+    .describe("If set, inbound payloads must include this token value"),
+});
+
+/**
+ * @summary Update iSpindel integration settings
+ */
+export const UpdateISpindelSettingsBody = zod.object({
+  enabled: zod.boolean(),
+  token: zod
+    .string()
+    .nullish()
+    .describe("If set, inbound payloads must include this token value"),
+});
+
+export const UpdateISpindelSettingsResponse = zod.object({
+  enabled: zod.boolean(),
+  token: zod
+    .string()
+    .nullish()
+    .describe("If set, inbound payloads must include this token value"),
+});
+
+/**
+ * @summary Simulate an iSpindel reading for developer testing
+ */
+export const SimulateISpindelReadingBody = zod.object({
+  deviceId: zod
+    .number()
+    .nullish()
+    .describe("Existing device id. If omitted a temporary device is used."),
+  brewSessionId: zod.number().nullish(),
+  deviceName: zod.string().optional(),
+  gravity: zod.number(),
+  temperature: zod.number(),
+  temperatureUnit: zod.string().optional(),
+  battery: zod.number().optional(),
+  angle: zod.number().optional(),
+  rssi: zod.number().optional(),
+});
+
+export const SimulateISpindelReadingResponse = zod.object({
+  ok: zod.boolean(),
+  readingId: zod.number(),
+});
+
+/**
+ * @summary Home Assistant friendly — all active sensor devices with latest telemetry
+ */
+export const GetISpindelStatusResponse = zod.object({
+  devices: zod.array(
+    zod.object({
+      device: zod.object({
+        id: zod.number(),
+        deviceType: zod.string(),
+        deviceName: zod.string(),
+        deviceKey: zod.string(),
+        enabled: zod.boolean(),
+        notes: zod.string().nullish(),
+        lastSeenAt: zod.string().datetime({}).nullish(),
+        createdAt: zod.string().datetime({}),
+        updatedAt: zod.string().datetime({}),
+      }),
+      latestReading: zod
+        .object({
+          id: zod.number(),
+          deviceId: zod.number(),
+          brewSessionId: zod.number().nullish(),
+          gravity: zod.number().nullish(),
+          temperature: zod.number().nullish(),
+          temperatureUnit: zod.string().nullish(),
+          angle: zod.number().nullish(),
+          battery: zod.number().nullish(),
+          rssi: zod.number().nullish(),
+          reportedInterval: zod.number().nullish(),
+          receivedAt: zod.string().datetime({}),
+        })
+        .nullish(),
+      assignedBrewSessionId: zod.number().nullish(),
+      assignedBrewName: zod.string().nullish(),
+      connectionStatus: zod.enum([
+        "connected",
+        "warning",
+        "offline",
+        "unknown",
+      ]),
+      alerts: zod.array(
+        zod.object({
+          type: zod.enum([
+            "gravity_stalled",
+            "temp_out_of_range",
+            "battery_low",
+            "device_offline",
+          ]),
+          message: zod.string(),
+          triggeredAt: zod.string().datetime({}),
+        }),
+      ),
+    }),
+  ),
+});

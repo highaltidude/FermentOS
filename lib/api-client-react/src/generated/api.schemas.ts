@@ -436,6 +436,147 @@ export interface PhotoUploadResult {
   photoPath: string;
 }
 
+export interface SensorDevice {
+  id: number;
+  deviceType: string;
+  deviceName: string;
+  deviceKey: string;
+  enabled: boolean;
+  notes?: string | null;
+  lastSeenAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SensorReading {
+  id: number;
+  deviceId: number;
+  brewSessionId?: number | null;
+  gravity?: number | null;
+  temperature?: number | null;
+  temperatureUnit?: string | null;
+  angle?: number | null;
+  battery?: number | null;
+  rssi?: number | null;
+  reportedInterval?: number | null;
+  receivedAt: string;
+}
+
+export type SensorAlertType =
+  (typeof SensorAlertType)[keyof typeof SensorAlertType];
+
+export const SensorAlertType = {
+  gravity_stalled: "gravity_stalled",
+  temp_out_of_range: "temp_out_of_range",
+  battery_low: "battery_low",
+  device_offline: "device_offline",
+} as const;
+
+export interface SensorAlert {
+  type: SensorAlertType;
+  message: string;
+  triggeredAt: string;
+}
+
+export type FermentationInsightsFermentationStatus =
+  (typeof FermentationInsightsFermentationStatus)[keyof typeof FermentationInsightsFermentationStatus];
+
+export const FermentationInsightsFermentationStatus = {
+  likely_active: "likely_active",
+  slowing: "slowing",
+  stable: "stable",
+  possibly_complete: "possibly_complete",
+  insufficient_data: "insufficient_data",
+} as const;
+
+export interface FermentationInsights {
+  startingGravity?: number | null;
+  currentGravity?: number | null;
+  gravityDrop?: number | null;
+  attenuationPercent?: number | null;
+  fermentationStatus: FermentationInsightsFermentationStatus;
+  /** Gravity points dropped per day over the last 24 h */
+  velocityLast24h?: number | null;
+}
+
+export type SensorDeviceWithStatusConnectionStatus =
+  (typeof SensorDeviceWithStatusConnectionStatus)[keyof typeof SensorDeviceWithStatusConnectionStatus];
+
+export const SensorDeviceWithStatusConnectionStatus = {
+  connected: "connected",
+  warning: "warning",
+  offline: "offline",
+  unknown: "unknown",
+} as const;
+
+export interface SensorDeviceWithStatus {
+  device: SensorDevice;
+  latestReading?: SensorReading | null;
+  assignedBrewSessionId?: number | null;
+  assignedBrewName?: string | null;
+  connectionStatus: SensorDeviceWithStatusConnectionStatus;
+  alerts: SensorAlert[];
+}
+
+export interface BrewSensorTelemetry {
+  brewSessionId: number;
+  device?: SensorDevice | null;
+  latestReading?: SensorReading | null;
+  readings: SensorReading[];
+  insights?: FermentationInsights | null;
+  alerts: SensorAlert[];
+}
+
+export interface ISpindelPayload {
+  name?: string;
+  ID?: number;
+  token?: string;
+  temperature?: number;
+  temp_units?: string;
+  angle?: number;
+  gravity?: number;
+  battery?: number;
+  interval?: number;
+  RSSI?: number;
+}
+
+export interface ISpindelSettings {
+  enabled: boolean;
+  /** If set, inbound payloads must include this token value */
+  token?: string | null;
+}
+
+export interface SimulateReadingBody {
+  /** Existing device id. If omitted a temporary device is used. */
+  deviceId?: number | null;
+  brewSessionId?: number | null;
+  deviceName?: string;
+  gravity: number;
+  temperature: number;
+  temperatureUnit?: string;
+  battery?: number;
+  angle?: number;
+  rssi?: number;
+}
+
+export interface CreateSensorDeviceBody {
+  deviceType?: string;
+  deviceName: string;
+  deviceKey: string;
+  notes?: string;
+}
+
+export interface UpdateSensorDeviceBody {
+  deviceName?: string;
+  deviceKey?: string;
+  enabled?: boolean;
+  notes?: string;
+}
+
+export interface AssignDeviceBody {
+  brewSessionId: number;
+}
+
 export type GetUpcomingBrewsParams = {
   /**
    * @minimum 1
@@ -462,4 +603,21 @@ export type ListInventoryParams = {
 export type ListEquipmentParams = {
   category?: string;
   search?: string;
+};
+
+export type ListSensorReadingsParams = {
+  limit?: number;
+};
+
+export type IngestISpindelReading200 = {
+  ok: boolean;
+};
+
+export type SimulateISpindelReading200 = {
+  ok: boolean;
+  readingId: number;
+};
+
+export type GetISpindelStatus200 = {
+  devices: SensorDeviceWithStatus[];
 };

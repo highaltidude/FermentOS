@@ -23,6 +23,12 @@ const ALWAYS_ALLOWED_PREFIXES = [
   // reachable from HA without a Bearer token so polling works even when
   // API auth is enabled.
   "/api/ha/status",
+  // iSpindel ingest — device posts directly from the brewer's local network;
+  // it cannot send a Bearer token. Optional token validation is handled
+  // inside the route handler itself.
+  "/api/integrations/ispindel",
+  // HA-friendly iSpindel status endpoint — read-only, polled by HA.
+  "/api/integrations/ispindel/status",
 ];
 
 let cachedRequired: boolean | null = null;

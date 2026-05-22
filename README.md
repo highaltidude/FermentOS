@@ -46,6 +46,7 @@ page.
 - **Beer Styles** — Define your own style list (Settings) used as a dropdown when creating recipes
 - **Unit System** — Choose Imperial, Metric, or Both in Settings → Brewing. Controls which units appear in the inventory form; existing items keep their stored units
 - **Dashboard** — At-a-glance view of active fermentations and recent sessions
+- **iSpindel Integration** — Receive live gravity, temperature, battery, and angle readings from iSpindel Wi-Fi hydrometers. Devices auto-register on first POST, readings are mirrored into the fermentation chart, and a live telemetry card appears on the brew session page when a device is assigned
 
 ## Tech Stack
 
@@ -416,12 +417,81 @@ The preference is stored in the database and defaults to `imperial` on a fresh i
 
 ---
 
+### Sensors
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sensors/devices` | List all registered sensor devices with latest reading, assignment, and connection status |
+| POST | `/api/sensors/devices` | Manually register a device |
+| GET | `/api/sensors/devices/:id` | Get a single device |
+| PUT | `/api/sensors/devices/:id` | Rename a device |
+| DELETE | `/api/sensors/devices/:id` | Delete a device and all its readings |
+| POST | `/api/sensors/devices/:id/assign` | Assign a device to a brew session |
+| DELETE | `/api/sensors/devices/:id/assign` | Unassign a device from its current brew session |
+| GET | `/api/sensors/readings` | List raw sensor readings (filterable by `deviceId`, `brewSessionId`) |
+| GET | `/api/brew-sessions/:id/sensor-telemetry` | Live telemetry for a brew: device info, latest reading, fermentation insights, alerts |
+
+---
+
+### iSpindel Integration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/integrations/ispindel` | iSpindel ingest — receives the device's JSON payload; no auth token required |
+| GET | `/api/integrations/ispindel/settings` | Get integration settings (enabled flag, token) |
+| PUT | `/api/integrations/ispindel/settings` | Update integration settings |
+| POST | `/api/integrations/ispindel/simulate` | Send a synthetic reading for development/testing |
+| GET | `/api/integrations/ispindel/status` | HA-friendly status endpoint — returns latest reading from each device |
+
+---
+
 ### Static Assets
 
 Uploaded session photos are served at:
 ```
 GET /api/uploads/sessions/<filename>
 ```
+
+---
+
+## iSpindel Setup
+
+The iSpindel is an open-source Wi-Fi hydrometer that sends gravity, temperature, battery, and tilt angle readings over HTTP. FermentOS includes a native ingest endpoint so the iSpindel posts directly to your local server — no cloud account or relay required.
+
+### 1. Enable the integration
+
+In FermentOS, go to **Settings → System → Connectivity → iSpindel Integration** and confirm the toggle is on. The panel shows the exact POST URL to use.
+
+### 2. Configure your iSpindel
+
+Open the iSpindel's built-in web UI (connect it to your network in hotspot mode first, then visit `http://192.168.4.1`):
+
+| Field | Value |
+|-------|-------|
+| Server Address | your FermentOS host IP (e.g. `192.168.1.100`) |
+| Port | `80` |
+| URL | `/api/integrations/ispindel` |
+| Protocol | HTTP |
+
+Leave all other fields at their defaults. The iSpindel's **Name** field becomes the `deviceKey` used to identify it in FermentOS.
+
+### 3. First reading
+
+On the next wake cycle the iSpindel will POST to FermentOS. If no device with that `deviceKey` exists yet, one is **auto-created** — you will see it appear in the Connectivity panel immediately after the first reading.
+
+### 4. Assign to a brew session
+
+In the Connectivity panel (or on the brew session page), select an active brew from the **Assign to brew…** dropdown. From that point on, every incoming reading is also mirrored into the session's fermentation chart and a live telemetry card appears at the top of the brew session page.
+
+### 5. Optional: secure with a token
+
+Set a **Security Token** in the Connectivity panel. Then open the iSpindel web UI and enter the same value in its **Token** field. FermentOS will reject readings that don't include the matching token.
+
+> **Note:** The ingest endpoint (`POST /api/integrations/ispindel`) and the status endpoint (`GET /api/integrations/ispindel/status`) are always exempt from API key lockdown so the iSpindel device can reach them without a bearer token.
+
+### Simulate a reading (development)
+
+Expand the **Developer: Simulate iSpindel Reading** section in the Connectivity panel and click **Send Reading** — useful for testing before your device arrives or while debugging.
 
 ---
 

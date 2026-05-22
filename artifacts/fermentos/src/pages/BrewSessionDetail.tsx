@@ -9,6 +9,8 @@ import {
   useDeleteFermentationReading,
   useDeleteStatusLogEntry,
   getGetBrewSessionQueryKey,
+  useGetBrewSensorTelemetry,
+  getGetBrewSensorTelemetryQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -119,6 +121,18 @@ export default function BrewSessionDetail() {
   }, [photoLightboxOpen]);
 
   const { data: session, isLoading } = useGetBrewSession(id, { query: { enabled: !!id, queryKey: getGetBrewSessionQueryKey(id) } });
+
+  const { data: telemetry } = useGetBrewSensorTelemetry(id, {
+    query: { enabled: !!id, refetchInterval: 30_000, queryKey: getGetBrewSensorTelemetryQueryKey(id) },
+  });
+
+  const sensorConnStatus = (() => {
+    if (!telemetry?.latestReading) return "unknown";
+    const ms = Date.now() - new Date(telemetry.latestReading.receivedAt).getTime();
+    if (ms < 30 * 60_000) return "connected";
+    if (ms < 2 * 60 * 60_000) return "warning";
+    return "offline";
+  })();
 
   const updateMutation = useUpdateBrewSession({
     mutation: {
@@ -561,6 +575,97 @@ export default function BrewSessionDetail() {
           )}
         </div>
       </div>
+
+      {/* Sensor Telemetry — only shown when an iSpindel/sensor device is assigned */}
+      {telemetry?.device && (
+        <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                sensorConnStatus === "connected" ? "bg-green-500" :
+                sensorConnStatus === "warning" ? "bg-amber-500" :
+                sensorConnStatus === "offline" ? "bg-destructive" : "bg-muted-foreground"
+              }`} />
+              <h2 className="text-sm font-semibold text-foreground">{telemetry.device.deviceName}</h2>
+              <span className="text-xs text-muted-foreground font-mono">· {telemetry.device.deviceKey}</span>
+              <span className={`text-xs capitalize ${
+                sensorConnStatus === "connected" ? "text-green-600 dark:text-green-400" :
+                sensorConnStatus === "warning" ? "text-amber-600 dark:text-amber-400" :
+                sensorConnStatus === "offline" ? "text-destructive" : "text-muted-foreground"
+              }`}>{sensorConnStatus}</span>
+            </div>
+            {telemetry.latestReading && (
+              <span className="text-xs text-muted-foreground">
+                {new Date(telemetry.latestReading.receivedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
+
+          {/* Current readings */}
+          {telemetry.latestReading && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {telemetry.latestReading.gravity != null && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                  <p className="text-xs text-muted-foreground">Gravity</p>
+                  <p className="text-base font-semibold text-blue-700 dark:text-blue-400">{Number(telemetry.latestReading.gravity).toFixed(3)}</p>
+                </div>
+              )}
+              {telemetry.latestReading.temperature != null && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                  <p className="text-xs text-muted-foreground">Temperature</p>
+                  <p className="text-base font-semibold text-amber-700 dark:text-amber-400">
+                    {Number(telemetry.latestReading.temperature).toFixed(1)}{telemetry.latestReading.temperatureUnit === "F" ? "°F" : "°C"}
+                  </p>
+                </div>
+              )}
+              {telemetry.latestReading.battery != null && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                  <p className="text-xs text-muted-foreground">Battery</p>
+                  <p className="text-base font-semibold text-foreground">{Number(telemetry.latestReading.battery).toFixed(0)}%</p>
+                </div>
+              )}
+              {telemetry.latestReading.angle != null && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                  <p className="text-xs text-muted-foreground">Angle</p>
+                  <p className="text-base font-semibold text-foreground">{Number(telemetry.latestReading.angle).toFixed(1)}°</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Fermentation insights */}
+          {telemetry.insights && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground border-t border-border pt-2">
+              {telemetry.insights.fermentationStatus && (
+                <span>Status: <span className="text-foreground font-medium capitalize">{String(telemetry.insights.fermentationStatus).replace(/_/g, " ")}</span></span>
+              )}
+              {telemetry.insights.attenuationPercent != null && (
+                <span>Attenuation: <span className="text-foreground font-medium">{Number(telemetry.insights.attenuationPercent).toFixed(1)}%</span></span>
+              )}
+              {telemetry.insights.velocityLast24h != null && (
+                <span>Δ 24h: <span className="text-foreground font-medium">{Number(telemetry.insights.velocityLast24h).toFixed(4)} SG/day</span></span>
+              )}
+              {telemetry.insights.gravityDrop != null && (
+                <span>Drop: <span className="text-foreground font-medium">{Number(telemetry.insights.gravityDrop).toFixed(3)} SG</span></span>
+              )}
+            </div>
+          )}
+
+          {/* Alerts */}
+          {telemetry.alerts && telemetry.alerts.length > 0 && (
+            <div className="space-y-1">
+              {telemetry.alerts.map((a: any, i: number) => (
+                <div key={i} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded ${
+                  a.severity === "critical" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                }`}>
+                  <Thermometer className="w-3.5 h-3.5 shrink-0" />
+                  {a.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Fermentation Chart */}
       {chartData.length > 1 && (

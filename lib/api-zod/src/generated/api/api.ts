@@ -1020,6 +1020,12 @@ export const ListSensorDevicesResponseItem = zod.object({
       temperatureUnit: zod.string().nullish(),
       angle: zod.number().nullish(),
       battery: zod.number().nullish(),
+      batteryPercentEstimate: zod
+        .number()
+        .nullish()
+        .describe(
+          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+        ),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
       rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1087,6 +1093,12 @@ export const GetSensorDeviceResponse = zod.object({
       temperatureUnit: zod.string().nullish(),
       angle: zod.number().nullish(),
       battery: zod.number().nullish(),
+      batteryPercentEstimate: zod
+        .number()
+        .nullish()
+        .describe(
+          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+        ),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
       rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1176,6 +1188,12 @@ export const AssignSensorDeviceResponse = zod.object({
       temperatureUnit: zod.string().nullish(),
       angle: zod.number().nullish(),
       battery: zod.number().nullish(),
+      batteryPercentEstimate: zod
+        .number()
+        .nullish()
+        .describe(
+          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+        ),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
       rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1228,6 +1246,12 @@ export const UnassignSensorDeviceResponse = zod.object({
       temperatureUnit: zod.string().nullish(),
       angle: zod.number().nullish(),
       battery: zod.number().nullish(),
+      batteryPercentEstimate: zod
+        .number()
+        .nullish()
+        .describe(
+          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+        ),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
       rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1273,6 +1297,12 @@ export const ListSensorReadingsResponseItem = zod.object({
   temperatureUnit: zod.string().nullish(),
   angle: zod.number().nullish(),
   battery: zod.number().nullish(),
+  batteryPercentEstimate: zod
+    .number()
+    .nullish()
+    .describe(
+      "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+    ),
   rssi: zod.number().nullish(),
   reportedInterval: zod.number().nullish(),
   rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1314,6 +1344,12 @@ export const GetBrewSensorTelemetryResponse = zod.object({
       temperatureUnit: zod.string().nullish(),
       angle: zod.number().nullish(),
       battery: zod.number().nullish(),
+      batteryPercentEstimate: zod
+        .number()
+        .nullish()
+        .describe(
+          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+        ),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
       rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1330,6 +1366,12 @@ export const GetBrewSensorTelemetryResponse = zod.object({
       temperatureUnit: zod.string().nullish(),
       angle: zod.number().nullish(),
       battery: zod.number().nullish(),
+      batteryPercentEstimate: zod
+        .number()
+        .nullish()
+        .describe(
+          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+        ),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
       rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1469,6 +1511,12 @@ export const GetISpindelStatusResponse = zod.object({
           temperatureUnit: zod.string().nullish(),
           angle: zod.number().nullish(),
           battery: zod.number().nullish(),
+          batteryPercentEstimate: zod
+            .number()
+            .nullish()
+            .describe(
+              "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+            ),
           rssi: zod.number().nullish(),
           reportedInterval: zod.number().nullish(),
           rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1536,6 +1584,12 @@ export const ListISpindelDeviceReadingsResponse = zod.object({
       temperatureUnit: zod.string().nullish(),
       angle: zod.number().nullish(),
       battery: zod.number().nullish(),
+      batteryPercentEstimate: zod
+        .number()
+        .nullish()
+        .describe(
+          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+        ),
       rssi: zod.number().nullish(),
       reportedInterval: zod.number().nullish(),
       rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),

@@ -287,6 +287,7 @@ function ISpindelDeviceDetail({
     gravity: r.gravity != null ? Number(r.gravity) : null,
     temp: r.temperature != null ? Number(r.temperature) : null,
     battery: r.battery != null ? Number(r.battery) : null,
+    batteryPct: r.batteryPercentEstimate != null ? Number(r.batteryPercentEstimate) : null,
   })), [chartPage]);
 
   const brewName = (id: number | null) =>
@@ -332,7 +333,12 @@ function ISpindelDeviceDetail({
           <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
             {device.latestReading.gravity != null && <span>SG <strong className="text-blue-700 dark:text-blue-400">{Number(device.latestReading.gravity).toFixed(3)}</strong></span>}
             {device.latestReading.temperature != null && <span>Temp <strong className="text-amber-700 dark:text-amber-400">{Number(device.latestReading.temperature).toFixed(1)}{device.latestReading.temperatureUnit === "F" ? "°F" : "°C"}</strong></span>}
-            {device.latestReading.battery != null && <span>🔋 <strong>{Number(device.latestReading.battery).toFixed(2)}V</strong></span>}
+            {device.latestReading.battery != null && (
+              <span className={(device.latestReading as any).batteryPercentEstimate != null && (device.latestReading as any).batteryPercentEstimate < 10 ? "text-destructive" : (device.latestReading as any).batteryPercentEstimate != null && (device.latestReading as any).batteryPercentEstimate < 20 ? "text-amber-600 dark:text-amber-400" : ""}>
+                🔋 <strong>{Number(device.latestReading.battery).toFixed(2)}V</strong>
+                {(device.latestReading as any).batteryPercentEstimate != null && <span className="font-normal text-muted-foreground"> (~{Math.round((device.latestReading as any).batteryPercentEstimate)}%)</span>}
+              </span>
+            )}
             {device.latestReading.angle != null && <span>∠ <strong>{Number(device.latestReading.angle).toFixed(1)}°</strong></span>}
             {device.latestReading.rssi != null && <span>📶 <strong>{device.latestReading.rssi} dBm</strong></span>}
           </div>
@@ -365,7 +371,10 @@ function ISpindelDeviceDetail({
                   <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
                   <XAxis dataKey="t" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
                   <YAxis domain={[0, 5]} tick={{ fontSize: 9 }} unit="V" width={32} />
-                  <Tooltip labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 10 }} formatter={(v: number) => [`${v.toFixed(2)}V`, "Battery"]} />
+                  <Tooltip labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 10 }} formatter={(v: number, _name: string, entry: any) => {
+                    const pct = entry?.payload?.batteryPct;
+                    return [`${v.toFixed(2)}V${pct != null ? ` (~${Math.round(pct)}%)` : ""}`, "Battery"];
+                  }} />
                   <Line type="monotone" dataKey="battery" stroke="#16a34a" strokeWidth={1.5} dot={false} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
@@ -427,7 +436,13 @@ function ISpindelDeviceDetail({
                     <td className="px-2 py-1.5 text-right font-mono">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>
                     <td className="px-2 py-1.5 text-right whitespace-nowrap">{r.temperature != null ? `${Number(r.temperature).toFixed(1)}${r.temperatureUnit === "F" ? "°F" : "°C"}` : "—"}</td>
                     <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>
-                    <td className="px-2 py-1.5 text-right">{r.battery != null ? `${Number(r.battery).toFixed(2)}V` : "—"}</td>
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                      {r.battery != null ? (
+                        <span className={r.batteryPercentEstimate != null && r.batteryPercentEstimate < 10 ? "text-destructive" : r.batteryPercentEstimate != null && r.batteryPercentEstimate < 20 ? "text-amber-600 dark:text-amber-400" : ""}>
+                          {Number(r.battery).toFixed(2)}V{r.batteryPercentEstimate != null ? ` (~${Math.round(r.batteryPercentEstimate)}%)` : ""}
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rssi != null ? `${r.rssi}` : "—"}</td>
                     <td className="px-2 py-1.5 text-muted-foreground max-w-[100px] truncate">{brewName(r.brewSessionId ?? null) ?? "—"}</td>
                     <td className="px-2 py-1.5">
@@ -695,7 +710,11 @@ function ISpindelPanel() {
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                           {reading.gravity != null && <span>SG {Number(reading.gravity).toFixed(3)}</span>}
                           {reading.temperature != null && <span>{Number(reading.temperature).toFixed(1)}{reading.temperatureUnit === "F" ? "°F" : "°C"}</span>}
-                          {reading.battery != null && <span>🔋 {Number(reading.battery).toFixed(0)}%</span>}
+                          {reading.battery != null && (
+                            <span className={(reading as any).batteryPercentEstimate != null && (reading as any).batteryPercentEstimate < 10 ? "text-destructive" : (reading as any).batteryPercentEstimate != null && (reading as any).batteryPercentEstimate < 20 ? "text-amber-600 dark:text-amber-400" : ""}>
+                              🔋 {Number(reading.battery).toFixed(2)}V{(reading as any).batteryPercentEstimate != null ? ` (~${Math.round((reading as any).batteryPercentEstimate)}%)` : ""}
+                            </span>
+                          )}
                           {reading.angle != null && <span>∠ {Number(reading.angle).toFixed(1)}°</span>}
                           {reading.rssi != null && <span>📶 {reading.rssi} dBm</span>}
                           <span className="text-muted-foreground/70">{new Date(reading.receivedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>

@@ -72,7 +72,7 @@ function calcConnectionStatus(
 
 function buildAlerts(
   device: { lastSeenAt: Date | null },
-  reading: { battery?: number | null; gravity?: number | null; receivedAt: Date; reportedInterval?: number | null } | null,
+  reading: { battery?: number | null; batteryPercentEstimate?: number | null; gravity?: number | null; receivedAt: Date; reportedInterval?: number | null } | null,
   connectionStatus: string,
 ): { type: string; message: string; triggeredAt: string }[] {
   const alerts: { type: string; message: string; triggeredAt: string }[] = [];
@@ -82,8 +82,14 @@ function buildAlerts(
     alerts.push({ type: "device_offline", message: "Device has not reported recently", triggeredAt: now.toISOString() });
   }
 
-  if (reading?.battery != null && reading.battery < 20) {
-    alerts.push({ type: "battery_low", message: `Battery at ${reading.battery.toFixed(0)}%`, triggeredAt: now.toISOString() });
+  const pct = reading?.batteryPercentEstimate ?? null;
+  if (pct != null && pct < 20) {
+    const level = pct < 10 ? "critical" : "warning";
+    alerts.push({
+      type: "battery_low",
+      message: `Battery ${level}: ${reading!.battery != null ? `${Number(reading!.battery).toFixed(2)}V ` : ""}(~${Math.round(pct)}%)`,
+      triggeredAt: now.toISOString(),
+    });
   }
 
   return alerts;

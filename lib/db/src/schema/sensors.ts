@@ -32,6 +32,7 @@ export const sensorReadingsTable = pgTable("sensor_readings", {
   temperatureUnit: text("temperature_unit").default("C"),
   angle: real("angle"),
   battery: real("battery"),
+  batteryPercentEstimate: real("battery_percent_estimate"),
   rssi: integer("rssi"),
   reportedInterval: integer("reported_interval"),
   rawPayload: jsonb("raw_payload"),

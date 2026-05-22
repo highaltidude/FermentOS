@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, appConfigTable, fermentationReadingsTable } from "@workspace/db";
 import { eq, desc, isNull, and, count, gte, lte } from "drizzle-orm";
 import { calcConnectionStatus, buildAlerts } from "./sensors";
+import { estimateBatteryPercent } from "../lib/batteryUtil";
 
 const router = Router();
 
@@ -78,6 +79,7 @@ async function ingestReading(opts: {
   }
 
   // Store sensor reading
+  const batteryPct = opts.battery != null ? estimateBatteryPercent(opts.battery) : null;
   const [reading] = await db
     .insert(sensorReadingsTable)
     .values({
@@ -88,6 +90,7 @@ async function ingestReading(opts: {
       temperatureUnit: opts.temperatureUnit ?? "C",
       angle: opts.angle ?? null,
       battery: opts.battery ?? null,
+      batteryPercentEstimate: batteryPct,
       rssi: opts.rssi != null ? Math.round(opts.rssi) : null,
       reportedInterval: opts.interval != null ? Math.round(opts.interval) : null,
       rawPayload: opts.rawPayload ?? null,

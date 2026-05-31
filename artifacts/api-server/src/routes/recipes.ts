@@ -45,17 +45,18 @@ router.get("/recipes", async (req, res) => {
 
   const statsMap = new Map(stats.map((s) => [s.recipeId, s]));
 
-  let rows = await db.select().from(recipesTable).orderBy(recipesTable.createdAt);
+  const conditions = [
+    ...(search
+      ? [or(ilike(recipesTable.name, `%${search}%`), ilike(recipesTable.style, `%${search}%`))]
+      : []),
+    ...(style ? [eq(recipesTable.style, style)] : []),
+  ];
 
-  if (search) {
-    const lower = search.toLowerCase();
-    rows = rows.filter(
-      (r) => r.name.toLowerCase().includes(lower) || r.style.toLowerCase().includes(lower)
-    );
-  }
-  if (style) {
-    rows = rows.filter((r) => r.style === style);
-  }
+  const rows = await db
+    .select()
+    .from(recipesTable)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(recipesTable.createdAt);
 
   return res.json(
     rows.map((r) => {

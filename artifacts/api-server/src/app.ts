@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import errorHandler from "./middleware/errorHandler";
 
 const app: Express = express();
 
@@ -49,5 +50,7 @@ if (fs.existsSync(staticDir)) {
   });
   logger.info({ staticDir }, "Serving frontend static files");
 }
+
+app.use(errorHandler);
 
 export default app;

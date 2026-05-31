@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, ilike } from "drizzle-orm";
 import { db, inventoryTable } from "@workspace/db";
 import {
   ListInventoryQueryParams,
@@ -15,15 +15,16 @@ router.get("/inventory", async (req, res) => {
   const query = ListInventoryQueryParams.safeParse(req.query);
   if (!query.success) return res.status(400).json({ error: "Invalid query parameters" });
 
-  let rows = await db.select().from(inventoryTable).orderBy(inventoryTable.name);
+  const conditions = [
+    ...(query.data.type ? [eq(inventoryTable.type, query.data.type)] : []),
+    ...(query.data.search ? [ilike(inventoryTable.name, `%${query.data.search}%`)] : []),
+  ];
 
-  if (query.data.type) {
-    rows = rows.filter((r) => r.type === query.data.type);
-  }
-  if (query.data.search) {
-    const lower = query.data.search.toLowerCase();
-    rows = rows.filter((r) => r.name.toLowerCase().includes(lower));
-  }
+  const rows = await db
+    .select()
+    .from(inventoryTable)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(inventoryTable.name);
 
   return res.json(rows);
 });

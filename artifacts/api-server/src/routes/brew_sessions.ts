@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { db, brewSessionsTable, fermentationReadingsTable, brewSessionStatusLogTable } from "@workspace/db";
 import {
   ListBrewSessionsQueryParams,
@@ -40,16 +40,18 @@ router.get("/brew-sessions", async (req, res) => {
   const query = ListBrewSessionsQueryParams.safeParse(req.query);
   if (!query.success) return res.status(400).json({ error: "Invalid query parameters" });
 
-  let rows = await db.select().from(brewSessionsTable).orderBy(brewSessionsTable.brewDate);
+  const conditions = [
+    query.data.status ? eq(brewSessionsTable.status, query.data.status) : undefined,
+    query.data.recipeId ? eq(brewSessionsTable.recipeId, query.data.recipeId) : undefined,
+  ].filter((c) => c !== undefined);
 
-  if (query.data.status) {
-    rows = rows.filter((r) => r.status === query.data.status);
-  }
-  if (query.data.recipeId) {
-    rows = rows.filter((r) => r.recipeId === query.data.recipeId);
-  }
+  const rows = await db
+    .select()
+    .from(brewSessionsTable)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(brewSessionsTable.brewDate));
 
-  return res.json(rows.reverse());
+  return res.json(rows);
 });
 
 router.post("/brew-sessions", async (req, res) => {

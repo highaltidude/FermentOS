@@ -5,6 +5,7 @@ export const apiTokensTable = pgTable("api_tokens", {
   name: text("name").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   prefix: text("prefix").notNull(),
+  scope: text("scope").$type<"read" | "write">().notNull().default("write"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
 });

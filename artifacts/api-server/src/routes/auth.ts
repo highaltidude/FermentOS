@@ -17,6 +17,7 @@ router.get("/status", async (_req, res) => {
       id: apiTokensTable.id,
       name: apiTokensTable.name,
       prefix: apiTokensTable.prefix,
+      scope: apiTokensTable.scope,
       createdAt: apiTokensTable.createdAt,
       lastUsedAt: apiTokensTable.lastUsedAt,
     })
@@ -47,14 +48,18 @@ router.post("/tokens", async (req, res): Promise<void> => {
   if (!name) { res.status(400).json({ error: "Token name is required" }); return; }
   if (name.length > 80) { res.status(400).json({ error: "Name too long" }); return; }
 
+  const rawScope = req.body?.scope;
+  const scope: "read" | "write" = rawScope === "read" || rawScope === "write" ? rawScope : "write";
+
   const { token, prefix, hash } = generateToken();
   const [row] = await db
     .insert(apiTokensTable)
-    .values({ name, prefix, tokenHash: hash })
+    .values({ name, prefix, tokenHash: hash, scope })
     .returning({
       id: apiTokensTable.id,
       name: apiTokensTable.name,
       prefix: apiTokensTable.prefix,
+      scope: apiTokensTable.scope,
       createdAt: apiTokensTable.createdAt,
       lastUsedAt: apiTokensTable.lastUsedAt,
     });

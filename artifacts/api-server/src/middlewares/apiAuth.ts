@@ -137,6 +137,12 @@ export async function apiAuth(req: Request, res: Response, next: NextFunction): 
           .set({ lastUsedAt: new Date() })
           .where(eq(apiTokensTable.id, row.id))
           .catch(() => {});
+        (req as any).tokenScope = row.scope;
+        const WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
+        if (WRITE_METHODS.includes(req.method) && row.scope === "read") {
+          res.status(403).json({ error: "Token scope insufficient — write access required" });
+          return;
+        }
         return next();
       }
     } catch (err) {

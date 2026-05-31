@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, ilike, or, avg, count, sql, asc, inArray } from "drizzle-orm";
+import { eq, ilike, or, and, avg, count, sql, asc, inArray } from "drizzle-orm";
 import { db, recipesTable, recipeIngredientsTable, recipeStepsTable, brewSessionsTable } from "@workspace/db";
 import {
   CreateRecipeBody,

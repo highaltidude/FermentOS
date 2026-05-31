@@ -31,9 +31,7 @@ page lets you advance (or revert) to any stage with a single click. Every
 status change is recorded in a timestamped history log visible on the session
 page.
 
-`brewDate` records the actual day grain hit the kettle. The optional
-`plannedDate` field is preserved for sessions that were previously in a
-"scheduled" state before the v2 lifecycle simplification.
+`brewDate` records the actual day grain hit the kettle.
 
 ## Features
 
@@ -296,7 +294,7 @@ sensor:
 {
   "recipeId": 1,
   "recipeName": "Pacific IPA",
-  "status": "brewing",
+  "status": "brew_day",
   "brewDate": "2024-03-15",
   "batchSizeGallons": 5.5,
   "originalGravityActual": 1.064,
@@ -306,9 +304,7 @@ sensor:
   "notes": "Optional"
 }
 ```
-`status`: `scheduled` | `brewing` | `fermenting` | `conditioning` | `packaged` | `complete`
-
-When you create a session in `scheduled` state, `brewDate` holds your *intended* brew day. The detail page shows a **Start brew** button instead of the stage progression bar; clicking it sets `status` to `brewing`, overwrites `brewDate` with today's date, and saves the original intended date in the new optional `plannedDate` field. This keeps duration math anchored on when the brew actually started, not on when you first drafted the session. Sessions created in any other status leave `plannedDate` null.
+`status`: `brew_day` | `fermenting` | `conditioning` | `packaged`
 
 **POST /api/brew-sessions/:id/readings** body:
 ```json

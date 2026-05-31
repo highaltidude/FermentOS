@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "arjun.swagger-viewer",
+    "42crunch.vscode-openapi",
+    "ms-vscode.vscode-typescript-next"
+  ]
+}

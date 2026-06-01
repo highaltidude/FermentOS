@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type SystemStats = {
   uptime: number;
@@ -519,7 +520,7 @@ function ISpindelPanel() {
     },
   });
   const updateDevice = useUpdateSensorDevice({
-    mutation: { onSuccess: () => { qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() }); setEditingDeviceId(null); } },
+    mutation: { onSuccess: () => { qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() }); setEditingDeviceId(null); toast({ title: "Device renamed" }); } },
   });
   const deleteDevice = useDeleteSensorDevice({
     mutation: { onSuccess: () => { qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() }); toast({ title: "Device removed" }); } },
@@ -670,40 +671,25 @@ function ISpindelPanel() {
 
           <div className="space-y-2">
             {(devices as any[]).map((d: any) => {
-              const isEditing = editingDeviceId === d.device.id;
               const reading = d.latestReading;
               return (
                 <div key={d.device.id} className="bg-muted/30 rounded-lg p-3 border border-border">
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
                       {/* Name row */}
-                      {isEditing ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            value={editDeviceName}
-                            onChange={(e) => setEditDeviceName(e.target.value)}
-                            className="text-sm h-7 py-0"
-                            autoFocus
-                          />
-                          <button type="button" onClick={() => updateDevice.mutate({ id: d.device.id, data: { deviceName: editDeviceName } })} className="text-primary hover:text-primary/80">
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button type="button" onClick={() => setEditingDeviceId(null)} className="text-muted-foreground hover:text-foreground">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
+                      <div className="group flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot(d.connectionStatus)}`} />
+                        <span className="text-sm font-medium text-foreground">{d.device.deviceName}</span>
+                        <span className="text-xs text-muted-foreground font-mono">· {d.device.deviceKey}</span>
                         <button
                           type="button"
-                          className="flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                           onClick={() => { setEditingDeviceId(d.device.id); setEditDeviceName(d.device.deviceName); }}
-                          title="Click to rename"
+                          title="Rename device"
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot(d.connectionStatus)}`} />
-                          <span className="text-sm font-medium text-foreground">{d.device.deviceName}</span>
-                          <span className="text-xs text-muted-foreground font-mono">· {d.device.deviceKey}</span>
+                          <Pencil className="w-3 h-3" />
                         </button>
-                      )}
+                      </div>
 
                       {/* Latest reading */}
                       {reading ? (
@@ -859,6 +845,37 @@ function ISpindelPanel() {
           )}
         </div>
         </>}
+
+        {editingDeviceId != null && (
+          <Dialog open onOpenChange={(open) => { if (!open) setEditingDeviceId(null); }}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Rename Device</DialogTitle>
+              </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  updateDevice.mutate({ id: editingDeviceId, data: { deviceName: editDeviceName } });
+                }}
+                className="space-y-4"
+              >
+                <Input
+                  value={editDeviceName}
+                  onChange={(e) => setEditDeviceName(e.target.value)}
+                  className="text-sm"
+                  autoFocus
+                  required
+                />
+                <DialogFooter>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingDeviceId(null)}>Cancel</Button>
+                  <Button type="submit" size="sm" disabled={updateDevice.isPending}>
+                    {updateDevice.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     </div>
   );

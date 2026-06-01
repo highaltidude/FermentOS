@@ -606,6 +606,62 @@ export interface AssignDeviceBody {
   brewSessionId: number;
 }
 
+export interface HaLatestReading {
+  gravity?: number | null;
+  temperature?: number | null;
+  temperatureUnit?: string | null;
+  battery?: number | null;
+  batteryPercentEstimate?: number | null;
+  angle?: number | null;
+  rssi?: number | null;
+  receivedAt: string;
+}
+
+export type HaInsightsFermentationStatus =
+  (typeof HaInsightsFermentationStatus)[keyof typeof HaInsightsFermentationStatus];
+
+export const HaInsightsFermentationStatus = {
+  likely_active: "likely_active",
+  slowing: "slowing",
+  stable: "stable",
+  possibly_complete: "possibly_complete",
+  insufficient_data: "insufficient_data",
+} as const;
+
+export interface HaInsights {
+  fermentationStatus: HaInsightsFermentationStatus;
+  attenuationPercent?: number | null;
+  gravityDrop?: number | null;
+  startingGravity?: number | null;
+  currentGravity?: number | null;
+  velocityLast24h?: number | null;
+}
+
+export type HaDeviceConnectionStatus =
+  (typeof HaDeviceConnectionStatus)[keyof typeof HaDeviceConnectionStatus];
+
+export const HaDeviceConnectionStatus = {
+  connected: "connected",
+  warning: "warning",
+  offline: "offline",
+  unknown: "unknown",
+} as const;
+
+export interface HaDevice {
+  deviceId: number;
+  deviceName: string;
+  deviceKey: string;
+  connectionStatus: HaDeviceConnectionStatus;
+  assignedBrewSessionId?: number | null;
+  assignedBrewName?: string | null;
+  lastSeenAt?: string | null;
+  latestReading?: HaLatestReading | null;
+  insights?: HaInsights | null;
+  alerts: SensorAlert[];
+}
+
+export type HaStatusResponse = HaDevice[];
+
 export type GetUpcomingBrewsParams = {
   /**
    * @minimum 1

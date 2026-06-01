@@ -1,74 +1,92 @@
 import { Router } from "express";
-import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable } from "@workspace/db";
+import { eq, desc, isNull, and, gte } from "drizzle-orm";
+import { calcConnectionStatus, buildAlerts } from "./sensors";
+import { calcInsights } from "../lib/fermentationInsights";
 
 const router = Router();
 
-const ACTIVE_STATUSES = ["brew_day", "fermenting", "conditioning"] as const;
-
 router.get("/status", async (req, res) => {
-  const [sessions, recipes, inventory] = await Promise.all([
-    db.select().from(brewSessionsTable),
-    db.select().from(recipesTable),
-    db.select().from(inventoryTable),
-  ]);
+  const devices = await db
+    .select()
+    .from(sensorDevicesTable)
+    .where(eq(sensorDevicesTable.enabled, true))
+    .orderBy(sensorDevicesTable.deviceName);
 
-  const activeSessions = sessions.filter((s) => (ACTIVE_STATUSES as readonly string[]).includes(s.status));
-
-  // Pick the most recently updated active session as the "current brew".
-  const candidate = activeSessions.sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  )[0] ?? null;
-
-  let current_brew: Record<string, unknown> | null = null;
-
-  if (candidate) {
-    const readings = await db
-      .select()
-      .from(fermentationReadingsTable)
-      .where(eq(fermentationReadingsTable.brewSessionId, candidate.id))
-      .orderBy(fermentationReadingsTable.readingAt);
-
-    const latest = readings[readings.length - 1] ?? null;
-
-    let targetFg: number | null = null;
-    if (candidate.recipeId) {
-      const [recipe] = await db
+  const results = await Promise.all(
+    devices.map(async (device) => {
+      const [latestReading] = await db
         .select()
-        .from(recipesTable)
-        .where(eq(recipesTable.id, candidate.recipeId));
-      targetFg = recipe?.finalGravity ?? null;
-    }
+        .from(sensorReadingsTable)
+        .where(eq(sensorReadingsTable.deviceId, device.id))
+        .orderBy(desc(sensorReadingsTable.receivedAt))
+        .limit(1);
 
-    const now = new Date();
-    const [by, bm, bd] = String(candidate.brewDate).slice(0, 10).split("-").map(Number);
-    const brewMidnight = new Date(by, (bm ?? 1) - 1, bd ?? 1).getTime();
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const daysSinceBrew = Math.max(0, Math.floor((todayMidnight - brewMidnight) / 86_400_000));
+      const [activeAssignment] = await db
+        .select()
+        .from(sensorDeviceBrewAssignmentsTable)
+        .where(
+          and(
+            eq(sensorDeviceBrewAssignmentsTable.deviceId, device.id),
+            isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
+          ),
+        )
+        .limit(1);
 
-    current_brew = {
-      name: candidate.recipeName,
-      status: candidate.status,
-      brew_date: String(candidate.brewDate).slice(0, 10),
-      days_in_progress: daysSinceBrew,
-      og: candidate.originalGravityActual ?? null,
-      fg: candidate.finalGravityActual ?? null,
-      abv: candidate.abvActual ?? null,
-      temperature_f: latest?.temperatureFahrenheit ?? null,
-      gravity: latest?.gravity ?? null,
-      target_fg: targetFg,
-    };
-  }
+      let assignedBrewName: string | null = null;
+      if (activeAssignment) {
+        const [session] = await db
+          .select({ recipeName: brewSessionsTable.recipeName })
+          .from(brewSessionsTable)
+          .where(eq(brewSessionsTable.id, activeAssignment.brewSessionId));
+        assignedBrewName = session?.recipeName ?? null;
+      }
 
-  return res.json({
-    fermentos: {
-      active: activeSessions.length,
-      recipes: recipes.length,
-      sessions: sessions.length,
-      inventory: inventory.length,
-    },
-    current_brew,
-  });
+      let insights = null;
+      if (activeAssignment) {
+        const windowReadings = await db
+          .select()
+          .from(sensorReadingsTable)
+          .where(
+            and(
+              eq(sensorReadingsTable.deviceId, device.id),
+              gte(sensorReadingsTable.receivedAt, activeAssignment.assignedAt),
+            ),
+          )
+          .orderBy(sensorReadingsTable.receivedAt);
+        insights = calcInsights(windowReadings);
+      }
+
+      const connectionStatus = calcConnectionStatus(device.lastSeenAt, latestReading?.reportedInterval ?? null);
+      const alerts = buildAlerts(device, latestReading ?? null, connectionStatus);
+
+      return {
+        deviceId: device.id,
+        deviceName: device.deviceName,
+        deviceKey: device.deviceKey,
+        connectionStatus,
+        assignedBrewSessionId: activeAssignment?.brewSessionId ?? null,
+        assignedBrewName,
+        lastSeenAt: device.lastSeenAt ? new Date(device.lastSeenAt).toISOString() : null,
+        latestReading: latestReading
+          ? {
+              gravity: latestReading.gravity ?? null,
+              temperature: latestReading.temperature ?? null,
+              temperatureUnit: latestReading.temperatureUnit ?? null,
+              battery: latestReading.battery ?? null,
+              batteryPercentEstimate: latestReading.batteryPercentEstimate ?? null,
+              angle: latestReading.angle ?? null,
+              rssi: latestReading.rssi ?? null,
+              receivedAt: new Date(latestReading.receivedAt).toISOString(),
+            }
+          : null,
+        insights,
+        alerts,
+      };
+    }),
+  );
+
+  return res.json(results);
 });
 
 export default router;

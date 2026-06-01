@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+.env
+.git
+.gitignore
+update.log
+update.lock
+update-history.json
+data/
+docs/screenshots
+*.sh
+!docker/entrypoint.sh

@@ -86,6 +86,25 @@ The script will:
 
 When it finishes, it prints the URL to open in your browser (e.g. `http://192.168.1.42:3000`).
 
+### Docker Installation
+
+Recommended for NAS, mini PC, VM, or anyone already running Docker.
+
+```bash
+git clone https://github.com/highaltidude/FermentOS.git
+cd FermentOS
+docker compose up -d
+```
+
+The app will be available at **http://localhost:3000**.
+
+- Data is persisted in a Docker volume (`postgres_data`); uploaded photos are stored in `./data/uploads`
+- To update: `docker compose pull && docker compose up -d`
+
+> **Warning:** Change the default database password in `docker-compose.yml` before exposing FermentOS to a network.
+
+---
+
 ### Useful commands after install
 
 ```bash

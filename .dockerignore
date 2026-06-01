@@ -1,0 +1,9 @@
+node_modules
+*/node_modules
+dist
+.env
+.git
+update.log
+update.lock
+update-history.json
+data/

@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fermentos
+      POSTGRES_USER: fermentos
+      # Change this password before exposing FermentOS to a network
+      POSTGRES_PASSWORD: fermentos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fermentos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://fermentos:fermentos@db:5432/fermentos
+      NODE_ENV: production
+      PORT: 8080
+      BASE_PATH: /
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./data/uploads:/app/data/uploads
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -2644,6 +2644,7 @@ type ApiToken = {
   id: number;
   name: string;
   prefix: string;
+  scope: "read" | "write";
   createdAt: string;
   lastUsedAt: string | null;
 };
@@ -2655,6 +2656,7 @@ function ApiAccessPanel() {
   const [required, setRequired] = useState(false);
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [newName, setNewName] = useState("");
+  const [newScope, setNewScope] = useState<"read" | "write">("write");
   const [creating, setCreating] = useState(false);
   const [revealedToken, setRevealedToken] = useState<{ id: number; token: string } | null>(null);
   const [savingToggle, setSavingToggle] = useState(false);
@@ -2709,16 +2711,17 @@ function ApiAccessPanel() {
       const res = await fetch(`${BASE}api/admin/auth/tokens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, scope: newScope }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || `HTTP ${res.status}`);
       }
       const created = await res.json() as ApiToken & { token: string };
-      setTokens((t) => [{ id: created.id, name: created.name, prefix: created.prefix, createdAt: created.createdAt, lastUsedAt: created.lastUsedAt }, ...t]);
+      setTokens((t) => [{ id: created.id, name: created.name, prefix: created.prefix, scope: created.scope, createdAt: created.createdAt, lastUsedAt: created.lastUsedAt }, ...t]);
       setRevealedToken({ id: created.id, token: created.token });
       setNewName("");
+      setNewScope("write");
       toast({ title: "Token created — copy it now!" });
     } catch (e) {
       toast({ title: "Failed to create token", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
@@ -2813,6 +2816,22 @@ function ApiAccessPanel() {
             className="text-sm"
             maxLength={80}
           />
+          <div className="flex items-center rounded-md border border-border bg-background text-xs overflow-hidden shrink-0">
+            <button
+              type="button"
+              onClick={() => setNewScope("read")}
+              className={`px-2.5 py-1.5 transition-colors ${newScope === "read" ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Read
+            </button>
+            <button
+              type="button"
+              onClick={() => setNewScope("write")}
+              className={`px-2.5 py-1.5 transition-colors ${newScope === "write" ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Write
+            </button>
+          </div>
           <Button type="submit" size="sm" disabled={creating || !newName.trim()}>
             {creating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
             Generate
@@ -2828,7 +2847,12 @@ function ApiAccessPanel() {
               <div key={t.id} className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-border bg-background group hover:border-primary/30 transition-colors">
                 <KeyRound className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-foreground truncate">{t.name}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-foreground truncate">{t.name}</div>
+                    <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${t.scope === "read" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" : "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"}`}>
+                      {t.scope}
+                    </span>
+                  </div>
                   <div className="text-xs text-muted-foreground font-mono truncate">
                     {t.prefix}…
                     <span className="ml-2 font-sans">

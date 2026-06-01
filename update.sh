@@ -37,6 +37,7 @@ if ! git symbolic-ref -q HEAD >/dev/null; then
     exit 1
   fi
 fi
+PREVIOUS_HASH=$(git rev-parse --short HEAD)
 git pull --ff-only
 
 echo "[2/5] Installing dependencies..."
@@ -49,9 +50,18 @@ source "${INSTALL_DIR}/.env"
 set +a
 pnpm --filter @workspace/db run push
 
+build_and_rollback_on_failure() {
+  if ! { pnpm --filter @workspace/api-server run build && \
+         BASE_PATH=/ pnpm --filter @workspace/fermentos run build; }; then
+    echo ""
+    echo "ERROR: Build failed — automatic rollback to $PREVIOUS_HASH is starting..."
+    bash rollback.sh "$PREVIOUS_HASH"
+    exit 1
+  fi
+}
+
 echo "[4/5] Building application..."
-pnpm --filter @workspace/api-server run build
-BASE_PATH=/ pnpm --filter @workspace/fermentos run build
+build_and_rollback_on_failure
 
 echo "[5/5] Restarting services..."
 # `sudo -n` runs non-interactively — it succeeds only if a NOPASSWD sudoers

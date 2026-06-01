@@ -11,6 +11,7 @@ import { appConfigTable } from "@workspace/db/schema";
 import { BACKUP_REGISTRY, EXCLUDED_TABLES } from "@workspace/db/backup-registry";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
+import { runRetentionCleanup } from "../services/readingRetention.js";
 
 const router = Router();
 
@@ -247,6 +248,12 @@ export async function initBackupScheduler() {
   } catch (e) {
     logger.error({ e }, "Failed to init backup scheduler");
   }
+
+  cron.schedule("0 3 * * *", () => {
+    runRetentionCleanup()
+      .then((result) => logger.info(result, "Nightly reading retention cleanup"))
+      .catch((e) => logger.error({ e }, "Reading retention cleanup error"));
+  });
 }
 
 // ── Security helpers ───────────────────────────────────────────────────────

@@ -3023,6 +3023,80 @@ function InventoryEnforcementPanel() {
   );
 }
 
+const RETENTION_OPTIONS: Array<{ value: number | null; label: string; desc: string }> = [
+  { value: null, label: "Forever",  desc: "Never delete readings automatically" },
+  { value: 90,   label: "90 days",  desc: "Delete readings older than 3 months" },
+  { value: 180,  label: "6 months", desc: "Delete readings older than 6 months" },
+  { value: 365,  label: "1 year",   desc: "Delete readings older than 1 year"   },
+  { value: 730,  label: "2 years",  desc: "Delete readings older than 2 years"  },
+];
+
+function ReadingRetentionPanel() {
+  const BASE = import.meta.env.BASE_URL;
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`${BASE}api/settings/reading-retention`)
+      .then((r) => r.json())
+      .then((d: { days: number | null }) => setDays(d.days ?? null))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [BASE]);
+
+  const handleChange = async (next: number | null) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE}api/settings/reading-retention`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setDays(next);
+      toast({ title: "Reading retention updated" });
+    } catch (e) {
+      toast({ title: "Failed to update", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <Skeleton className="h-24 rounded-md" />;
+
+  return (
+    <div className="space-y-2">
+      {RETENTION_OPTIONS.map((opt) => (
+        <button
+          key={String(opt.value)}
+          type="button"
+          disabled={saving}
+          onClick={() => handleChange(opt.value)}
+          className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border text-left transition-colors ${
+            days === opt.value
+              ? "border-primary bg-primary/5 text-foreground"
+              : "border-border bg-background text-foreground hover:border-primary/50"
+          } ${saving ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+        >
+          <div>
+            <div className="text-sm font-medium">{opt.label}</div>
+            <div className="text-xs text-muted-foreground">{opt.desc}</div>
+          </div>
+          <div className={`h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center ${days === opt.value ? "border-primary" : "border-muted-foreground/30"}`}>
+            {days === opt.value && <div className="h-2 w-2 rounded-full bg-primary" />}
+          </div>
+        </button>
+      ))}
+      <div className="flex items-start gap-2 text-xs text-muted-foreground rounded-md border border-dashed border-border p-3">
+        <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+        <span>Cleanup runs nightly at 3 AM. Only readings from packaged brew sessions are eligible for deletion — active sessions are never affected.</span>
+      </div>
+    </div>
+  );
+}
+
 type SettingsTab = "brewing" | "system";
 
 export default function Settings() {
@@ -3179,6 +3253,21 @@ export default function Settings() {
             </div>
             <div className="p-4">
               <InventoryEnforcementPanel />
+            </div>
+          </div>
+
+          <div className="bg-card border border-card-border rounded-lg">
+            <div className="px-4 py-3 border-b border-card-border">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Reading Retention</h2>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically delete old fermentation and sensor readings from packaged sessions to keep your database small.
+              </p>
+            </div>
+            <div className="p-4">
+              <ReadingRetentionPanel />
             </div>
           </div>
         </div>

@@ -852,6 +852,24 @@ export const SetReadingRetentionResponse = zod.object({
 });
 
 /**
+ * @summary Get the default fermentation readings shown count
+ */
+export const GetDefaultReadingsShownResponse = zod.object({
+  count: zod.number(),
+});
+
+/**
+ * @summary Set the default fermentation readings shown count
+ */
+export const SetDefaultReadingsShownBody = zod.object({
+  count: zod.number(),
+});
+
+export const SetDefaultReadingsShownResponse = zod.object({
+  count: zod.number(),
+});
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({

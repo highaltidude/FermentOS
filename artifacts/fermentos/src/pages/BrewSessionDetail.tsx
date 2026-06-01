@@ -14,6 +14,7 @@ import {
   useListSensorDevices,
   getListSensorDevicesQueryKey,
   useAssignSensorDevice,
+  useGetDefaultReadingsShown,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,7 @@ export default function BrewSessionDetail() {
   const [showAssignPanel, setShowAssignPanel] = useState(false);
   const [assignDeviceId, setAssignDeviceId] = useState<string>("");
   const [readingFilter, setReadingFilter] = useState<"all" | "sensor" | "manual">("all");
+  const [showAllReadings, setShowAllReadings] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -127,6 +129,9 @@ export default function BrewSessionDetail() {
       document.body.style.overflow = prev;
     };
   }, [photoLightboxOpen]);
+
+  const { data: defaultReadingsData } = useGetDefaultReadingsShown();
+  const defaultCount = defaultReadingsData?.count ?? 5;
 
   const { data: session, isLoading } = useGetBrewSession(id, { query: { enabled: !!id, queryKey: getGetBrewSessionQueryKey(id) } });
 
@@ -915,48 +920,71 @@ export default function BrewSessionDetail() {
               ) : null;
             }
 
+            const hasMore = reversed.length > defaultCount;
+            const visible = showAllReadings ? reversed : reversed.slice(0, defaultCount);
+
             return (
-              <div className="space-y-1">
-                {reversed.map((reading) => {
-                  const src = (reading as any).source as "manual" | "ispindel" | undefined;
-                  return (
-                    <div key={reading.id} className="flex items-start gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
-                      <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
-                        <span className="text-xs text-muted-foreground">{formatReadingTime(reading.readingAt)}</span>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
-                          src === "ispindel"
-                            ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                            : "bg-muted text-muted-foreground"
-                        }`}>
-                          {src === "ispindel" ? "📡 iSpindel" : "✍️ Manual"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 flex-1 flex-wrap">
-                        {reading.temperatureFahrenheit != null && (
-                          <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                            <Thermometer className="w-3.5 h-3.5" />{reading.temperatureFahrenheit.toFixed(1)}°F
+              <>
+                <div className="space-y-1">
+                  {visible.map((reading) => {
+                    const src = (reading as any).source as "manual" | "ispindel" | undefined;
+                    return (
+                      <div key={reading.id} className="flex items-start gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
+                        <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
+                          <span className="text-xs text-muted-foreground">{formatReadingTime(reading.readingAt)}</span>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
+                            src === "ispindel"
+                              ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                              : "bg-muted text-muted-foreground"
+                          }`}>
+                            {src === "ispindel" ? "📡 iSpindel" : "✍️ Manual"}
                           </span>
-                        )}
-                        {reading.gravity != null && (
-                          <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
-                            <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}
-                          </span>
-                        )}
-                        {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
-                        {reading.notes && src !== "ispindel" && (
-                          <span className="text-muted-foreground text-xs truncate">{reading.notes}</span>
-                        )}
-                        {reading.notes && src === "ispindel" && (
-                          <span className="text-muted-foreground text-xs truncate font-mono">{reading.notes}</span>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-3 flex-1 flex-wrap">
+                          {reading.temperatureFahrenheit != null && (
+                            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                              <Thermometer className="w-3.5 h-3.5" />{reading.temperatureFahrenheit.toFixed(1)}°F
+                            </span>
+                          )}
+                          {reading.gravity != null && (
+                            <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
+                              <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}
+                            </span>
+                          )}
+                          {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
+                          {reading.notes && src !== "ispindel" && (
+                            <span className="text-muted-foreground text-xs truncate">{reading.notes}</span>
+                          )}
+                          {reading.notes && src === "ispindel" && (
+                            <span className="text-muted-foreground text-xs truncate font-mono">{reading.notes}</span>
+                          )}
+                        </div>
+                        <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+                {!showAllReadings && hasMore && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllReadings(true)}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2 border border-dashed border-border rounded-md hover:border-primary/50"
+                  >
+                    Show all {reversed.length} readings
+                  </button>
+                )}
+                {showAllReadings && hasMore && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllReadings(false)}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2 border border-dashed border-border rounded-md hover:border-primary/50"
+                  >
+                    Show less
+                  </button>
+                )}
+              </>
             );
           })()}
         </div>

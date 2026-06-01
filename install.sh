@@ -19,6 +19,10 @@ error()   { echo -e "${RED}[ERROR]${RESET} $*"; exit 1; }
 step()    { echo -e "\n${BOLD}── $* ${RESET}"; }
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Back up .env before anything runs so it can be restored if lost
+if [ -f "${INSTALL_DIR}/.env" ]; then
+  cp "${INSTALL_DIR}/.env" "${INSTALL_DIR}/.env.backup"
+fi
 DEFAULT_APP_PORT=3000
 DB_NAME="fermentos"
 DB_USER="fermentos"
@@ -248,6 +252,11 @@ else
 fi
 
 # ── Done ─────────────────────────────────────
+# Restore .env from backup if it was lost during install
+if [ ! -f "${INSTALL_DIR}/.env" ] && [ -f "${INSTALL_DIR}/.env.backup" ]; then
+  cp "${INSTALL_DIR}/.env.backup" "${INSTALL_DIR}/.env"
+  warn ".env was missing — restored from backup"
+fi
 PI_IP="$(hostname -I | awk '{print $1}')"
 
 echo ""

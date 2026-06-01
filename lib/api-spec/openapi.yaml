@@ -1014,6 +1014,19 @@ paths:
                       $ref: "#/components/schemas/SensorDeviceWithStatus"
                 required: [devices]
 
+  /ha/status:
+    get:
+      operationId: getHaStatus
+      tags: [integrations]
+      summary: Home Assistant friendly status — all active sensor devices with full telemetry and fermentation insights
+      responses:
+        "200":
+          description: Active sensor device statuses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HaStatusResponse"
+
   /integrations/ispindel/devices/{deviceId}/readings:
     get:
       operationId: listISpindelDeviceReadings
@@ -2225,3 +2238,94 @@ components:
         brewSessionId:
           type: integer
       required: [brewSessionId]
+
+    HaLatestReading:
+      type: object
+      properties:
+        gravity:
+          type: number
+          nullable: true
+        temperature:
+          type: number
+          nullable: true
+        temperatureUnit:
+          type: string
+          nullable: true
+        battery:
+          type: number
+          nullable: true
+        batteryPercentEstimate:
+          type: number
+          nullable: true
+        angle:
+          type: number
+          nullable: true
+        rssi:
+          type: integer
+          nullable: true
+        receivedAt:
+          type: string
+          format: date-time
+      required: [receivedAt]
+
+    HaInsights:
+      type: object
+      properties:
+        fermentationStatus:
+          type: string
+          enum: [likely_active, slowing, stable, possibly_complete, insufficient_data]
+        attenuationPercent:
+          type: number
+          nullable: true
+        gravityDrop:
+          type: number
+          nullable: true
+        startingGravity:
+          type: number
+          nullable: true
+        currentGravity:
+          type: number
+          nullable: true
+        velocityLast24h:
+          type: number
+          nullable: true
+      required: [fermentationStatus]
+
+    HaDevice:
+      type: object
+      properties:
+        deviceId:
+          type: integer
+        deviceName:
+          type: string
+        deviceKey:
+          type: string
+        connectionStatus:
+          type: string
+          enum: [connected, warning, offline, unknown]
+        assignedBrewSessionId:
+          type: integer
+          nullable: true
+        assignedBrewName:
+          type: string
+          nullable: true
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        latestReading:
+          $ref: "#/components/schemas/HaLatestReading"
+          nullable: true
+        insights:
+          $ref: "#/components/schemas/HaInsights"
+          nullable: true
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SensorAlert"
+      required: [deviceId, deviceName, deviceKey, connectionStatus, alerts]
+
+    HaStatusResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/HaDevice"

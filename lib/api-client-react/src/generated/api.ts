@@ -38,6 +38,7 @@ import type {
   FermentationReading,
   GetISpindelStatus200,
   GetUpcomingBrewsParams,
+  HaStatusResponse,
   HealthStatus,
   ISpindelPayload,
   ISpindelReadingsPage,
@@ -50,6 +51,8 @@ import type {
   ListInventoryParams,
   ListRecipesParams,
   ListSensorReadingsParams,
+  ReadingRetentionBody,
+  ReadingRetentionResponse,
   Recipe,
   RecipeIngredient,
   RecipeStep,
@@ -63,8 +66,6 @@ import type {
   StyleCount,
   UnitSystemBody,
   UnitSystemResponse,
-  ReadingRetentionBody,
-  ReadingRetentionResponse,
   UpcomingBrew,
   UpdateBrewSessionBody,
   UpdateEquipmentBody,
@@ -2896,6 +2897,167 @@ export const useSetUnitSystem = <
 };
 
 /**
+ * @summary Get the reading retention window
+ */
+export const getGetReadingRetentionUrl = () => {
+  return `/api/settings/reading-retention`;
+};
+
+export const getReadingRetention = async (
+  options?: RequestInit,
+): Promise<ReadingRetentionResponse> => {
+  return customFetch<ReadingRetentionResponse>(getGetReadingRetentionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReadingRetentionQueryKey = () => {
+  return [`/api/settings/reading-retention`] as const;
+};
+
+export const getGetReadingRetentionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReadingRetention>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReadingRetention>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetReadingRetentionQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReadingRetention>>
+  > = ({ signal }) => getReadingRetention({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReadingRetention>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReadingRetentionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReadingRetention>>
+>;
+export type GetReadingRetentionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the reading retention window
+ */
+
+export function useGetReadingRetention<
+  TData = Awaited<ReturnType<typeof getReadingRetention>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReadingRetention>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReadingRetentionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set the reading retention window
+ */
+export const getSetReadingRetentionUrl = () => {
+  return `/api/settings/reading-retention`;
+};
+
+export const setReadingRetention = async (
+  readingRetentionBody: ReadingRetentionBody,
+  options?: RequestInit,
+): Promise<ReadingRetentionResponse> => {
+  return customFetch<ReadingRetentionResponse>(getSetReadingRetentionUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(readingRetentionBody),
+  });
+};
+
+export const getSetReadingRetentionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setReadingRetention>>,
+    TError,
+    { data: BodyType<ReadingRetentionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setReadingRetention>>,
+  TError,
+  { data: BodyType<ReadingRetentionBody> },
+  TContext
+> => {
+  const mutationKey = ["setReadingRetention"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setReadingRetention>>,
+    { data: BodyType<ReadingRetentionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setReadingRetention(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetReadingRetentionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setReadingRetention>>
+>;
+export type SetReadingRetentionMutationBody = BodyType<ReadingRetentionBody>;
+export type SetReadingRetentionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the reading retention window
+ */
+export const useSetReadingRetention = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setReadingRetention>>,
+    TError,
+    { data: BodyType<ReadingRetentionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setReadingRetention>>,
+  TError,
+  { data: BodyType<ReadingRetentionBody> },
+  TContext
+> => {
+  return useMutation(getSetReadingRetentionMutationOptions(options));
+};
+
+/**
  * @summary List all inventory items
  */
 export const getListInventoryUrl = (params?: ListInventoryParams) => {
@@ -4800,6 +4962,81 @@ export function useGetISpindelStatus<
 }
 
 /**
+ * @summary Home Assistant friendly status — all active sensor devices with full telemetry and fermentation insights
+ */
+export const getGetHaStatusUrl = () => {
+  return `/api/ha/status`;
+};
+
+export const getHaStatus = async (
+  options?: RequestInit,
+): Promise<HaStatusResponse> => {
+  return customFetch<HaStatusResponse>(getGetHaStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetHaStatusQueryKey = () => {
+  return [`/api/ha/status`] as const;
+};
+
+export const getGetHaStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getHaStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHaStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetHaStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHaStatus>>> = ({
+    signal,
+  }) => getHaStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getHaStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetHaStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getHaStatus>>
+>;
+export type GetHaStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Home Assistant friendly status — all active sensor devices with full telemetry and fermentation insights
+ */
+
+export function useGetHaStatus<
+  TData = Awaited<ReturnType<typeof getHaStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHaStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetHaStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary List paginated readings for an iSpindel device
  */
 export const getListISpindelDeviceReadingsUrl = (
@@ -4919,158 +5156,3 @@ export function useListISpindelDeviceReadings<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * @summary Get the reading retention window
- */
-export const getGetReadingRetentionUrl = () => {
-  return `/api/settings/reading-retention`;
-};
-
-export const getReadingRetention = async (
-  options?: RequestInit,
-): Promise<ReadingRetentionResponse> => {
-  return customFetch<ReadingRetentionResponse>(getGetReadingRetentionUrl(), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getGetReadingRetentionQueryKey = () => {
-  return [`/api/settings/reading-retention`] as const;
-};
-
-export const getGetReadingRetentionQueryOptions = <
-  TData = Awaited<ReturnType<typeof getReadingRetention>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getReadingRetention>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ?? getGetReadingRetentionQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getReadingRetention>>
-  > = ({ signal }) => getReadingRetention({ signal, ...requestOptions });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getReadingRetention>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetReadingRetentionQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getReadingRetention>>
->;
-export type GetReadingRetentionQueryError = ErrorType<unknown>;
-
-export function useGetReadingRetention<
-  TData = Awaited<ReturnType<typeof getReadingRetention>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getReadingRetention>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetReadingRetentionQueryOptions(options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * @summary Set the reading retention window
- */
-export const getSetReadingRetentionUrl = () => {
-  return `/api/settings/reading-retention`;
-};
-
-export const setReadingRetention = async (
-  readingRetentionBody: ReadingRetentionBody,
-  options?: RequestInit,
-): Promise<ReadingRetentionResponse> => {
-  return customFetch<ReadingRetentionResponse>(getSetReadingRetentionUrl(), {
-    ...options,
-    method: "PUT",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(readingRetentionBody),
-  });
-};
-
-export const getSetReadingRetentionMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof setReadingRetention>>,
-    TError,
-    { data: BodyType<ReadingRetentionBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof setReadingRetention>>,
-  TError,
-  { data: BodyType<ReadingRetentionBody> },
-  TContext
-> => {
-  const mutationKey = ["setReadingRetention"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof setReadingRetention>>,
-    { data: BodyType<ReadingRetentionBody> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return setReadingRetention(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type SetReadingRetentionMutationResult = NonNullable<
-  Awaited<ReturnType<typeof setReadingRetention>>
->;
-export type SetReadingRetentionMutationBody = BodyType<ReadingRetentionBody>;
-export type SetReadingRetentionMutationError = ErrorType<unknown>;
-
-export const useSetReadingRetention = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof setReadingRetention>>,
-    TError,
-    { data: BodyType<ReadingRetentionBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof setReadingRetention>>,
-  TError,
-  { data: BodyType<ReadingRetentionBody> },
-  TContext
-> => {
-  return useMutation(getSetReadingRetentionMutationOptions(options));
-};

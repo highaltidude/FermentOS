@@ -1568,6 +1568,60 @@ export const GetISpindelStatusResponse = zod.object({
 });
 
 /**
+ * @summary Home Assistant friendly status — all active sensor devices with full telemetry and fermentation insights
+ */
+export const GetHaStatusResponseItem = zod.object({
+  deviceId: zod.number(),
+  deviceName: zod.string(),
+  deviceKey: zod.string(),
+  connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
+  assignedBrewSessionId: zod.number().nullish(),
+  assignedBrewName: zod.string().nullish(),
+  lastSeenAt: zod.string().datetime({}).nullish(),
+  latestReading: zod
+    .object({
+      gravity: zod.number().nullish(),
+      temperature: zod.number().nullish(),
+      temperatureUnit: zod.string().nullish(),
+      battery: zod.number().nullish(),
+      batteryPercentEstimate: zod.number().nullish(),
+      angle: zod.number().nullish(),
+      rssi: zod.number().nullish(),
+      receivedAt: zod.string().datetime({}),
+    })
+    .nullish(),
+  insights: zod
+    .object({
+      fermentationStatus: zod.enum([
+        "likely_active",
+        "slowing",
+        "stable",
+        "possibly_complete",
+        "insufficient_data",
+      ]),
+      attenuationPercent: zod.number().nullish(),
+      gravityDrop: zod.number().nullish(),
+      startingGravity: zod.number().nullish(),
+      currentGravity: zod.number().nullish(),
+      velocityLast24h: zod.number().nullish(),
+    })
+    .nullish(),
+  alerts: zod.array(
+    zod.object({
+      type: zod.enum([
+        "gravity_stalled",
+        "temp_out_of_range",
+        "battery_low",
+        "device_offline",
+      ]),
+      message: zod.string(),
+      triggeredAt: zod.string().datetime({}),
+    }),
+  ),
+});
+export const GetHaStatusResponse = zod.array(GetHaStatusResponseItem);
+
+/**
  * @summary List paginated readings for an iSpindel device
  */
 export const ListISpindelDeviceReadingsParams = zod.object({

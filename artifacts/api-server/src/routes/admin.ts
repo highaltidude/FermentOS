@@ -523,6 +523,14 @@ router.post("/update", async (req, res) => {
   // poll reflects the new state without waiting for the 5-min TTL.
   refreshRemoteHashAsync().catch(() => {});
 
+  // Reset any local file modifications so git pull always succeeds.
+  try {
+    execSync("git reset --hard HEAD && git clean -fd", { cwd: REPO_ROOT, stdio: "pipe" });
+    req.log.info("Reset local changes before update");
+  } catch (err) {
+    req.log.warn({ err }, "git reset before update failed — continuing anyway");
+  }
+
   // Spawn detached so it survives the API server restart
   const child = spawn("bash", [UPDATE_SCRIPT], {
     cwd: REPO_ROOT,

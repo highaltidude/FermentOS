@@ -170,6 +170,7 @@ set +a
 # ── Install dependencies ─────────────────────
 step "Installing project dependencies"
 cd "$INSTALL_DIR"
+git config core.fileMode false
 pnpm install --no-frozen-lockfile
 success "Dependencies installed"
 

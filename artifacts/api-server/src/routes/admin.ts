@@ -513,9 +513,15 @@ router.post("/update", async (req, res) => {
     });
   }
 
+  // Reset file permission changes and any other local modifications so
+  // git pull always succeeds. chmod +x previously caused fileMode drift.
   try {
-    execSync(`chmod +x "${UPDATE_SCRIPT}"`, { cwd: REPO_ROOT });
-  } catch {}
+    execSync("git config core.fileMode false", { cwd: REPO_ROOT, stdio: "pipe" });
+    execSync("git reset --hard HEAD", { cwd: REPO_ROOT, stdio: "pipe" });
+    req.log.info("git reset completed before update");
+  } catch (err) {
+    req.log.warn({ err }, "git reset before update failed — continuing anyway");
+  }
 
   // Write the lock BEFORE spawning so a fast retry can't race past the check.
   writeLock({ kind: "update", startedAt: new Date().toISOString() });
@@ -691,9 +697,6 @@ router.post("/rollback", (req, res) => {
   }
 
   req.log.warn({ hash }, "Rollback requested");
-  try {
-    execSync(`chmod +x "${ROLLBACK_SCRIPT}"`, { cwd: REPO_ROOT });
-  } catch {}
   writeLock({ kind: "rollback", startedAt: new Date().toISOString(), hash });
   // Detached so it survives the api-server restart that happens at step 5.
   const child = spawn("bash", [ROLLBACK_SCRIPT, hash], {

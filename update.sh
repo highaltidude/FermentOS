@@ -21,6 +21,11 @@ echo "=== Update started at $(date) ==="
 
 cd "$INSTALL_DIR"
 
+# Ignore file permission changes so chmod never blocks a future pull.
+git config core.fileMode false
+echo "  Resetting local changes before pull..."
+git reset --hard HEAD
+
 echo "[1/5] Pulling latest changes from GitHub..."
 # Recover from a detached HEAD (the state left behind by a rollback). Without
 # this, `git pull --ff-only` fails with "You are not currently on a branch."

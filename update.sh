@@ -45,7 +45,6 @@ fi
 PREVIOUS_HASH=$(git rev-parse --short HEAD)
 echo "  Resetting local changes before pull..."
 git reset --hard HEAD
-git clean -fd
 git pull --ff-only
 
 echo "[2/5] Installing dependencies..."

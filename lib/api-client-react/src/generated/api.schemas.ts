@@ -307,6 +307,14 @@ export interface ReadingRetentionBody {
   days?: number | null;
 }
 
+export interface DefaultReadingsShownResponse {
+  count: number;
+}
+
+export interface DefaultReadingsShownBody {
+  count: number;
+}
+
 export type MaltType = (typeof MaltType)[keyof typeof MaltType];
 
 export const MaltType = {

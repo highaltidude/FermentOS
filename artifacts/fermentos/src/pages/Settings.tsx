@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -19,6 +19,9 @@ import {
   getListSensorDevicesQueryKey,
   useListBrewSessions,
   useListISpindelDeviceReadings,
+  useGetDefaultReadingsShown,
+  useSetDefaultReadingsShown,
+  getGetDefaultReadingsShownQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -3114,6 +3117,57 @@ function ReadingRetentionPanel() {
   );
 }
 
+const DEFAULT_READINGS_OPTIONS = [5, 10, 25, 50, 100] as const;
+
+function DefaultReadingsShownPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useGetDefaultReadingsShown();
+  const count = data?.count ?? 5;
+
+  const setMutation = useSetDefaultReadingsShown({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetDefaultReadingsShownQueryKey() });
+        toast({ title: "Settings saved" });
+      },
+    },
+  });
+
+  if (isLoading) return <Skeleton className="h-10 rounded-md" />;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3 p-3 rounded-md border border-border bg-background">
+        <div className="space-y-0.5 flex-1">
+          <div className="text-sm font-medium text-foreground">Default readings shown</div>
+          <div className="text-xs text-muted-foreground">
+            How many fermentation readings to show by default on a brew session page
+          </div>
+        </div>
+        <div className="flex items-center rounded-md border border-border bg-muted/30 overflow-hidden shrink-0">
+          {DEFAULT_READINGS_OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              disabled={setMutation.isPending}
+              onClick={() => setMutation.mutate({ data: { count: opt } })}
+              className={`px-2.5 py-1.5 text-xs transition-colors ${
+                count === opt
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground"
+              } ${setMutation.isPending ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type SettingsTab = "brewing" | "system";
 
 export default function Settings() {
@@ -3270,6 +3324,21 @@ export default function Settings() {
             </div>
             <div className="p-4">
               <InventoryEnforcementPanel />
+            </div>
+          </div>
+
+          <div className="bg-card border border-card-border rounded-lg">
+            <div className="px-4 py-3 border-b border-card-border">
+              <div className="flex items-center gap-2">
+                <Droplets className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Fermentation Readings</h2>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Configure display settings for fermentation readings on brew session pages.
+              </p>
+            </div>
+            <div className="p-4">
+              <DefaultReadingsShownPanel />
             </div>
           </div>
 

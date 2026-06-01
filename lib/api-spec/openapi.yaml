@@ -618,6 +618,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReadingRetentionResponse"
 
+  /settings/default-readings-shown:
+    get:
+      operationId: getDefaultReadingsShown
+      tags: [settings]
+      summary: Get the default fermentation readings shown count
+      responses:
+        "200":
+          description: Default readings shown count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DefaultReadingsShownResponse"
+    put:
+      operationId: setDefaultReadingsShown
+      tags: [settings]
+      summary: Set the default fermentation readings shown count
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DefaultReadingsShownBody"
+      responses:
+        "200":
+          description: Updated default readings shown count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DefaultReadingsShownResponse"
+
   /inventory:
     get:
       operationId: listInventory
@@ -1680,6 +1710,20 @@ components:
         days:
           type: integer
           nullable: true
+
+    DefaultReadingsShownResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+      required: [count]
+
+    DefaultReadingsShownBody:
+      type: object
+      properties:
+        count:
+          type: integer
+      required: [count]
 
     MaltType:
       type: string

@@ -33,6 +33,8 @@ import type {
   CreateRecipeStepBody,
   CreateSensorDeviceBody,
   DashboardSummary,
+  DefaultReadingsShownBody,
+  DefaultReadingsShownResponse,
   Equipment,
   ErrorResponse,
   FermentationReading,
@@ -3055,6 +3057,175 @@ export const useSetReadingRetention = <
   TContext
 > => {
   return useMutation(getSetReadingRetentionMutationOptions(options));
+};
+
+/**
+ * @summary Get the default fermentation readings shown count
+ */
+export const getGetDefaultReadingsShownUrl = () => {
+  return `/api/settings/default-readings-shown`;
+};
+
+export const getDefaultReadingsShown = async (
+  options?: RequestInit,
+): Promise<DefaultReadingsShownResponse> => {
+  return customFetch<DefaultReadingsShownResponse>(
+    getGetDefaultReadingsShownUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetDefaultReadingsShownQueryKey = () => {
+  return [`/api/settings/default-readings-shown`] as const;
+};
+
+export const getGetDefaultReadingsShownQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDefaultReadingsShown>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDefaultReadingsShown>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDefaultReadingsShownQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDefaultReadingsShown>>
+  > = ({ signal }) => getDefaultReadingsShown({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDefaultReadingsShown>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDefaultReadingsShownQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDefaultReadingsShown>>
+>;
+export type GetDefaultReadingsShownQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the default fermentation readings shown count
+ */
+
+export function useGetDefaultReadingsShown<
+  TData = Awaited<ReturnType<typeof getDefaultReadingsShown>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDefaultReadingsShown>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDefaultReadingsShownQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set the default fermentation readings shown count
+ */
+export const getSetDefaultReadingsShownUrl = () => {
+  return `/api/settings/default-readings-shown`;
+};
+
+export const setDefaultReadingsShown = async (
+  defaultReadingsShownBody: DefaultReadingsShownBody,
+  options?: RequestInit,
+): Promise<DefaultReadingsShownResponse> => {
+  return customFetch<DefaultReadingsShownResponse>(
+    getSetDefaultReadingsShownUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(defaultReadingsShownBody),
+    },
+  );
+};
+
+export const getSetDefaultReadingsShownMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDefaultReadingsShown>>,
+    TError,
+    { data: BodyType<DefaultReadingsShownBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setDefaultReadingsShown>>,
+  TError,
+  { data: BodyType<DefaultReadingsShownBody> },
+  TContext
+> => {
+  const mutationKey = ["setDefaultReadingsShown"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setDefaultReadingsShown>>,
+    { data: BodyType<DefaultReadingsShownBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setDefaultReadingsShown(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetDefaultReadingsShownMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setDefaultReadingsShown>>
+>;
+export type SetDefaultReadingsShownMutationBody =
+  BodyType<DefaultReadingsShownBody>;
+export type SetDefaultReadingsShownMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the default fermentation readings shown count
+ */
+export const useSetDefaultReadingsShown = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDefaultReadingsShown>>,
+    TError,
+    { data: BodyType<DefaultReadingsShownBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setDefaultReadingsShown>>,
+  TError,
+  { data: BodyType<DefaultReadingsShownBody> },
+  TContext
+> => {
+  return useMutation(getSetDefaultReadingsShownMutationOptions(options));
 };
 
 /**

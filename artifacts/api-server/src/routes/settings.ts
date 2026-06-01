@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, asc } from "drizzle-orm";
-import { db, beerStylesTable } from "@workspace/db";
+import { db, beerStylesTable, appConfigTable } from "@workspace/db";
 import { CreateBeerStyleBody, DeleteBeerStyleParams } from "@workspace/api-zod";
 import {
   isInventoryEnforcementEnabled,
@@ -81,6 +81,28 @@ router.put("/settings/reading-retention", async (req, res) => {
   await setRetentionDays(days as number | null);
   const saved = await getRetentionDays();
   return res.json({ days: saved });
+});
+
+const VALID_DEFAULT_READINGS = new Set([5, 10, 25, 50, 100]);
+const DEFAULT_READINGS_KEY = "default_readings_shown";
+
+router.get("/settings/default-readings-shown", async (_req, res) => {
+  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, DEFAULT_READINGS_KEY));
+  const parsed = row?.value ? parseInt(row.value, 10) : 5;
+  const count = Number.isFinite(parsed) && VALID_DEFAULT_READINGS.has(parsed) ? parsed : 5;
+  return res.json({ count });
+});
+
+router.put("/settings/default-readings-shown", async (req, res) => {
+  const { count } = req.body as { count: unknown };
+  if (typeof count !== "number" || !VALID_DEFAULT_READINGS.has(count)) {
+    return res.status(400).json({ error: "count must be 5, 10, 25, 50, or 100" });
+  }
+  await db
+    .insert(appConfigTable)
+    .values({ key: DEFAULT_READINGS_KEY, value: String(count) })
+    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: String(count), updatedAt: new Date() } });
+  return res.json({ count });
 });
 
 export default router;

@@ -588,6 +588,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/UnitSystemResponse"
 
+  /settings/reading-retention:
+    get:
+      operationId: getReadingRetention
+      tags: [settings]
+      summary: Get the reading retention window
+      responses:
+        "200":
+          description: Current reading retention setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingRetentionResponse"
+    put:
+      operationId: setReadingRetention
+      tags: [settings]
+      summary: Set the reading retention window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadingRetentionBody"
+      responses:
+        "200":
+          description: Updated reading retention setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingRetentionResponse"
+
   /inventory:
     get:
       operationId: listInventory
@@ -1622,6 +1652,21 @@ components:
         system:
           $ref: "#/components/schemas/UnitSystem"
       required: [system]
+
+    ReadingRetentionResponse:
+      type: object
+      properties:
+        days:
+          type: integer
+          nullable: true
+      required: [days]
+
+    ReadingRetentionBody:
+      type: object
+      properties:
+        days:
+          type: integer
+          nullable: true
 
     MaltType:
       type: string

@@ -834,6 +834,24 @@ export const SetUnitSystemResponse = zod.object({
 });
 
 /**
+ * @summary Get the reading retention window
+ */
+export const GetReadingRetentionResponse = zod.object({
+  days: zod.number().nullable(),
+});
+
+/**
+ * @summary Set the reading retention window
+ */
+export const SetReadingRetentionBody = zod.object({
+  days: zod.number().nullish(),
+});
+
+export const SetReadingRetentionResponse = zod.object({
+  days: zod.number().nullable(),
+});
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({

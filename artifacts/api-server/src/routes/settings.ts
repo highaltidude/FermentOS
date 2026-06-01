@@ -7,6 +7,7 @@ import {
   setInventoryEnforcementEnabled,
 } from "../services/inventoryEnforcement";
 import { getUnitSystem, setUnitSystem, isUnitSystem } from "../services/unitSystem";
+import { getRetentionDays, setRetentionDays } from "../services/readingRetention.js";
 
 const router = Router();
 
@@ -63,6 +64,23 @@ router.delete("/settings/styles/:id", async (req, res) => {
 
   await db.delete(beerStylesTable).where(eq(beerStylesTable.id, params.data.id));
   return res.status(204).send();
+});
+
+const VALID_RETENTION_DAYS = new Set([0, 90, 180, 365, 730]);
+
+router.get("/settings/reading-retention", async (_req, res) => {
+  const days = await getRetentionDays();
+  return res.json({ days });
+});
+
+router.put("/settings/reading-retention", async (req, res) => {
+  const { days } = req.body as { days: unknown };
+  if (days !== null && (typeof days !== "number" || !VALID_RETENTION_DAYS.has(days))) {
+    return res.status(400).json({ error: "days must be null, 0, 90, 180, 365, or 730" });
+  }
+  await setRetentionDays(days as number | null);
+  const saved = await getRetentionDays();
+  return res.json({ days: saved });
 });
 
 export default router;

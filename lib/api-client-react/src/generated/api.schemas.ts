@@ -299,6 +299,14 @@ export interface UnitSystemBody {
   system: UnitSystem;
 }
 
+export interface ReadingRetentionResponse {
+  days: number | null;
+}
+
+export interface ReadingRetentionBody {
+  days?: number | null;
+}
+
 export type MaltType = (typeof MaltType)[keyof typeof MaltType];
 
 export const MaltType = {

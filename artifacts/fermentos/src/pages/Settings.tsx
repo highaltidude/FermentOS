@@ -2087,7 +2087,7 @@ function SystemUpdatePanel() {
             </p>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={() => { fetchVersion(); fetchAuditCoverage(); }} disabled={checking || inProgress}>
+        <Button size="sm" variant="outline" onClick={() => { fetchVersion(); fetchAuditCoverage(); }} disabled={checking || inProgress} title="Check GitHub for the latest version">
           {checking ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
           Check for updates
         </Button>

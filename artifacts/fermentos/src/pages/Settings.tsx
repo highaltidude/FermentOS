@@ -1724,7 +1724,6 @@ function SystemUpdatePanel() {
   const [releasesError, setReleasesError] = useState<string | null>(null);
   const [releasesOpen, setReleasesOpen] = useState(false);
   const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
-  const [reloadWaiting, setReloadWaiting] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
   const logBoxRef = useRef<HTMLPreElement>(null);
   const startHashRef = useRef<string | null>(null);
@@ -1856,12 +1855,28 @@ function SystemUpdatePanel() {
           setStep(5);
           setStepLabel("Verifying server is ready…");
           setPhase("verifying");
-          // Give the server 3 more seconds to fully initialize before showing Reload
-          setTimeout(() => {
+          // Poll until lock is clear before showing Reload now
+          (async () => {
+            for (let i = 0; i < 90; i++) {
+              try {
+                const res = await fetch(`${BASE}api/admin/version`);
+                if (res.ok) {
+                  const data = await res.json() as VersionInfo;
+                  if (!data.lock) {
+                    setStepLabel("Update complete");
+                    setPhase("complete");
+                    stopPolling();
+                    return;
+                  }
+                }
+              } catch { /* server still starting */ }
+              await new Promise((r) => setTimeout(r, 1000));
+            }
+            // Fallback after 90 seconds
             setStepLabel("Update complete");
             setPhase("complete");
             stopPolling();
-          }, 3000);
+          })();
           return;
         }
         // Server is reachable but still on the old hash/process — we're either
@@ -1889,22 +1904,7 @@ function SystemUpdatePanel() {
     }, 2000);
   }, [BASE]);
 
-  const handleReloadNow = async () => {
-    setReloadWaiting(true);
-    for (let i = 0; i < 90; i++) {
-      try {
-        const res = await fetch(`${BASE}api/admin/version`);
-        if (res.ok) {
-          const data = await res.json() as VersionInfo;
-          if (!data.lock) {
-            window.location.reload();
-            return;
-          }
-        }
-      } catch { /* server still starting */ }
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    // Fallback: reload anyway after 90 seconds
+  const handleReloadNow = () => {
     window.location.reload();
   };
 
@@ -2417,8 +2417,8 @@ function SystemUpdatePanel() {
               <div className="text-xs opacity-80">Reload the page to load the new app code.</div>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleReloadNow} disabled={reloadWaiting}>
-                {reloadWaiting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+              <Button size="sm" onClick={handleReloadNow}>
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                 Reload now
               </Button>
               <Button size="sm" variant="outline" onClick={() => { setPhase("idle"); setStep(0); setLogTail(""); }}>
@@ -2711,8 +2711,8 @@ function RestartAppPanel() {
         <div className="flex-1 space-y-2">
           <div className="font-medium">Service restarted — reload to reconnect cleanly.</div>
           <div className="flex gap-2">
-            <Button size="sm" onClick={handleReloadNow} disabled={reloadWaiting}>
-              {reloadWaiting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}Reload now
+            <Button size="sm" onClick={handleReloadNow}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Reload now
             </Button>
             <Button size="sm" variant="outline" onClick={() => { setPhase("idle"); setLogTail(""); }}>Dismiss</Button>
           </div>

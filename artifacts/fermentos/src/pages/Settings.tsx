@@ -1712,6 +1712,7 @@ function SystemUpdatePanel() {
   const [releasesError, setReleasesError] = useState<string | null>(null);
   const [releasesOpen, setReleasesOpen] = useState(false);
   const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
+  const [reloadWaiting, setReloadWaiting] = useState(false);
   const startHashRef = useRef<string | null>(null);
   // Snapshot of the api-server's PROCESS_STARTED_AT taken right before we
   // request a restart. The poller treats "startedAt has changed" as the
@@ -1868,6 +1869,25 @@ function SystemUpdatePanel() {
       }
     }, 2000);
   }, [BASE]);
+
+  const handleReloadNow = async () => {
+    setReloadWaiting(true);
+    for (let i = 0; i < 15; i++) {
+      try {
+        const res = await fetch(`${BASE}api/admin/version`);
+        if (res.ok) {
+          const data = await res.json() as VersionInfo;
+          if (!data.lock) {
+            window.location.reload();
+            return;
+          }
+        }
+      } catch { /* server still starting */ }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    // Fallback: reload anyway after 15 seconds
+    window.location.reload();
+  };
 
   const handleUpdate = async () => {
     const preMsg =
@@ -2331,8 +2351,8 @@ function SystemUpdatePanel() {
               <div className="text-xs opacity-80">Reload the page to load the new app code.</div>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => window.location.reload()}>
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              <Button size="sm" onClick={handleReloadNow} disabled={reloadWaiting}>
+                {reloadWaiting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
                 Reload now
               </Button>
               <Button size="sm" variant="outline" onClick={() => { setPhase("idle"); setStep(0); setLogTail(""); }}>
@@ -2625,8 +2645,8 @@ function RestartAppPanel() {
         <div className="flex-1 space-y-2">
           <div className="font-medium">Service restarted — reload to reconnect cleanly.</div>
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => window.location.reload()}>
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Reload now
+            <Button size="sm" onClick={handleReloadNow} disabled={reloadWaiting}>
+              {reloadWaiting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}Reload now
             </Button>
             <Button size="sm" variant="outline" onClick={() => { setPhase("idle"); setLogTail(""); }}>Dismiss</Button>
           </div>

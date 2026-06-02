@@ -1,8 +1,10 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/Layout";
+import useUpdateChecker from "@/hooks/useUpdateChecker";
 import Dashboard from "@/pages/Dashboard";
 import Recipes from "@/pages/Recipes";
 import RecipeDetail from "@/pages/RecipeDetail";
@@ -24,6 +26,11 @@ const queryClient = new QueryClient({
   },
 });
 
+function UpdateChecker() {
+  useUpdateChecker();
+  return null;
+}
+
 function Router() {
   return (
     <Layout>
@@ -40,6 +47,7 @@ function Router() {
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>
+      <UpdateChecker />
     </Layout>
   );
 }
@@ -52,6 +60,7 @@ function App() {
           <Router />
         </WouterRouter>
         <Toaster />
+        <SonnerToaster />
       </TooltipProvider>
     </QueryClientProvider>
   );

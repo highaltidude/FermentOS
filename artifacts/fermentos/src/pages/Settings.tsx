@@ -1663,7 +1663,7 @@ type HistoryEntry = {
 // before surfacing an actionable error. Real restarts complete in <15s on a
 // Pi 4; if we're past 90s the systemctl restart almost certainly failed
 // silently (missing sudoers entry, build failure, etc.).
-const RESTART_TIMEOUT_MS = 90_000;
+const RESTART_TIMEOUT_MS = 120_000;
 
 // Update lifecycle:
 //   idle      — nothing happening
@@ -1864,7 +1864,7 @@ function SystemUpdatePanel() {
         stopPolling();
         setPhase("error");
         setErrorMsg(
-          "Update timed out — the server did not come back within 90 seconds. The systemctl restart may have failed silently. Check the log tail above for details, or run `sudo systemctl restart fermentos` from the host shell.",
+          "Update timed out — the server did not come back within 120 seconds. The systemctl restart may have failed silently. Check the log tail above for details, or run `sudo systemctl restart fermentos` from the host shell.",
         );
       }
     }, 2000);
@@ -1872,7 +1872,7 @@ function SystemUpdatePanel() {
 
   const handleReloadNow = async () => {
     setReloadWaiting(true);
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 90; i++) {
       try {
         const res = await fetch(`${BASE}api/admin/version`);
         if (res.ok) {
@@ -1885,7 +1885,7 @@ function SystemUpdatePanel() {
       } catch { /* server still starting */ }
       await new Promise((r) => setTimeout(r, 1000));
     }
-    // Fallback: reload anyway after 15 seconds
+    // Fallback: reload anyway after 90 seconds
     window.location.reload();
   };
 
@@ -2048,7 +2048,7 @@ function SystemUpdatePanel() {
           stopPolling();
           setPhase("error");
           setErrorMsg(
-            "Restart timed out — the service did not come back within 90 seconds. The systemctl restart may have failed silently (often a missing `NOPASSWD` sudoers entry for `systemctl restart fermentos`). Check the log tail above, or run the restart manually from the host shell.",
+            "Restart timed out — the service did not come back within 120 seconds. The systemctl restart may have failed silently (often a missing `NOPASSWD` sudoers entry for `systemctl restart fermentos`). Check the log tail above, or run the restart manually from the host shell.",
           );
         }
       }, 2000);
@@ -2616,7 +2616,7 @@ function RestartAppPanel() {
       if (restartStartedAtRef.current && Date.now() - restartStartedAtRef.current > RESTART_TIMEOUT_MS) {
         stopProbe();
         setPhase("error");
-        setErrorMsg("Restart timed out — the service did not come back within 90 seconds. Check your sudoers config or run `sudo systemctl restart fermentos` from the host shell.");
+        setErrorMsg("Restart timed out — the service did not come back within 120 seconds. Check your sudoers config or run `sudo systemctl restart fermentos` from the host shell.");
       }
     }, 2000);
   };

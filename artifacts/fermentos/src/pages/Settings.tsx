@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type SystemStats = {
+  hostname: string;
   uptime: number;
   loadAvg: [number, number, number];
   cpu: { model: string; cores: number; usagePercent: number | null };
@@ -206,7 +207,7 @@ function SystemStatsPanel() {
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
-          Uptime: {formatUptime(stats.uptime)}
+          Uptime: {formatUptime(stats.uptime)} · Hostname: {stats.hostname}
         </div>
         <div className="flex items-center gap-1">
           <RefreshCw className="w-3 h-3" />

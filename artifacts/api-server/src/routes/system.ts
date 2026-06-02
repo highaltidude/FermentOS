@@ -90,6 +90,7 @@ router.get("/system/stats", async (req, res) => {
   const cpus = os.cpus();
 
   return res.json({
+    hostname: os.hostname(),
     uptime: Math.floor(os.uptime()),
     loadAvg: os.loadavg(),
     cpu: {

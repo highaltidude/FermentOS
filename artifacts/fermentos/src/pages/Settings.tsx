@@ -1714,6 +1714,7 @@ function SystemUpdatePanel() {
   const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
   const [reloadWaiting, setReloadWaiting] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
+  const logBoxRef = useRef<HTMLPreElement>(null);
   const startHashRef = useRef<string | null>(null);
   // Snapshot of the api-server's PROCESS_STARTED_AT taken right before we
   // request a restart. The poller treats "startedAt has changed" as the
@@ -1796,6 +1797,11 @@ function SystemUpdatePanel() {
   useEffect(() => { if (phase === "complete") fetchHistory(); }, [phase, fetchHistory]);
   // Tear down polling if the user navigates away mid-update.
   useEffect(() => () => stopPolling(), []);
+  useEffect(() => {
+    if (logBoxRef.current) {
+      logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight;
+    }
+  }, [logTail]);
 
   const startPolling = useCallback(() => {
     stopPolling();
@@ -1808,7 +1814,7 @@ function SystemUpdatePanel() {
       ]);
 
       if (logRes.status === "fulfilled" && logRes.value.log) {
-        const tail = logRes.value.log.split("\n").slice(-12).join("\n");
+        const tail = logRes.value.log.split("\n").slice(-30).join("\n");
         setLogTail(tail);
         const parsed = parseLastStep(logRes.value.log);
         if (parsed) {
@@ -2025,7 +2031,7 @@ function SystemUpdatePanel() {
           fetch(`${BASE}api/admin/version`, { cache: "no-store" }).then((r) => r.ok ? r.json() as Promise<VersionInfo> : Promise.reject(new Error(`HTTP ${r.status}`))),
         ]);
         if (logRes.status === "fulfilled" && logRes.value.log) {
-          setLogTail(logRes.value.log.split("\n").slice(-12).join("\n"));
+          setLogTail(logRes.value.log.split("\n").slice(-30).join("\n"));
         }
         if (verRes.status === "fulfilled") {
           const v = verRes.value;
@@ -2347,10 +2353,40 @@ function SystemUpdatePanel() {
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          {logTail && phase !== "complete" && (
-            <pre className="text-[10px] leading-snug font-mono text-muted-foreground bg-muted/40 border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-words">
-              {logTail}
-            </pre>
+          {(logTail || phase === "complete") && (
+            <div className="space-y-2">
+              {/* Step indicators */}
+              <div className="space-y-1">
+                {[
+                  { n: 1, label: "Pulling latest changes" },
+                  { n: 2, label: "Installing dependencies" },
+                  { n: 3, label: "Running database migrations" },
+                  { n: 4, label: "Building application" },
+                  { n: 5, label: "Restarting services" },
+                ].map(({ n, label }) => {
+                  const isDone = phase === "complete" || step > n;
+                  const isActive = step === n && phase !== "complete";
+                  return (
+                    <div key={n} className={`flex items-center gap-2 text-xs ${isDone ? "text-green-600 dark:text-green-400" : isActive ? "text-foreground" : "text-muted-foreground opacity-50"}`}>
+                      {isDone
+                        ? <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                        : isActive
+                          ? <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                          : <div className="w-3.5 h-3.5 shrink-0 rounded-full border border-muted-foreground/30" />
+                      }
+                      <span>{n}/5 — {label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Raw log output */}
+              <pre
+                ref={logBoxRef}
+                className="text-[10px] leading-snug font-mono text-muted-foreground bg-muted/40 border border-border rounded p-2 h-40 overflow-auto whitespace-pre-wrap break-words"
+              >
+                {logTail || ""}
+              </pre>
+            </div>
           )}
         </div>
       )}

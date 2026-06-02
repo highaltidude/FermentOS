@@ -23,9 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 
 const STATUS_COLORS: Record<string, string> = {
   brew_day: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/40",
@@ -116,6 +114,7 @@ export default function BrewSessionDetail() {
   const [assignDeviceId, setAssignDeviceId] = useState<string>("");
   const [readingFilter, setReadingFilter] = useState<"all" | "sensor" | "manual">("all");
   const [showAllReadings, setShowAllReadings] = useState(false);
+  const [chartSeries, setChartSeries] = useState<"both" | "temp" | "gravity">("both");
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -835,27 +834,175 @@ export default function BrewSessionDetail() {
       )}
 
       {/* Fermentation Chart */}
-      {chartData.length > 1 && (
-        <div className="bg-card border border-card-border rounded-lg p-4">
-          <h2 className="text-sm font-semibold text-foreground mb-4">Fermentation Chart</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="temp" orientation="left" domain={["auto", "auto"]} tick={{ fontSize: 11 }} unit="°F" />
-              <YAxis yAxisId="gravity" orientation="right" domain={["auto", "auto"]} tick={{ fontSize: 11 }} tickFormatter={(v) => v.toFixed(3)} />
-              <Tooltip
-                formatter={(value: number, name: string) =>
-                  name === "temp" ? [`${value}°F`, "Temperature"] : [value?.toFixed(3), "Gravity"]
-                }
-              />
-              <Legend formatter={(v) => v === "temp" ? "Temperature" : "Gravity"} />
-              <Line yAxisId="temp" type="monotone" dataKey="temp" stroke="#d97706" strokeWidth={2} dot={{ r: 3 }} />
-              <Line yAxisId="gravity" type="monotone" dataKey="gravity" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {chartData.length > 1 && (() => {
+        const sortedLog = [...(session.statusLog ?? [])].sort(
+          (a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime()
+        );
+        const fermStartEntry = sortedLog.find((e) => e.status === "fermenting");
+        const fermEndEntry = (() => {
+          if (!fermStartEntry) return undefined;
+          return sortedLog.find(
+            (e) =>
+              e.status !== "fermenting" &&
+              new Date(e.changedAt).getTime() > new Date(fermStartEntry.changedAt).getTime()
+          );
+        })();
+
+        const fermStartLabel = fermStartEntry
+          ? new Date(fermStartEntry.changedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+          : null;
+        const fermEndLabel = fermEndEntry
+          ? new Date(fermEndEntry.changedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+          : null;
+
+        const showTemp = chartSeries === "both" || chartSeries === "temp";
+        const showGravity = chartSeries === "both" || chartSeries === "gravity";
+        const isDense = chartData.length > 40;
+
+        return (
+          <div className="bg-card border border-card-border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Fermentation Chart</h2>
+              <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5 text-xs">
+                {(["both", "temp", "gravity"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setChartSeries(s)}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      chartSeries === s
+                        ? "bg-background text-foreground shadow-sm font-medium"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {s === "both" ? "Both" : s === "temp" ? "🌡 Temp" : "💧 Gravity"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {(fermStartLabel || fermEndLabel) && (
+              <div className="flex items-center gap-4 mb-3 flex-wrap">
+                {fermStartLabel && (
+                  <span className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                    Fermentation started · {fermStartLabel}
+                  </span>
+                )}
+                {fermEndLabel && (
+                  <span className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-400">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                    Fermentation ended · {fermEndLabel}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval="preserveStartEnd"
+                />
+                {showTemp && (
+                  <YAxis
+                    yAxisId="temp"
+                    orientation="left"
+                    domain={["auto", "auto"]}
+                    tick={{ fontSize: 10, fill: "#d97706" }}
+                    tickLine={false}
+                    axisLine={false}
+                    unit="°F"
+                    width={42}
+                  />
+                )}
+                {showGravity && (
+                  <YAxis
+                    yAxisId="gravity"
+                    orientation="right"
+                    domain={["auto", "auto"]}
+                    tick={{ fontSize: 10, fill: "#2563eb" }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => v.toFixed(3)}
+                    width={52}
+                  />
+                )}
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "var(--color-card)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    padding: "8px 12px",
+                  }}
+                  labelStyle={{ color: "var(--color-muted-foreground)", marginBottom: 4 }}
+                  formatter={(value: number, name: string) =>
+                    name === "temp"
+                      ? [`${value.toFixed(1)}°F`, "Temperature"]
+                      : [value?.toFixed(3), "Gravity"]
+                  }
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                  formatter={(v) => (
+                    <span style={{ color: v === "temp" ? "#d97706" : "#2563eb" }}>
+                      {v === "temp" ? "Temperature" : "Gravity"}
+                    </span>
+                  )}
+                />
+                {fermStartLabel && (
+                  <ReferenceLine
+                    x={fermStartLabel}
+                    yAxisId={showTemp ? "temp" : "gravity"}
+                    stroke="#22c55e"
+                    strokeDasharray="4 3"
+                    strokeWidth={1.5}
+                    label={{ value: "▶ Ferm start", position: "insideTopLeft", fontSize: 9, fill: "#22c55e", dy: -2 }}
+                  />
+                )}
+                {fermEndLabel && (
+                  <ReferenceLine
+                    x={fermEndLabel}
+                    yAxisId={showTemp ? "temp" : "gravity"}
+                    stroke="#3b82f6"
+                    strokeDasharray="4 3"
+                    strokeWidth={1.5}
+                    label={{ value: "■ Ferm end", position: "insideTopRight", fontSize: 9, fill: "#3b82f6", dy: -2 }}
+                  />
+                )}
+                {showTemp && (
+                  <Line
+                    yAxisId="temp"
+                    type="monotone"
+                    dataKey="temp"
+                    stroke="#d97706"
+                    strokeWidth={2}
+                    dot={isDense ? false : { r: 2, fill: "#d97706", strokeWidth: 0 }}
+                    activeDot={{ r: 4 }}
+                    connectNulls
+                  />
+                )}
+                {showGravity && (
+                  <Line
+                    yAxisId="gravity"
+                    type="monotone"
+                    dataKey="gravity"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    dot={isDense ? false : { r: 2, fill: "#2563eb", strokeWidth: 0 }}
+                    activeDot={{ r: 4 }}
+                    connectNulls
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
 
       {/* Fermentation Readings */}
       <div className="bg-card border border-card-border rounded-lg">

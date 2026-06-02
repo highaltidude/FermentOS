@@ -1739,9 +1739,11 @@ function SystemUpdatePanel() {
   // Pi 4 — easily 2–5 minutes — never trips the comeback timeout.
   const restartStartedAtRef = useRef<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const verifyAbortRef = useRef(false);
 
   const stopPolling = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    verifyAbortRef.current = true;
   };
 
   const fetchVersion = useCallback(async () => {
@@ -1856,13 +1858,15 @@ function SystemUpdatePanel() {
           setStepLabel("Verifying server is ready…");
           setPhase("verifying");
           // Poll until lock is clear before showing Reload now
+          verifyAbortRef.current = false;
           (async () => {
-            for (let i = 0; i < 90; i++) {
+            for (let i = 0; i < 120; i++) {
+              if (verifyAbortRef.current) return;
               try {
                 const res = await fetch(`${BASE}api/admin/version`);
                 if (res.ok) {
                   const data = await res.json() as VersionInfo;
-                  if (!data.lock) {
+                  if (!data.lock && !verifyAbortRef.current) {
                     setStepLabel("Update complete");
                     setPhase("complete");
                     stopPolling();
@@ -1872,10 +1876,11 @@ function SystemUpdatePanel() {
               } catch { /* server still starting */ }
               await new Promise((r) => setTimeout(r, 1000));
             }
-            // Fallback after 90 seconds
-            setStepLabel("Update complete");
-            setPhase("complete");
-            stopPolling();
+            if (!verifyAbortRef.current) {
+              setStepLabel("Update complete");
+              setPhase("complete");
+              stopPolling();
+            }
           })();
           return;
         }
@@ -1924,6 +1929,7 @@ function SystemUpdatePanel() {
     // Cleared here, then armed by the poller the first time it sees
     // step 5/5 in update.log — see comment on the ref declaration.
     restartStartedAtRef.current = null;
+    verifyAbortRef.current = false;
     setPhase("starting");
     setStep(0);
     setStepLabel(preBackup !== "none" ? "Running pre-update backup" : "Starting update");

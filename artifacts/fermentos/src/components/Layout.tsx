@@ -1,6 +1,6 @@
 import { Link, useRoute } from "wouter";
 import { useEffect, useState } from "react";
-import { Beer, BookOpen, Package, LayoutDashboard, Wrench, Settings, Sun, Moon } from "lucide-react";
+import { Beer, BookOpen, Package, LayoutDashboard, Wrench, Settings, Sun, Moon, Calculator } from "lucide-react";
 
 const logoUrl = `${import.meta.env.BASE_URL}fermentos-logo.png`;
 
@@ -40,6 +40,7 @@ const navItems = [
   { href: "/brew-sessions", label: "Brew Log", icon: Beer },
   { href: "/ingredients", label: "Ingredients", icon: Package },
   { href: "/equipment", label: "Equipment", icon: Wrench },
+  { href: "/calculators", label: "Calculators", icon: Calculator },
 ];
 
 const bottomNavItems = [

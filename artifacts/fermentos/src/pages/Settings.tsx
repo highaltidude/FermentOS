@@ -1695,6 +1695,18 @@ function parseLastStep(log: string): { step: number; label: string } | null {
   return { step, label: raw || (UPDATE_STEPS[step - 1] ?? `Step ${step}`) };
 }
 
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days = Math.floor(diff / 86_400_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
 function SystemUpdatePanel() {
   const BASE = import.meta.env.BASE_URL;
   const { toast } = useToast();
@@ -2124,6 +2136,11 @@ function SystemUpdatePanel() {
             <p className="text-xs text-muted-foreground">
               {new Date(version.date).toLocaleString()}
             </p>
+          )}
+          {version.date && (
+            <span className="text-xs text-muted-foreground">
+              Deployed {timeAgo(version.date)}
+            </span>
           )}
         </div>
         <Button size="sm" variant="outline" onClick={() => { fetchVersion(); fetchAuditCoverage(); }} disabled={checking || inProgress} title="Check GitHub for the latest version">

@@ -2088,7 +2088,7 @@ function SystemUpdatePanel() {
     return <div className="space-y-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-9 rounded-md" />)}</div>;
   }
 
-  const inProgress = phase === "starting" || phase === "running" || phase === "restarting";
+  const inProgress = phase === "starting" || phase === "running" || phase === "restarting" || phase === "verifying";
   const restartPending = !!version.restartPending && phase === "idle";
   // Active lock from any source — this tab, another tab, or a CLI invocation.
   // We treat "lock present + idle in this tab" as "another session is doing
@@ -2377,7 +2377,7 @@ function SystemUpdatePanel() {
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          {(logTail || phase === "complete") && (
+          {(inProgress || logTail || phase === "complete" || phase === "verifying") && (
             <div className="space-y-2">
               {/* Step indicators */}
               <div className="space-y-1">
@@ -2408,7 +2408,7 @@ function SystemUpdatePanel() {
                 ref={logBoxRef}
                 className="text-[10px] leading-snug font-mono text-muted-foreground bg-muted/40 border border-border rounded p-2 h-40 overflow-auto whitespace-pre-wrap break-words"
               >
-                {logTail || ""}
+                {logTail || "Connecting to update service…"}
               </pre>
             </div>
           )}

@@ -1872,7 +1872,7 @@ function SystemUpdatePanel() {
 
   const handleReloadNow = async () => {
     setReloadWaiting(true);
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 90; i++) {
       try {
         const res = await fetch(`${BASE}api/admin/version`);
         if (res.ok) {
@@ -1885,7 +1885,7 @@ function SystemUpdatePanel() {
       } catch { /* server still starting */ }
       await new Promise((r) => setTimeout(r, 1000));
     }
-    // Fallback: reload anyway after 15 seconds
+    // Fallback: reload anyway after 90 seconds
     window.location.reload();
   };
 

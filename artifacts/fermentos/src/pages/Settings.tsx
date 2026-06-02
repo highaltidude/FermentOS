@@ -1713,6 +1713,7 @@ function SystemUpdatePanel() {
   const [releasesOpen, setReleasesOpen] = useState(false);
   const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
   const [reloadWaiting, setReloadWaiting] = useState(false);
+  const [copiedHash, setCopiedHash] = useState(false);
   const startHashRef = useRef<string | null>(null);
   // Snapshot of the api-server's PROCESS_STARTED_AT taken right before we
   // request a restart. The poller treats "startedAt has changed" as the
@@ -2095,6 +2096,18 @@ function SystemUpdatePanel() {
           <div className="flex items-center gap-2 text-sm">
             <GitBranch className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <span className="font-mono text-foreground">{version.hash}</span>
+            <button
+              type="button"
+              title="Copy commit hash"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => {
+                navigator.clipboard.writeText(version.hash);
+                setCopiedHash(true);
+                setTimeout(() => setCopiedHash(false), 2000);
+              }}
+            >
+              {copiedHash ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
             <span className="text-xs text-muted-foreground">on {version.branch}</span>
             {version.updateAvailable && phase === "idle" && (
               <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">Update available</span>

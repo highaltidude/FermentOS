@@ -14,6 +14,7 @@ import BrewSessionDetail from "@/pages/BrewSessionDetail";
 import NewBrewSession from "@/pages/NewBrewSession";
 import Inventory from "@/pages/Inventory";
 import Equipment from "@/pages/Equipment";
+import Calculators from "@/pages/Calculators";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
@@ -44,6 +45,7 @@ function Router() {
         <Route path="/brew-sessions" component={BrewSessions} />
         <Route path="/ingredients" component={Inventory} />
         <Route path="/equipment" component={Equipment} />
+        <Route path="/calculators" component={Calculators} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

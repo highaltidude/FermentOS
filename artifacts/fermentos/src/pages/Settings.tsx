@@ -1673,7 +1673,7 @@ const RESTART_TIMEOUT_MS = 90_000;
 //   restarting— API server is unreachable (build finished, services restarting)
 //   complete  — server reachable again with a new git hash; show Reload button
 //   error     — POST returned non-2xx (e.g. backup failed) OR something unexpected
-type UpdatePhase = "idle" | "starting" | "running" | "restarting" | "complete" | "error";
+type UpdatePhase = "idle" | "starting" | "running" | "restarting" | "verifying" | "complete" | "error";
 
 // Steps emitted by update.sh as `[N/5] ...` markers in update.log.
 const UPDATE_STEPS = [
@@ -1834,9 +1834,14 @@ function SystemUpdatePanel() {
         if (hashChanged || processChanged) {
           setVersion(v);
           setStep(5);
-          setStepLabel("Update complete");
-          setPhase("complete");
-          stopPolling();
+          setStepLabel("Verifying server is ready…");
+          setPhase("verifying");
+          // Give the server 3 more seconds to fully initialize before showing Reload
+          setTimeout(() => {
+            setStepLabel("Update complete");
+            setPhase("complete");
+            stopPolling();
+          }, 3000);
           return;
         }
         // Server is reachable but still on the old hash/process — we're either
@@ -1906,6 +1911,7 @@ function SystemUpdatePanel() {
     if (phase === "idle" || phase === "error") return 0;
     if (phase === "starting") return 5;
     if (phase === "complete") return 100;
+    if (phase === "verifying") return 98;
     if (phase === "restarting") return Math.max(95, (step / 5) * 100);
     // running
     return Math.min(95, Math.max(10, (step / 5) * 100));
@@ -1915,6 +1921,7 @@ function SystemUpdatePanel() {
     if (phase === "starting") return "Preparing…";
     if (phase === "running") return step > 0 ? `Step ${step} of 5 — ${stepLabel}` : (stepLabel || "Running…");
     if (phase === "restarting") return "Restarting service — server is briefly offline";
+    if (phase === "verifying") return "Verifying server is ready…";
     if (phase === "complete") return "Update complete";
     return "";
   })();

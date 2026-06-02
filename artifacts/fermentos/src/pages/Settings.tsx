@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -3443,7 +3443,7 @@ export default function Settings() {
               [
                 { id: "health",       label: "Health",       icon: <Activity className="w-3.5 h-3.5" /> },
                 { id: "updates",      label: "Updates",      icon: <RefreshCw className="w-3.5 h-3.5" /> },
-                { id: "connectivity", label: "Connectivity", icon: <Wifi className="w-3.5 h-3.5" /> },
+                { id: "connectivity", label: "Integrations", icon: <Plug className="w-3.5 h-3.5" /> },
                 { id: "backups",      label: "Backups",      icon: <Database className="w-3.5 h-3.5" /> },
                 { id: "power",        label: "Power",        icon: <Power className="w-3.5 h-3.5" /> },
               ] as const

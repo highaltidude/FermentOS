@@ -106,6 +106,7 @@ The script will prompt for a web port (default 3000), generate secure random cre
 FERMENTOS_PORT=7070 bash docker-install.sh
 ```
 
+
 **Raspberry Pi / ARM:**
 ```bash
 docker compose build --build-arg BUILD_TARGET=linux/arm64

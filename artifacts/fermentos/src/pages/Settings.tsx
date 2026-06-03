@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -41,6 +41,9 @@ type SystemStats = {
   memory: { totalMB: number; usedMB: number; freeMB: number; usedPercent: number };
   disk: { totalGB: number; usedGB: number; freeGB: number; usedPercent: number } | null;
   network: Array<{ name: string; rxBytes: number; txBytes: number; rxBytesPerSec: number; txBytesPerSec: number }>;
+  temperatureCelsius: number | null;
+  containerMemoryLimitMB: number | null;
+  isDocker: boolean;
 };
 
 function formatUptime(seconds: number) {
@@ -128,10 +131,15 @@ function SystemStatsPanel() {
 
   const primaryNet = stats.network[0];
 
+  const memoryPressurePercent = (stats.isDocker && stats.containerMemoryLimitMB)
+    ? Math.round((stats.memory.usedMB / stats.containerMemoryLimitMB) * 100)
+    : stats.memory.usedPercent;
+
   const maxUsage = Math.max(
     stats.cpu.usagePercent ?? 0,
-    stats.memory.usedPercent,
+    memoryPressurePercent,
     stats.disk?.usedPercent ?? 0,
+    stats.temperatureCelsius !== null ? (stats.temperatureCelsius / 85) * 100 : 0,
   );
   const statusBadge = maxUsage > 85
     ? { label: "Critical", cls: "bg-destructive/15 text-destructive border-destructive/30", Icon: AlertCircle }
@@ -160,14 +168,40 @@ function SystemStatsPanel() {
           </div>
         </StatCard>
 
+        {stats.temperatureCelsius !== null && (
+          <StatCard icon={<Thermometer className="w-3.5 h-3.5" />} label="Temperature">
+            <div className="space-y-1">
+              <div className={`text-lg font-bold ${
+                stats.temperatureCelsius >= 75 ? "text-destructive"
+                : stats.temperatureCelsius >= 60 ? "text-amber-500"
+                : "text-foreground"
+              }`}>
+                {stats.temperatureCelsius.toFixed(1)}°C
+              </div>
+              <UsageBar
+                percent={(stats.temperatureCelsius / 85) * 100}
+                color="bg-green-500"
+              />
+              <div className="text-xs text-muted-foreground">
+                {stats.temperatureCelsius >= 75 ? "Thermal throttle risk"
+                 : stats.temperatureCelsius >= 60 ? "Running warm"
+                 : "Normal"}
+              </div>
+            </div>
+          </StatCard>
+        )}
+
         <StatCard icon={<MemoryStick className="w-3.5 h-3.5" />} label="Memory">
           <div className="space-y-1">
             <div className="flex justify-between items-baseline">
               <span className="text-lg font-bold text-foreground">{stats.memory.usedPercent}%</span>
               <span className="text-xs text-muted-foreground">{stats.memory.usedMB} / {stats.memory.totalMB} MB</span>
             </div>
-            <UsageBar percent={stats.memory.usedPercent} />
+            <UsageBar percent={memoryPressurePercent} />
             <div className="text-xs text-muted-foreground">{stats.memory.freeMB} MB free</div>
+            {stats.isDocker && stats.containerMemoryLimitMB !== null && (
+              <div className="text-xs text-muted-foreground">Container limit: {stats.containerMemoryLimitMB} MB</div>
+            )}
           </div>
         </StatCard>
 

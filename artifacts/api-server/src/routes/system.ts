@@ -5,6 +5,8 @@ import { execSync } from "child_process";
 
 const router = Router();
 
+const IS_DOCKER = fs.existsSync("/.dockerenv");
+
 function readProcStat(): { total: number; idle: number } | null {
   try {
     const line = fs.readFileSync("/proc/stat", "utf8").split("\n")[0];
@@ -89,6 +91,32 @@ router.get("/system/stats", async (req, res) => {
 
   const cpus = os.cpus();
 
+  let temperatureCelsius: number | null = null;
+  try {
+    const raw = fs.readFileSync("/sys/class/thermal/thermal_zone0/temp", "utf8");
+    const milli = parseInt(raw.trim(), 10);
+    if (Number.isFinite(milli)) temperatureCelsius = Math.round(milli / 10) / 100;
+  } catch { /* not available on this platform */ }
+
+  let containerMemoryLimitMB: number | null = null;
+  if (IS_DOCKER) {
+    try {
+      const raw = fs.readFileSync("/sys/fs/cgroup/memory.max", "utf8").trim();
+      if (raw !== "max") {
+        const bytes = parseInt(raw, 10);
+        if (Number.isFinite(bytes)) containerMemoryLimitMB = Math.round(bytes / 1024 / 1024);
+      }
+    } catch {
+      try {
+        const raw = fs.readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf8").trim();
+        const bytes = parseInt(raw, 10);
+        if (Number.isFinite(bytes) && bytes < 9e18) {
+          containerMemoryLimitMB = Math.round(bytes / 1024 / 1024);
+        }
+      } catch { /* no cgroup limit set */ }
+    }
+  }
+
   return res.json({
     hostname: os.hostname(),
     uptime: Math.floor(os.uptime()),
@@ -106,6 +134,9 @@ router.get("/system/stats", async (req, res) => {
     },
     disk: getDiskStats(),
     network: netInterfaces,
+    temperatureCelsius,
+    containerMemoryLimitMB,
+    isDocker: IS_DOCKER,
   });
 });
 

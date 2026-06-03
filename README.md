@@ -93,18 +93,18 @@ Recommended for NAS, mini PC, VM, or anyone already running Docker.
 ```bash
 git clone https://github.com/highaltidude/FermentOS.git
 cd FermentOS
-
-# Set a custom database password before first run (recommended)
-cp .env.example .env
-# Edit .env and set DB_PASSWORD to something unique
-
-docker compose up -d
+bash docker-install.sh
 ```
 
-The app will be available at **http://localhost:3000**.
+The script will prompt for a web port (default 3000), generate secure random credentials, write `.env`, and start the stack. Open the URL it prints when done.
 
 - Data is persisted in a Docker volume (`postgres_data`); uploaded photos are stored in `./data/uploads`
 - To update: `git pull && docker compose up -d --build`
+
+**Non-interactive / unattended install:**
+```bash
+FERMENTOS_PORT=7070 bash docker-install.sh
+```
 
 **Raspberry Pi / ARM:**
 ```bash

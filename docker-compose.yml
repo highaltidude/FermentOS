@@ -29,11 +29,12 @@ services:
         required: false
     environment:
       DATABASE_URL: postgresql://fermentos:${DB_PASSWORD:-fermentos}@db:5432/fermentos
+      SESSION_SECRET: ${SESSION_SECRET}
       NODE_ENV: production
       PORT: 8080
       BASE_PATH: /
     ports:
-      - "3000:8080"
+      - "${HOST_PORT:-3000}:8080"
     volumes:
       - ./data/uploads:/app/data/uploads
     healthcheck:

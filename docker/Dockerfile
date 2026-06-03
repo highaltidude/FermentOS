@@ -42,6 +42,7 @@ COPY --from=builder /app/scripts ./scripts
 RUN mkdir -p /app/data
 
 COPY docker/entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 RUN addgroup --system fermentos && adduser --system --ingroup fermentos fermentos

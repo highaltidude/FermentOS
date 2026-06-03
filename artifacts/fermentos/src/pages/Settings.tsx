@@ -3284,7 +3284,7 @@ function BreweryNamePanel() {
     <div className="flex items-center gap-2">
       <Input
         className="flex-1"
-        placeholder="e.g. Rollins Brewery"
+        placeholder="e.g. My Brewery"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleSave()}

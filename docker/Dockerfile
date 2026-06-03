@@ -1,6 +1,6 @@
 # Stage 1 — base
 FROM node:20-slim AS base
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@10
 WORKDIR /app
 
 # Stage 2 — deps: install all workspace dependencies
@@ -27,7 +27,7 @@ RUN BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 
 # Stage 4 — runner: lean production image
 FROM node:20-slim AS runner
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@10
 ENV NODE_ENV=production
 WORKDIR /app
 

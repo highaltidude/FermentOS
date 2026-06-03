@@ -23,6 +23,7 @@ const DOCKER_GIT_META: GitMeta | null = (() => {
   }
 })();
 
+
 const REPO_ROOT = path.resolve(process.cwd());
 const UPDATE_LOG = path.join(REPO_ROOT, "update.log");
 const UPDATE_SCRIPT = path.join(REPO_ROOT, "update.sh");

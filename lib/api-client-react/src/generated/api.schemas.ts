@@ -379,6 +379,7 @@ export interface ActiveBrew {
   latestTemperature?: number | null;
   latestGravity?: number | null;
   targetFinalGravity?: number | null;
+  originalGravityActual?: number | null;
 }
 
 export interface UpcomingBrew {

@@ -22,6 +22,13 @@ FROM deps AS builder
 COPY . .
 ARG BUILD_TARGET=linux/amd64
 ENV BUILD_TARGET=${BUILD_TARGET}
+# Bake git metadata into the image so the runner can show branch/hash and
+# check for updates without needing a .git directory at runtime.
+ARG GIT_HASH=unknown
+ARG GIT_BRANCH=unknown
+ARG GIT_REMOTE=""
+RUN printf '{"hash":"%s","branch":"%s","remote":"%s"}' \
+    "${GIT_HASH}" "${GIT_BRANCH}" "${GIT_REMOTE}" > /tmp/git-meta.json
 RUN pnpm --filter @workspace/api-server run build
 RUN BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 
@@ -41,6 +48,7 @@ COPY --from=builder /app/scripts ./scripts
 
 RUN mkdir -p /app/data
 
+COPY --from=builder /tmp/git-meta.json /app/git-meta.json
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh
 RUN chmod +x /entrypoint.sh

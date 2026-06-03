@@ -75,10 +75,21 @@ EOF
   success ".env created with secure random credentials"
 fi
 
-# ── Start the stack ──────────────────────────
+# ── Build and start the stack ────────────────
 step "Starting FermentOS"
 cd "$INSTALL_DIR"
-docker compose up -d --build
+
+# Capture git metadata on the host (where git is available) so it can be
+# baked into the image — the container has no .git directory at runtime.
+GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "unknown")
+GIT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+
+docker compose build \
+  --build-arg GIT_HASH="$GIT_HASH" \
+  --build-arg GIT_BRANCH="$GIT_BRANCH" \
+  --build-arg GIT_REMOTE="$GIT_REMOTE"
+docker compose up -d
 
 # ── Done ─────────────────────────────────────
 echo ""

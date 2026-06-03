@@ -2163,19 +2163,24 @@ function SystemUpdatePanel() {
       </div>
 
       {isDocker && phase === "idle" && (
-        <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 space-y-1">
-          <div className="flex items-start gap-2 text-sm text-blue-700 dark:text-blue-400">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className={`rounded-md border p-3 space-y-1 ${version.updateAvailable ? "border-amber-500/30 bg-amber-500/10" : "border-blue-500/30 bg-blue-500/10"}`}>
+          <div className={`flex items-start gap-2 text-sm ${version.updateAvailable ? "text-amber-700 dark:text-amber-400" : "text-blue-700 dark:text-blue-400"}`}>
+            {version.updateAvailable
+              ? <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              : <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            }
             <div className="flex-1">
-              <div className="font-medium">Running in Docker</div>
+              <div className="font-medium">
+                {version.updateAvailable ? "New version available" : "Running in Docker"}
+              </div>
               <div className="text-xs opacity-80 mt-0.5">
-                Update and Rollback aren't available — the source code is baked into the image.
-                Restart works and will bring the container back up via Docker's restart policy.
-                To update, pull the latest code and rebuild:
+                {version.updateAvailable
+                  ? "A new version is available on GitHub. Pull and rebuild to update:"
+                  : "Update and Rollback aren't available — the source code is baked into the image. Restart works via Docker's restart policy. To update:"}
               </div>
             </div>
           </div>
-          <pre className="text-[10px] leading-snug font-mono bg-background/60 border border-blue-500/30 rounded p-2 overflow-x-auto whitespace-pre ml-6">git pull && docker compose up -d --build</pre>
+          <pre className={`text-[10px] leading-snug font-mono bg-background/60 border rounded p-2 overflow-x-auto whitespace-pre ml-6 ${version.updateAvailable ? "border-amber-500/30" : "border-blue-500/30"}`}>git pull && bash docker-install.sh</pre>
         </div>
       )}
 

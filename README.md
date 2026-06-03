@@ -99,7 +99,7 @@ bash docker-install.sh
 The script will prompt for a web port (default 3000), generate secure random credentials, write `.env`, and start the stack. Open the URL it prints when done.
 
 - Data is persisted in a Docker volume (`postgres_data`); uploaded photos are stored in `./data/uploads`
-- To update: `git pull && docker compose up -d --build`
+- To update: `git pull && bash docker-install.sh`
 
 **Non-interactive / unattended install:**
 ```bash

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -1593,7 +1593,12 @@ type VersionInfo = {
   // True when the api-server's `sudo -n --list` checks pass for both
   // `systemctl restart fermentos` and `reboot`. False means the in-app
   // Update / Restart / Reboot buttons will fail without the sudoers fix.
-  sudoOk?: boolean;
+  // null means not applicable (Docker).
+  sudoOk?: boolean | null;
+  // True when the api-server detected it is running inside a Docker container.
+  // System management buttons (Update, Rollback, Reboot) are hidden; Restart
+  // works via process.exit + the container restart policy.
+  isDocker?: boolean;
   // Set when an update or rollback is currently running. The UI uses this
   // to disable the start buttons across browser tabs and to surface a
   // "looks stuck — force clear?" affordance after LOCK_STALE_MS.
@@ -2096,7 +2101,8 @@ function SystemUpdatePanel() {
   const externalLock = phase === "idle" && version.lock && !version.lock.stale ? version.lock : null;
   const staleLock = phase === "idle" && version.lock && version.lock.stale ? version.lock : null;
   const sudoBroken = version.sudoOk === false;
-  const buttonsDisabled = inProgress || !!externalLock;
+  const isDocker = version.isDocker === true;
+  const buttonsDisabled = inProgress || !!externalLock || isDocker;
 
   const handleClearStaleLock = async () => {
     if (!confirm("Force-clear the stuck update lock?\n\nOnly do this if you're sure no update or rollback is actually still running.")) return;
@@ -2156,7 +2162,24 @@ function SystemUpdatePanel() {
         </Button>
       </div>
 
-      {sudoBroken && phase === "idle" && (
+      {isDocker && phase === "idle" && (
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 space-y-1">
+          <div className="flex items-start gap-2 text-sm text-blue-700 dark:text-blue-400">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-medium">Running in Docker</div>
+              <div className="text-xs opacity-80 mt-0.5">
+                Update and Rollback aren't available — the source code is baked into the image.
+                Restart works and will bring the container back up via Docker's restart policy.
+                To update, pull the latest code and rebuild:
+              </div>
+            </div>
+          </div>
+          <pre className="text-[10px] leading-snug font-mono bg-background/60 border border-blue-500/30 rounded p-2 overflow-x-auto whitespace-pre ml-6">git pull && docker compose up -d --build</pre>
+        </div>
+      )}
+
+      {sudoBroken && !isDocker && phase === "idle" && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
           <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />

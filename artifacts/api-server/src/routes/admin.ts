@@ -7,6 +7,10 @@ import { getConfig as getBackupConfig, runBackup } from "./backup.js";
 
 const router = Router();
 
+// Detect Docker at startup — /.dockerenv is always present inside containers.
+// Used to skip systemd-specific checks and wire up a process-exit restart.
+const IS_DOCKER = existsSync("/.dockerenv");
+
 const REPO_ROOT = path.resolve(process.cwd());
 const UPDATE_LOG = path.join(REPO_ROOT, "update.log");
 const UPDATE_SCRIPT = path.join(REPO_ROOT, "update.sh");
@@ -113,6 +117,7 @@ const RUNNING_HASH = (() => {
 // install.sh") instead of spawning a doomed `sudo` that hangs forever waiting
 // for a password prompt that will never come.
 function sudoPreflight(args: string[]): string | null {
+  if (IS_DOCKER) return null;
   try {
     execSync(`sudo -n ${args.join(" ")}`, {
       stdio: "pipe",
@@ -233,7 +238,9 @@ refreshRemoteHashAsync().catch(() => {});
 let sudoOkCache: { ok: boolean; fetchedAt: number } | null = null;
 const SUDO_OK_TTL_MS = 30 * 1000;
 
-function getSudoOkCached(): boolean {
+// Returns null in Docker (not applicable), true/false on bare-metal.
+function getSudoOkCached(): boolean | null {
+  if (IS_DOCKER) return null;
   if (sudoOkCache && Date.now() - sudoOkCache.fetchedAt < SUDO_OK_TTL_MS) {
     return sudoOkCache.ok;
   }
@@ -305,6 +312,7 @@ function getGitInfo() {
       restartPending: RUNNING_HASH !== "unknown" && hash !== "unknown" && RUNNING_HASH !== hash,
       startedAt: PROCESS_STARTED_AT,
       sudoOk: getSudoOkCached(),
+      isDocker: IS_DOCKER,
       lock: getLockState(),
     };
   } catch {
@@ -318,6 +326,7 @@ function getGitInfo() {
       restartPending: false,
       startedAt: PROCESS_STARTED_AT,
       sudoOk: getSudoOkCached(),
+      isDocker: IS_DOCKER,
       lock: getLockState(),
     };
   }
@@ -418,6 +427,15 @@ router.get("/sudoers-line", (_req, res) => {
 // on the version endpoint.
 router.post("/restart-service", (req, res) => {
   req.log.warn("Service restart requested");
+
+  if (IS_DOCKER) {
+    // In Docker there is no systemd. Exit cleanly and rely on the container's
+    // restart policy (unless-stopped) to bring the process back up.
+    res.json({ started: true, message: "Container restart scheduled in ~1 second." });
+    setTimeout(() => process.exit(0), 1000);
+    return;
+  }
+
   // Fail fast if the sudoers entry isn't in place — otherwise the spawned
   // `sudo systemctl restart` would hang forever waiting for a password.
   const sudoErr = sudoPreflight(["--list", "/usr/bin/systemctl", "restart", "fermentos"]);
@@ -669,6 +687,10 @@ router.post("/rollback", (req, res) => {
     });
     return;
   }
+  if (IS_DOCKER) {
+    res.status(409).json({ error: "Rollback is not available in Docker. The source code is baked into the image — to roll back, rebuild from an earlier commit." });
+    return;
+  }
   const sudoErr = sudoPreflight(["--list", "/usr/bin/systemctl", "restart", "fermentos"]);
   if (sudoErr) {
     req.log.error({ sudoErr }, "Rollback blocked: sudo pre-flight failed");
@@ -707,6 +729,12 @@ router.post("/rollback", (req, res) => {
 // NOPASSWD line for `/sbin/reboot`).
 router.post("/reboot", (req, res) => {
   req.log.warn("Host reboot requested");
+
+  if (IS_DOCKER) {
+    res.status(409).json({ error: "Host reboot is not available in Docker." });
+    return;
+  }
+
   // Same fail-fast logic as /restart-service. Without the sudoers entry,
   // `sudo reboot` would hang and the user would just see the "rebooting"
   // spinner forever, never knowing why the host never went down.

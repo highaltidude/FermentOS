@@ -22,7 +22,12 @@ const comingSoon = [
 function calcAbv(og: number, fg: number) {
   const abv = (og - fg) * 131.25;
   const attenuation = ((og - fg) / (og - 1.0)) * 100;
-  const calories = 3.55 * (1881.22 * fg * (og - fg) / (1.775 - og) + 3550 * fg * (fg - 1.0));
+  // ASBC calorie method (Brewer's Friend / Reiss 1994)
+  const ogP = (og - 1) * 250;
+  const fgP = (fg - 1) * 250;
+  const re  = 0.1808 * ogP + 0.8192 * fgP;
+  const abw = (ogP - re) / (2.0665 - 0.010665 * ogP);
+  const calories = (6.9 * abw + 4.0 * Math.max(0, re - 0.1)) * fg * 3.55;
   return { abv, attenuation, calories };
 }
 

@@ -1,6 +1,6 @@
 # Stage 1 — base
 FROM node:20-slim AS base
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 WORKDIR /app
 
 # Stage 2 — deps: install all workspace dependencies
@@ -20,13 +20,14 @@ RUN pnpm install --frozen-lockfile
 # Stage 3 — builder: compile API server and frontend
 FROM deps AS builder
 COPY . .
-ENV BUILD_TARGET=linux/amd64
+ARG BUILD_TARGET=linux/amd64
+ENV BUILD_TARGET=${BUILD_TARGET}
 RUN pnpm --filter @workspace/api-server run build
 RUN BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 
 # Stage 4 — runner: lean production image
 FROM node:20-slim AS runner
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 ENV NODE_ENV=production
 WORKDIR /app
 
@@ -42,6 +43,10 @@ RUN mkdir -p /app/data
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+RUN addgroup --system fermentos && adduser --system --ingroup fermentos fermentos
+RUN chown -R fermentos:fermentos /app /entrypoint.sh
+USER fermentos
 
 EXPOSE 8080
 CMD ["/entrypoint.sh"]

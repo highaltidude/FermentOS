@@ -93,15 +93,24 @@ Recommended for NAS, mini PC, VM, or anyone already running Docker.
 ```bash
 git clone https://github.com/highaltidude/FermentOS.git
 cd FermentOS
+
+# Set a custom database password before first run (recommended)
+cp .env.example .env
+# Edit .env and set DB_PASSWORD to something unique
+
 docker compose up -d
 ```
 
 The app will be available at **http://localhost:3000**.
 
 - Data is persisted in a Docker volume (`postgres_data`); uploaded photos are stored in `./data/uploads`
-- To update: `docker compose pull && docker compose up -d`
+- To update: `git pull && docker compose up -d --build`
 
-> **Warning:** Change the default database password in `docker-compose.yml` before exposing FermentOS to a network.
+**Raspberry Pi / ARM:**
+```bash
+docker compose build --build-arg BUILD_TARGET=linux/arm64
+docker compose up -d
+```
 
 ---
 

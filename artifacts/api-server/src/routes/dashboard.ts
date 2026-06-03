@@ -1,13 +1,16 @@
 import { Router } from "express";
-import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable } from "@workspace/db";
+import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable, appConfigTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const router = Router();
 
 router.get("/dashboard/summary", async (req, res) => {
-  const recipes = await db.select().from(recipesTable);
-  const sessions = await db.select().from(brewSessionsTable).orderBy(brewSessionsTable.createdAt);
-  const inventory = await db.select().from(inventoryTable);
+  const [recipes, sessions, inventory, breweryNameRow] = await Promise.all([
+    db.select().from(recipesTable),
+    db.select().from(brewSessionsTable).orderBy(brewSessionsTable.createdAt),
+    db.select().from(inventoryTable),
+    db.select().from(appConfigTable).where(eq(appConfigTable.key, "brewery_name")),
+  ]);
 
   // brew_day, fermenting, and conditioning are all active. packaged is terminal.
   const activeStatuses = ["brew_day", "fermenting", "conditioning"];
@@ -19,6 +22,7 @@ router.get("/dashboard/summary", async (req, res) => {
     totalBrewSessions: sessions.length,
     activeBrewCount: activeSessions.length,
     inventoryItemCount: inventory.length,
+    breweryName: breweryNameRow[0]?.value ?? null,
     recentSessions,
   });
 });

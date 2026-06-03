@@ -23,6 +23,8 @@ import type {
   BrewSensorTelemetry,
   BrewSession,
   BrewSessionWithReadings,
+  BreweryNameBody,
+  BreweryNameResponse,
   CreateBeerStyleBody,
   CreateBrewSessionBody,
   CreateEquipmentBody,
@@ -3057,6 +3059,167 @@ export const useSetReadingRetention = <
   TContext
 > => {
   return useMutation(getSetReadingRetentionMutationOptions(options));
+};
+
+/**
+ * @summary Get the brewery name
+ */
+export const getGetBreweryNameUrl = () => {
+  return `/api/settings/brewery-name`;
+};
+
+export const getBreweryName = async (
+  options?: RequestInit,
+): Promise<BreweryNameResponse> => {
+  return customFetch<BreweryNameResponse>(getGetBreweryNameUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBreweryNameQueryKey = () => {
+  return [`/api/settings/brewery-name`] as const;
+};
+
+export const getGetBreweryNameQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBreweryName>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBreweryName>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBreweryNameQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBreweryName>>> = ({
+    signal,
+  }) => getBreweryName({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBreweryName>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBreweryNameQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBreweryName>>
+>;
+export type GetBreweryNameQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the brewery name
+ */
+
+export function useGetBreweryName<
+  TData = Awaited<ReturnType<typeof getBreweryName>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBreweryName>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBreweryNameQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set the brewery name
+ */
+export const getSetBreweryNameUrl = () => {
+  return `/api/settings/brewery-name`;
+};
+
+export const setBreweryName = async (
+  breweryNameBody: BreweryNameBody,
+  options?: RequestInit,
+): Promise<BreweryNameResponse> => {
+  return customFetch<BreweryNameResponse>(getSetBreweryNameUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(breweryNameBody),
+  });
+};
+
+export const getSetBreweryNameMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setBreweryName>>,
+    TError,
+    { data: BodyType<BreweryNameBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setBreweryName>>,
+  TError,
+  { data: BodyType<BreweryNameBody> },
+  TContext
+> => {
+  const mutationKey = ["setBreweryName"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setBreweryName>>,
+    { data: BodyType<BreweryNameBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setBreweryName(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetBreweryNameMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setBreweryName>>
+>;
+export type SetBreweryNameMutationBody = BodyType<BreweryNameBody>;
+export type SetBreweryNameMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the brewery name
+ */
+export const useSetBreweryName = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setBreweryName>>,
+    TError,
+    { data: BodyType<BreweryNameBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setBreweryName>>,
+  TError,
+  { data: BodyType<BreweryNameBody> },
+  TContext
+> => {
+  return useMutation(getSetBreweryNameMutationOptions(options));
 };
 
 /**

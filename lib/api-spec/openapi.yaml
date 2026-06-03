@@ -618,6 +618,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReadingRetentionResponse"
 
+  /settings/brewery-name:
+    get:
+      operationId: getBreweryName
+      tags: [settings]
+      summary: Get the brewery name
+      responses:
+        "200":
+          description: Current brewery name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreweryNameResponse"
+    put:
+      operationId: setBreweryName
+      tags: [settings]
+      summary: Set the brewery name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BreweryNameBody"
+      responses:
+        "200":
+          description: Updated brewery name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreweryNameResponse"
+
   /settings/default-readings-shown:
     get:
       operationId: getDefaultReadingsShown
@@ -1725,6 +1755,21 @@ components:
           type: integer
       required: [count]
 
+    BreweryNameResponse:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+      required: [name]
+
+    BreweryNameBody:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+
     MaltType:
       type: string
       enum: [lme, dme, all_grain]
@@ -1837,6 +1882,9 @@ components:
           type: integer
         inventoryItemCount:
           type: integer
+        breweryName:
+          type: string
+          nullable: true
         recentSessions:
           type: array
           items:

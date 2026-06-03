@@ -1,11 +1,13 @@
 services:
   db:
     image: postgres:16-alpine
+    env_file:
+      - path: .env
+        required: false
     environment:
       POSTGRES_DB: fermentos
       POSTGRES_USER: fermentos
-      # Change this password before exposing FermentOS to a network
-      POSTGRES_PASSWORD: fermentos
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-fermentos}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,15 +24,25 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgresql://fermentos:fermentos@db:5432/fermentos
+      DATABASE_URL: postgresql://fermentos:${DB_PASSWORD:-fermentos}@db:5432/fermentos
+      SESSION_SECRET: ${SESSION_SECRET}
       NODE_ENV: production
       PORT: 8080
       BASE_PATH: /
     ports:
-      - "3000:8080"
+      - "${HOST_PORT:-3000}:8080"
     volumes:
       - ./data/uploads:/app/data/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
 volumes:

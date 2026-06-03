@@ -7,6 +7,22 @@ import { getConfig as getBackupConfig, runBackup } from "./backup.js";
 
 const router = Router();
 
+// Detect Docker at startup — /.dockerenv is always present inside containers.
+// Used to skip systemd-specific checks and wire up a process-exit restart.
+const IS_DOCKER = existsSync("/.dockerenv");
+
+// Git metadata baked into the image at build time (Docker only). The container
+// has no .git directory at runtime, so we read this file instead of spawning git.
+type GitMeta = { hash: string; branch: string; remote: string };
+const DOCKER_GIT_META: GitMeta | null = (() => {
+  if (!IS_DOCKER) return null;
+  try {
+    return JSON.parse(readFileSync(path.join(process.cwd(), "git-meta.json"), "utf8")) as GitMeta;
+  } catch {
+    return null;
+  }
+})();
+
 const REPO_ROOT = path.resolve(process.cwd());
 const UPDATE_LOG = path.join(REPO_ROOT, "update.log");
 const UPDATE_SCRIPT = path.join(REPO_ROOT, "update.sh");
@@ -64,6 +80,7 @@ function writeHistory(entries: HistoryEntry[]) {
 // new entry — that's how we record "v1.2.3 went live at this timestamp"
 // without needing to instrument update.sh or rollback.sh.
 function recordCurrentDeployIfNew() {
+  if (IS_DOCKER) return; // Deploy history isn't meaningful in Docker (no .git, non-persistent container)
   if (RUNNING_HASH === "unknown") return;
   const entries = readHistory();
   const latest = entries[0];
@@ -98,7 +115,9 @@ function recordCurrentDeployIfNew() {
 // built from. `getGitInfo()` reads HEAD on every request, which reflects what's
 // on disk right now. If the two diverge, someone pulled new code (manually or
 // via update.sh) but didn't restart the service, so the new code isn't live.
+// In Docker, DOCKER_GIT_META holds the hash baked in at build time.
 const RUNNING_HASH = (() => {
+  if (IS_DOCKER) return DOCKER_GIT_META?.hash ?? "unknown";
   try {
     return execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
   } catch {
@@ -113,6 +132,7 @@ const RUNNING_HASH = (() => {
 // install.sh") instead of spawning a doomed `sudo` that hangs forever waiting
 // for a password prompt that will never come.
 function sudoPreflight(args: string[]): string | null {
+  if (IS_DOCKER) return null;
   try {
     execSync(`sudo -n ${args.join(" ")}`, {
       stdio: "pipe",
@@ -180,8 +200,45 @@ let remoteHashCache: { hash: string | null; fetchedAt: number } = { hash: null, 
 let remoteHashInFlight: Promise<void> | null = null;
 const REMOTE_HASH_TTL_MS = 5 * 60 * 1000;
 
+// In Docker, use the GitHub REST API (no .git directory available at runtime).
+// Parses the baked-in remote URL to extract owner/repo, then calls the commits
+// API with Accept: application/vnd.github.sha to get just the commit SHA.
+async function refreshRemoteHashDockerAsync(): Promise<void> {
+  const remote = DOCKER_GIT_META?.remote ?? "";
+  const branch = DOCKER_GIT_META?.branch ?? "main";
+  const match = remote.match(/github\.com[:/]([^/]+\/[^/.]+)/);
+  if (!match) {
+    remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
+    remoteHashInFlight = null;
+    return;
+  }
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(
+      `https://api.github.com/repos/${match[1]}/commits/${branch}`,
+      { headers: { Accept: "application/vnd.github.sha" }, signal: controller.signal },
+    );
+    clearTimeout(timer);
+    if (res.ok) {
+      const sha = (await res.text()).trim().slice(0, 7);
+      if (sha) remoteHashCache = { hash: sha, fetchedAt: Date.now() };
+      else remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
+    } else {
+      remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
+    }
+  } catch {
+    remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
+  }
+  remoteHashInFlight = null;
+}
+
 function refreshRemoteHashAsync(): Promise<void> {
   if (remoteHashInFlight) return remoteHashInFlight;
+  if (IS_DOCKER) {
+    remoteHashInFlight = refreshRemoteHashDockerAsync();
+    return remoteHashInFlight;
+  }
   remoteHashInFlight = new Promise<void>((resolve) => {
     const proc = spawn("git", ["ls-remote", "origin", "HEAD"], {
       cwd: REPO_ROOT,
@@ -233,7 +290,9 @@ refreshRemoteHashAsync().catch(() => {});
 let sudoOkCache: { ok: boolean; fetchedAt: number } | null = null;
 const SUDO_OK_TTL_MS = 30 * 1000;
 
-function getSudoOkCached(): boolean {
+// Returns null in Docker (not applicable), true/false on bare-metal.
+function getSudoOkCached(): boolean | null {
+  if (IS_DOCKER) return null;
   if (sudoOkCache && Date.now() - sudoOkCache.fetchedAt < SUDO_OK_TTL_MS) {
     return sudoOkCache.ok;
   }
@@ -283,6 +342,26 @@ function getLockState(): (LockInfo & { ageMs: number; stale: boolean }) | null {
 }
 
 function getGitInfo() {
+  // In Docker there is no .git directory — use the metadata baked in at build time.
+  if (IS_DOCKER) {
+    const hash = DOCKER_GIT_META?.hash ?? "unknown";
+    const branch = DOCKER_GIT_META?.branch ?? "unknown";
+    const remoteHash = getRemoteHashCached();
+    return {
+      hash,
+      date: null,
+      message: null,
+      branch,
+      updateAvailable: remoteHash !== null && remoteHash !== hash,
+      runningHash: RUNNING_HASH,
+      restartPending: false,
+      startedAt: PROCESS_STARTED_AT,
+      sudoOk: null,
+      isDocker: true,
+      lock: getLockState(),
+    };
+  }
+
   try {
     const hash = execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
     const date = execSync("git log -1 --format=%ci", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
@@ -305,6 +384,7 @@ function getGitInfo() {
       restartPending: RUNNING_HASH !== "unknown" && hash !== "unknown" && RUNNING_HASH !== hash,
       startedAt: PROCESS_STARTED_AT,
       sudoOk: getSudoOkCached(),
+      isDocker: IS_DOCKER,
       lock: getLockState(),
     };
   } catch {
@@ -318,6 +398,7 @@ function getGitInfo() {
       restartPending: false,
       startedAt: PROCESS_STARTED_AT,
       sudoOk: getSudoOkCached(),
+      isDocker: IS_DOCKER,
       lock: getLockState(),
     };
   }
@@ -418,6 +499,15 @@ router.get("/sudoers-line", (_req, res) => {
 // on the version endpoint.
 router.post("/restart-service", (req, res) => {
   req.log.warn("Service restart requested");
+
+  if (IS_DOCKER) {
+    // In Docker there is no systemd. Exit cleanly and rely on the container's
+    // restart policy (unless-stopped) to bring the process back up.
+    res.json({ started: true, message: "Container restart scheduled in ~1 second." });
+    setTimeout(() => process.exit(0), 1000);
+    return;
+  }
+
   // Fail fast if the sudoers entry isn't in place — otherwise the spawned
   // `sudo systemctl restart` would hang forever waiting for a password.
   const sudoErr = sudoPreflight(["--list", "/usr/bin/systemctl", "restart", "fermentos"]);
@@ -669,6 +759,10 @@ router.post("/rollback", (req, res) => {
     });
     return;
   }
+  if (IS_DOCKER) {
+    res.status(409).json({ error: "Rollback is not available in Docker. The source code is baked into the image — to roll back, rebuild from an earlier commit." });
+    return;
+  }
   const sudoErr = sudoPreflight(["--list", "/usr/bin/systemctl", "restart", "fermentos"]);
   if (sudoErr) {
     req.log.error({ sudoErr }, "Rollback blocked: sudo pre-flight failed");
@@ -707,6 +801,12 @@ router.post("/rollback", (req, res) => {
 // NOPASSWD line for `/sbin/reboot`).
 router.post("/reboot", (req, res) => {
   req.log.warn("Host reboot requested");
+
+  if (IS_DOCKER) {
+    res.status(409).json({ error: "Host reboot is not available in Docker." });
+    return;
+  }
+
   // Same fail-fast logic as /restart-service. Without the sudoers entry,
   // `sudo reboot` would hang and the user would just see the "rebooting"
   // spinner forever, never knowing why the host never went down.

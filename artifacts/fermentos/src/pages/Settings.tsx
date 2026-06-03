@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -22,6 +22,9 @@ import {
   useGetDefaultReadingsShown,
   useSetDefaultReadingsShown,
   getGetDefaultReadingsShownQueryKey,
+  useGetBreweryName,
+  useSetBreweryName,
+  getGetBreweryNameQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -38,6 +41,9 @@ type SystemStats = {
   memory: { totalMB: number; usedMB: number; freeMB: number; usedPercent: number };
   disk: { totalGB: number; usedGB: number; freeGB: number; usedPercent: number } | null;
   network: Array<{ name: string; rxBytes: number; txBytes: number; rxBytesPerSec: number; txBytesPerSec: number }>;
+  temperatureCelsius: number | null;
+  containerMemoryLimitMB: number | null;
+  isDocker: boolean;
 };
 
 function formatUptime(seconds: number) {
@@ -125,10 +131,15 @@ function SystemStatsPanel() {
 
   const primaryNet = stats.network[0];
 
+  const memoryPressurePercent = (stats.isDocker && stats.containerMemoryLimitMB)
+    ? Math.round((stats.memory.usedMB / stats.containerMemoryLimitMB) * 100)
+    : stats.memory.usedPercent;
+
   const maxUsage = Math.max(
     stats.cpu.usagePercent ?? 0,
-    stats.memory.usedPercent,
+    memoryPressurePercent,
     stats.disk?.usedPercent ?? 0,
+    stats.temperatureCelsius !== null ? (stats.temperatureCelsius / 85) * 100 : 0,
   );
   const statusBadge = maxUsage > 85
     ? { label: "Critical", cls: "bg-destructive/15 text-destructive border-destructive/30", Icon: AlertCircle }
@@ -157,14 +168,40 @@ function SystemStatsPanel() {
           </div>
         </StatCard>
 
+        {stats.temperatureCelsius !== null && (
+          <StatCard icon={<Thermometer className="w-3.5 h-3.5" />} label="Temperature">
+            <div className="space-y-1">
+              <div className={`text-lg font-bold ${
+                stats.temperatureCelsius >= 75 ? "text-destructive"
+                : stats.temperatureCelsius >= 60 ? "text-amber-500"
+                : "text-foreground"
+              }`}>
+                {stats.temperatureCelsius.toFixed(1)}°C
+              </div>
+              <UsageBar
+                percent={(stats.temperatureCelsius / 85) * 100}
+                color="bg-green-500"
+              />
+              <div className="text-xs text-muted-foreground">
+                {stats.temperatureCelsius >= 75 ? "Thermal throttle risk"
+                 : stats.temperatureCelsius >= 60 ? "Running warm"
+                 : "Normal"}
+              </div>
+            </div>
+          </StatCard>
+        )}
+
         <StatCard icon={<MemoryStick className="w-3.5 h-3.5" />} label="Memory">
           <div className="space-y-1">
             <div className="flex justify-between items-baseline">
               <span className="text-lg font-bold text-foreground">{stats.memory.usedPercent}%</span>
               <span className="text-xs text-muted-foreground">{stats.memory.usedMB} / {stats.memory.totalMB} MB</span>
             </div>
-            <UsageBar percent={stats.memory.usedPercent} />
+            <UsageBar percent={memoryPressurePercent} />
             <div className="text-xs text-muted-foreground">{stats.memory.freeMB} MB free</div>
+            {stats.isDocker && stats.containerMemoryLimitMB !== null && (
+              <div className="text-xs text-muted-foreground">Container limit: {stats.containerMemoryLimitMB} MB</div>
+            )}
           </div>
         </StatCard>
 
@@ -1593,7 +1630,12 @@ type VersionInfo = {
   // True when the api-server's `sudo -n --list` checks pass for both
   // `systemctl restart fermentos` and `reboot`. False means the in-app
   // Update / Restart / Reboot buttons will fail without the sudoers fix.
-  sudoOk?: boolean;
+  // null means not applicable (Docker).
+  sudoOk?: boolean | null;
+  // True when the api-server detected it is running inside a Docker container.
+  // System management buttons (Update, Rollback, Reboot) are hidden; Restart
+  // works via process.exit + the container restart policy.
+  isDocker?: boolean;
   // Set when an update or rollback is currently running. The UI uses this
   // to disable the start buttons across browser tabs and to surface a
   // "looks stuck — force clear?" affordance after LOCK_STALE_MS.
@@ -2096,7 +2138,8 @@ function SystemUpdatePanel() {
   const externalLock = phase === "idle" && version.lock && !version.lock.stale ? version.lock : null;
   const staleLock = phase === "idle" && version.lock && version.lock.stale ? version.lock : null;
   const sudoBroken = version.sudoOk === false;
-  const buttonsDisabled = inProgress || !!externalLock;
+  const isDocker = version.isDocker === true;
+  const buttonsDisabled = inProgress || !!externalLock || isDocker;
 
   const handleClearStaleLock = async () => {
     if (!confirm("Force-clear the stuck update lock?\n\nOnly do this if you're sure no update or rollback is actually still running.")) return;
@@ -2156,7 +2199,29 @@ function SystemUpdatePanel() {
         </Button>
       </div>
 
-      {sudoBroken && phase === "idle" && (
+      {isDocker && phase === "idle" && (
+        <div className={`rounded-md border p-3 space-y-1 ${version.updateAvailable ? "border-amber-500/30 bg-amber-500/10" : "border-blue-500/30 bg-blue-500/10"}`}>
+          <div className={`flex items-start gap-2 text-sm ${version.updateAvailable ? "text-amber-700 dark:text-amber-400" : "text-blue-700 dark:text-blue-400"}`}>
+            {version.updateAvailable
+              ? <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              : <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            }
+            <div className="flex-1">
+              <div className="font-medium">
+                {version.updateAvailable ? "New version available" : "Running in Docker"}
+              </div>
+              <div className="text-xs opacity-80 mt-0.5">
+                {version.updateAvailable
+                  ? "A new version is available on GitHub. Pull and rebuild to update:"
+                  : "Update and Rollback aren't available — the source code is baked into the image. Restart works via Docker's restart policy. To update:"}
+              </div>
+            </div>
+          </div>
+          <pre className={`text-[10px] leading-snug font-mono bg-background/60 border rounded p-2 overflow-x-auto whitespace-pre ml-6 ${version.updateAvailable ? "border-amber-500/30" : "border-blue-500/30"}`}>git pull && bash docker-install.sh</pre>
+        </div>
+      )}
+
+      {sudoBroken && !isDocker && phase === "idle" && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
           <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -3219,6 +3284,57 @@ function ReadingRetentionPanel() {
 
 const DEFAULT_READINGS_OPTIONS = [5, 10, 25, 50, 100] as const;
 
+function BreweryNamePanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data, isLoading } = useGetBreweryName();
+  const [inputValue, setInputValue] = useState("");
+
+  useEffect(() => {
+    if (data !== undefined) {
+      setInputValue(data.name ?? "");
+    }
+  }, [data]);
+
+  const setMutation = useSetBreweryName({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetBreweryNameQueryKey() });
+        toast({ title: "Brewery name saved" });
+      },
+      onError: () => {
+        toast({ title: "Failed to save brewery name", variant: "destructive" });
+      },
+    },
+  });
+
+  const handleSave = () => {
+    setMutation.mutate({ data: { name: inputValue.trim() || null } });
+  };
+
+  if (isLoading) return <Skeleton className="h-10 rounded-md" />;
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        className="flex-1"
+        placeholder="e.g. My Brewery"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleSave()}
+        disabled={setMutation.isPending}
+      />
+      <Button
+        size="sm"
+        onClick={handleSave}
+        disabled={setMutation.isPending}
+      >
+        {setMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+      </Button>
+    </div>
+  );
+}
+
 function DefaultReadingsShownPanel() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -3395,6 +3511,21 @@ export default function Settings() {
 
       {tab === "brewing" && (
         <div className="space-y-5">
+          <div className="bg-card border border-card-border rounded-lg">
+            <div className="px-4 py-3 border-b border-card-border">
+              <div className="flex items-center gap-2">
+                <Home className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Brewery Name</h2>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Displayed as the heading on your dashboard. Leave blank to use the default "Brewery Overview".
+              </p>
+            </div>
+            <div className="p-4">
+              <BreweryNamePanel />
+            </div>
+          </div>
+
           {beerStylesCard}
 
           <div className="bg-card border border-card-border rounded-lg">

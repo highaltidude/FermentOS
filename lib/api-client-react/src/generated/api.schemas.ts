@@ -315,6 +315,14 @@ export interface DefaultReadingsShownBody {
   count: number;
 }
 
+export interface BreweryNameResponse {
+  name: string | null;
+}
+
+export interface BreweryNameBody {
+  name?: string | null;
+}
+
 export type MaltType = (typeof MaltType)[keyof typeof MaltType];
 
 export const MaltType = {
@@ -367,6 +375,7 @@ export interface DashboardSummary {
   totalBrewSessions: number;
   activeBrewCount: number;
   inventoryItemCount: number;
+  breweryName?: string | null;
   recentSessions: BrewSession[];
 }
 
@@ -379,7 +388,6 @@ export interface ActiveBrew {
   latestTemperature?: number | null;
   latestGravity?: number | null;
   targetFinalGravity?: number | null;
-  originalGravityActual?: number | null;
 }
 
 export interface UpcomingBrew {

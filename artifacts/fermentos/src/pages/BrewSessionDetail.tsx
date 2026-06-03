@@ -93,6 +93,10 @@ function formatReadingTime(d: string | Date) {
   return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function estimateAbv(og: number, fg: number): number {
+  return (og - fg) * 131.25;
+}
+
 export default function BrewSessionDetail() {
   const [, params] = useRoute("/brew-sessions/:id");
   const [, navigate] = useLocation();
@@ -722,6 +726,14 @@ export default function BrewSessionDetail() {
                 <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Angle</p>
                   <p className="text-base font-semibold text-foreground">{Number(telemetry.latestReading.angle).toFixed(1)}°</p>
+                </div>
+              )}
+              {session.originalGravityActual != null && telemetry.latestReading.gravity != null && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                  <p className="text-xs text-muted-foreground">Est. ABV</p>
+                  <p className="text-base font-semibold text-emerald-700 dark:text-emerald-400">
+                    {estimateAbv(session.originalGravityActual, Number(telemetry.latestReading.gravity)).toFixed(1)}%
+                  </p>
                 </div>
               )}
             </div>

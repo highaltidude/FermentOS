@@ -44,6 +44,10 @@ function formatDate(d: string) {
   return parseLocalDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function estimateAbv(og: number, fg: number): number {
+  return (og - fg) * 131.25;
+}
+
 export default function Dashboard() {
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
   const { data: activeBrews, isLoading: brewsLoading } = useGetActiveBrews();
@@ -115,6 +119,11 @@ export default function Dashboard() {
                           <Droplets className="w-3 h-3" />
                           {brew.latestGravity.toFixed(3)}
                           {brew.targetFinalGravity != null && ` / ${brew.targetFinalGravity.toFixed(3)} FG`}
+                        </span>
+                      )}
+                      {brew.originalGravityActual != null && brew.latestGravity != null && (
+                        <span>
+                          Est. ABV <span className="text-foreground">{estimateAbv(brew.originalGravityActual, brew.latestGravity).toFixed(1)}%</span>
                         </span>
                       )}
                     </div>

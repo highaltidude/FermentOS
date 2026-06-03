@@ -65,6 +65,7 @@ router.get("/dashboard/active-brews", async (req, res) => {
         latestTemperature: latestReading?.temperatureFahrenheit ?? null,
         latestGravity: latestReading?.gravity ?? null,
         targetFinalGravity,
+        originalGravityActual: session.originalGravityActual ?? null,
       };
     })
   );

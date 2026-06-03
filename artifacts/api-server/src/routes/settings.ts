@@ -83,6 +83,30 @@ router.put("/settings/reading-retention", async (req, res) => {
   return res.json({ days: saved });
 });
 
+const BREWERY_NAME_KEY = "brewery_name";
+
+router.get("/settings/brewery-name", async (_req, res) => {
+  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, BREWERY_NAME_KEY));
+  return res.json({ name: row?.value ?? null });
+});
+
+router.put("/settings/brewery-name", async (req, res) => {
+  const { name } = req.body as { name: unknown };
+  if (name !== null && name !== undefined && typeof name !== "string") {
+    return res.status(400).json({ error: "name must be a string or null" });
+  }
+  const trimmed = typeof name === "string" ? name.trim() : null;
+  if (trimmed) {
+    await db
+      .insert(appConfigTable)
+      .values({ key: BREWERY_NAME_KEY, value: trimmed })
+      .onConflictDoUpdate({ target: appConfigTable.key, set: { value: trimmed, updatedAt: new Date() } });
+  } else {
+    await db.delete(appConfigTable).where(eq(appConfigTable.key, BREWERY_NAME_KEY));
+  }
+  return res.json({ name: trimmed || null });
+});
+
 const VALID_DEFAULT_READINGS = new Set([5, 10, 25, 50, 100]);
 const DEFAULT_READINGS_KEY = "default_readings_shown";
 

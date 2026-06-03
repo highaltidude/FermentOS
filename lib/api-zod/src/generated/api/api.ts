@@ -22,6 +22,7 @@ export const GetDashboardSummaryResponse = zod.object({
   totalBrewSessions: zod.number(),
   activeBrewCount: zod.number(),
   inventoryItemCount: zod.number(),
+  breweryName: zod.string().nullish(),
   recentSessions: zod.array(
     zod.object({
       id: zod.number(),
@@ -849,6 +850,24 @@ export const SetReadingRetentionBody = zod.object({
 
 export const SetReadingRetentionResponse = zod.object({
   days: zod.number().nullable(),
+});
+
+/**
+ * @summary Get the brewery name
+ */
+export const GetBreweryNameResponse = zod.object({
+  name: zod.string().nullable(),
+});
+
+/**
+ * @summary Set the brewery name
+ */
+export const SetBreweryNameBody = zod.object({
+  name: zod.string().nullish(),
+});
+
+export const SetBreweryNameResponse = zod.object({
+  name: zod.string().nullable(),
 });
 
 /**

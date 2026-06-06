@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable, appConfigTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable, appConfigTable, brewSessionStatusLogTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 
 const router = Router();
 
@@ -51,6 +51,21 @@ router.get("/dashboard/active-brews", async (req, res) => {
         Math.floor((todayLocalMidnight - brewLocalMidnight) / (1000 * 60 * 60 * 24)),
       );
 
+      const statusLog = await db
+        .select()
+        .from(brewSessionStatusLogTable)
+        .where(eq(brewSessionStatusLogTable.brewSessionId, session.id))
+        .orderBy(desc(brewSessionStatusLogTable.changedAt))
+        .limit(1);
+
+      let daysInCurrentStage: number | null = null;
+      if (statusLog[0]) {
+        const stageStart = new Date(statusLog[0].changedAt).getTime();
+        daysInCurrentStage = Math.max(0, Math.floor((now.getTime() - stageStart) / (1000 * 60 * 60 * 24)));
+      } else {
+        daysInCurrentStage = daysSinceBrew;
+      }
+
       let targetFinalGravity: number | null = null;
       if (session.recipeId) {
         const [recipe] = await db
@@ -66,6 +81,7 @@ router.get("/dashboard/active-brews", async (req, res) => {
         status: session.status,
         brewDate: session.brewDate,
         daysSinceBrew,
+        daysInCurrentStage,
         latestTemperature: latestReading?.temperatureFahrenheit ?? null,
         latestGravity: latestReading?.gravity ?? null,
         targetFinalGravity,

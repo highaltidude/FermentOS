@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useEffect, useState } from "react";
 import { Beer, BookOpen, Package, Thermometer, Droplets, ArrowRight, Plus } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -48,9 +49,27 @@ function estimateAbv(og: number, fg: number): number {
   return (og - fg) * 131.25;
 }
 
+function formatInsightStatus(status: string): string {
+  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function Dashboard() {
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
   const { data: activeBrews, isLoading: brewsLoading } = useGetActiveBrews();
+
+  const [sensors, setSensors] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchSensors = () => {
+      fetch("/api/ha/status")
+        .then((r) => r.json())
+        .then((data) => setSensors(Array.isArray(data) ? data : []))
+        .catch(() => {});
+    };
+    fetchSensors();
+    const interval = setInterval(fetchSensors, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -108,6 +127,11 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>Day {brew.daysSinceBrew}</span>
+                      {brew.daysInCurrentStage != null && (
+                        <span className="text-muted-foreground">
+                          {STATUS_LABELS[brew.status] ?? brew.status} for {brew.daysInCurrentStage}d
+                        </span>
+                      )}
                       {brew.latestTemperature != null && (
                         <span className="flex items-center gap-1">
                           <Thermometer className="w-3 h-3" />
@@ -184,6 +208,65 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {sensors.length > 0 && (
+        <div className="bg-card border border-card-border rounded-lg">
+          <div className="px-4 py-3 border-b border-card-border">
+            <h2 className="text-sm font-semibold text-foreground">Live Sensors</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {sensors.map((sensor) => {
+              const dot =
+                sensor.connectionStatus === "connected"
+                  ? "bg-green-500"
+                  : sensor.connectionStatus === "warning"
+                  ? "bg-yellow-400"
+                  : "bg-red-500";
+              const card = (
+                <div className="px-4 py-3 hover:bg-muted transition-colors cursor-pointer">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${dot}`} />
+                      <span className="text-sm font-medium text-foreground">{sensor.deviceName}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {sensor.assignedBrewName ?? "Unassigned"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    {sensor.latestReading?.gravity != null && (
+                      <span className="flex items-center gap-1">
+                        <Droplets className="w-3 h-3" />
+                        {sensor.latestReading.gravity.toFixed(3)}
+                      </span>
+                    )}
+                    {sensor.latestReading?.temperature != null && (
+                      <span className="flex items-center gap-1">
+                        <Thermometer className="w-3 h-3" />
+                        {sensor.latestReading.temperature}
+                        {sensor.latestReading.temperatureUnit ?? "°F"}
+                      </span>
+                    )}
+                    {sensor.latestReading?.batteryPercentEstimate != null && (
+                      <span>{sensor.latestReading.batteryPercentEstimate}%</span>
+                    )}
+                    {sensor.insights?.fermentationStatus && (
+                      <span>{formatInsightStatus(sensor.insights.fermentationStatus)}</span>
+                    )}
+                  </div>
+                </div>
+              );
+              return sensor.assignedBrewSessionId ? (
+                <Link key={sensor.deviceId} href={`/brew-sessions/${sensor.assignedBrewSessionId}`}>
+                  {card}
+                </Link>
+              ) : (
+                <div key={sensor.deviceId}>{card}</div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

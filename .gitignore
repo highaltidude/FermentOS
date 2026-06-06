@@ -5,20 +5,12 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
-.expo
-.expo-shared
 
 # dependencies
 node_modules
 
 # IDEs and editors
 /.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
 
 # IDE - VSCode
 .vscode/*
@@ -28,14 +20,14 @@ node_modules
 !.vscode/extensions.json
 
 # misc
-/.sass-cache
-/connect.lock
 /coverage
-/libpeerconnection.log
 npm-debug.log
 yarn-error.log
-testem.log
-/typings
+pnpm-debug.log
+
+# environment — never commit secrets
+.env
+.env.local
 
 # System Files
 .DS_Store

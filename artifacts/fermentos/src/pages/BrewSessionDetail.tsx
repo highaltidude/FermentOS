@@ -739,6 +739,25 @@ export default function BrewSessionDetail() {
             </div>
           )}
 
+          {session.status === "fermenting" && telemetry.insights?.fermentationStatus === "possibly_complete" && !quickStatusMutation.isPending && (
+            <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 mb-3">
+              <span className="text-amber-500 mt-0.5 shrink-0">⚗️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Fermentation may be complete</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Gravity has been stable for 24+ hours. Ready to move to conditioning?</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                onClick={() => handleStatusClick("conditioning")}
+                disabled={quickStatusMutation.isPending}
+              >
+                Move to Conditioning
+              </Button>
+            </div>
+          )}
+
           {/* Fermentation insights */}
           {telemetry.insights && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground border-t border-border pt-2">

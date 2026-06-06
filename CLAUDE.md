@@ -121,6 +121,7 @@ The frontend Vite dev server reads `PORT` and `BASE_PATH` from environment.
 - Always work on the `dev` branch
 - Never push directly to `main`
 - After completing changes, suggest a commit message and wait for the user's approval before committing
+- No mention of Claude in created by or notes
 - After the user approves, commit to `dev` then remind the user to run:
 - Claude is never an author in commits
 git checkout main

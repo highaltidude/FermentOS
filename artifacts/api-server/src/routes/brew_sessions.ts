@@ -22,6 +22,11 @@ import {
   type InventoryShortage,
 } from "../services/inventoryEnforcement";
 
+function calcAbv(og: number | null | undefined, fg: number | null | undefined): number | null {
+  if (og == null || fg == null) return null;
+  return Math.round((og - fg) * 131.25 * 100) / 100;
+}
+
 const uploadsDir = path.resolve(process.cwd(), "data/uploads/sessions");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -148,6 +153,26 @@ router.put("/brew-sessions/:id", async (req, res) => {
   if (brewDateUpd !== undefined) updatePayload.brewDate = brewDateUpd;
   // plannedDate is nullable — explicit null clears it, undefined leaves untouched.
   if (plannedDateRawUpd !== undefined) updatePayload.plannedDate = plannedDateRawUpd;
+
+  // Auto-calculate ABV when session is packaged or when OG/FG change on a packaged session
+  const resultingStatus = updatePayload.status ?? existing[0].status;
+  const resultingOg = updatePayload.originalGravityActual ?? existing[0].originalGravityActual;
+  const resultingFg = updatePayload.finalGravityActual ?? existing[0].finalGravityActual;
+
+  if (resultingStatus === "packaged" && updatePayload.abvActual === undefined) {
+    const existingAbv = existing[0].abvActual;
+    if (existingAbv == null) {
+      const calculated = calcAbv(resultingOg, resultingFg);
+      if (calculated != null) updatePayload.abvActual = calculated;
+    } else if (
+      updatePayload.originalGravityActual !== undefined ||
+      updatePayload.finalGravityActual !== undefined
+    ) {
+      const calculated = calcAbv(resultingOg, resultingFg);
+      if (calculated != null) updatePayload.abvActual = calculated;
+    }
+  }
+
   const [session] = await db.update(brewSessionsTable).set(updatePayload).where(eq(brewSessionsTable.id, params.data.id)).returning();
   if (!session) return res.status(404).json({ error: "Brew session not found" });
 

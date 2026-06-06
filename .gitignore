@@ -65,3 +65,6 @@ artifacts/mockup-sandbox/src/.generated/
 # Runtime data files — written by the app on the host, not version-controlled
 artifacts/api-server/update-history.json
 .env.backup
+
+# Claude Code project instructions — local only
+CLAUDE.md

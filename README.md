@@ -1,6 +1,27 @@
 # FermentOS
 
-A self-hosted web app for home brewers to manage recipes, log brew sessions, track fermentation, and monitor ingredient inventory. Designed to run on a small always-on host on your home network — a Raspberry Pi, mini PC, NAS, or any Debian-based Linux box.
+## What is FermentOS
+
+> Self-hosted homebrewing management for the serious brewer.
+
+FermentOS is a self-hosted web app that runs on a Raspberry Pi or any Linux device on your home network. It manages your recipes, brew sessions, ingredients, and equipment from a single interface. It integrates with iSpindel hydrometers to capture gravity and temperature automatically throughout fermentation. All your data stays on your own hardware — no cloud, no subscription.
+
+**Who is it for**
+
+- Homebrewers who want full control over their data
+- Anyone already running Home Assistant or a home server
+- Brewers tired of spreadsheets or cloud apps
+
+**Key Features**
+
+- Recipe management with ingredients and step-by-step brew instructions
+- Brew session tracking with status lifecycle (Brew Day → Fermenting → Conditioning → Packaged)
+- iSpindel integration for automatic gravity and temperature readings
+- Fermentation insights — attenuation, velocity, and completion detection
+- Home Assistant integration via REST sensor endpoint
+- Inventory management with optional enforcement before starting a batch
+- Local backups with optional SFTP export
+- In-app updates — no SSH required
 
 ## Screenshots
 

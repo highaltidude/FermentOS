@@ -2212,12 +2212,12 @@ function SystemUpdatePanel() {
               </div>
               <div className="text-xs opacity-80 mt-0.5">
                 {version.updateAvailable
-                  ? "A new version is available on GitHub. Pull and rebuild to update:"
+                  ? "A new version is available on GitHub. Run to update:"
                   : "Update and Rollback aren't available — the source code is baked into the image. Restart works via Docker's restart policy. To update:"}
               </div>
             </div>
           </div>
-          <pre className={`text-[10px] leading-snug font-mono bg-background/60 border rounded p-2 overflow-x-auto whitespace-pre ml-6 ${version.updateAvailable ? "border-amber-500/30" : "border-blue-500/30"}`}>git pull && bash docker-install.sh</pre>
+          <pre className={`text-[10px] leading-snug font-mono bg-background/60 border rounded p-2 overflow-x-auto whitespace-pre ml-6 ${version.updateAvailable ? "border-amber-500/30" : "border-blue-500/30"}`}>bash docker-install.sh</pre>
         </div>
       )}
 

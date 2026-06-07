@@ -36,7 +36,8 @@ FermentOS is a self-hosted web app that runs on a Raspberry Pi or any Linux devi
 ![Ingredients](docs/screenshots/inventory.jpg)
 *Ingredients — keep tabs on malts, hops, yeast, and adjuncts with expiration tracking*
 
-![iSpindel Integration](docs/screenshots/iSpindel_Integration.png)
+![iSpindel Integration](docs/screenshots/iSpindel_Integration.PNG)
+
 *iSpindel Integration — live gravity and temperature tracking with fermentation insights*
 
 ![Settings](docs/screenshots/settings.jpg)

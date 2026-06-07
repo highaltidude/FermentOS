@@ -40,7 +40,7 @@ export type BackupConfig = {
   schedule: "none" | "daily" | "weekly";
   /** Local directory where backups are written when target = "local". */
   localPath?: string;
-  /** Days to keep backups. 0 / undefined = keep forever. Clamped 1–30 when set. */
+  /** Days to keep backups. 0 / undefined = keep forever. Clamped 0–60 when set. */
   retentionDays?: number;
   /** Run a backup right before applying a software update. */
   backupBeforeUpdate?: "none" | "sftp" | "local";
@@ -342,10 +342,10 @@ router.put("/backup/config", async (req, res) => {
       ? body.sftp.password
       : current.sftp.password ?? "",
   };
-  // Clamp retentionDays into 0..30 (0 = keep forever).
+  // Clamp retentionDays into 0..60 (0 = keep forever).
   let retention = body.retentionDays ?? current.retentionDays ?? 0;
   if (typeof retention !== "number" || !Number.isFinite(retention)) retention = 0;
-  retention = Math.max(0, Math.min(30, Math.floor(retention)));
+  retention = Math.max(0, Math.min(60, Math.floor(retention)));
 
   const newCfg: BackupConfig = {
     sftp: newSftp,

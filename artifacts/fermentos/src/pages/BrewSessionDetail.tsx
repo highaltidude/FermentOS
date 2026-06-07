@@ -119,6 +119,8 @@ export default function BrewSessionDetail() {
   const [readingFilter, setReadingFilter] = useState<"all" | "sensor" | "manual">("all");
   const [showAllReadings, setShowAllReadings] = useState(false);
   const [chartSeries, setChartSeries] = useState<"both" | "temp" | "gravity">("both");
+  const [ogInputOpen, setOgInputOpen] = useState(false);
+  const [ogValue, setOgValue] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -238,6 +240,32 @@ export default function BrewSessionDetail() {
   useEffect(() => {
     if (session?.tastingNotes != null) setTastingNotes(session.tastingNotes);
   }, [session?.tastingNotes]);
+
+  const saveOgMutation = useUpdateBrewSession({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
+        setOgInputOpen(false);
+        setOgValue("");
+        toast({ title: "OG saved" });
+      },
+    },
+  });
+
+  const handleSaveOg = () => {
+    const og = parseFloat(ogValue);
+    if (!session || isNaN(og) || og < 1.000 || og > 1.200) return;
+    saveOgMutation.mutate({
+      id,
+      data: {
+        recipeName: session.recipeName,
+        status: session.status as any,
+        brewDate: session.brewDate,
+        batchSizeGallons: session.batchSizeGallons,
+        originalGravityActual: og,
+      },
+    });
+  };
 
   const handleSaveTasting = () => {
     if (!session) return;
@@ -469,6 +497,41 @@ export default function BrewSessionDetail() {
           </div>
         )}
       </div>
+
+      {session.status === "brew_day" && session.originalGravityActual == null && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+          <span className="text-amber-500 shrink-0">🧪</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">Enter your original gravity</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Record your OG reading to track attenuation and estimate ABV</p>
+          </div>
+          {ogInputOpen ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                type="number"
+                step="0.001"
+                min="1.000"
+                max="1.200"
+                placeholder="1.050"
+                value={ogValue}
+                onChange={(e) => setOgValue(e.target.value)}
+                className="w-24 text-sm border border-border rounded px-2 py-1 bg-background text-foreground"
+                autoFocus
+              />
+              <Button size="sm" onClick={handleSaveOg} disabled={saveOgMutation.isPending}>
+                Save
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setOgInputOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="shrink-0 border-amber-500/40 text-amber-600 hover:bg-amber-500/10" onClick={() => setOgInputOpen(true)}>
+              Enter OG
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Tasting Notes & Photo */}
       <div className="bg-card border border-card-border rounded-lg">

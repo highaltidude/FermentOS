@@ -1333,8 +1333,8 @@ function DatabaseBackupPanel() {
             className="w-full text-sm rounded-md border border-input bg-background px-2 py-1.5"
           >
             <option value={0}>Keep forever</option>
-            {Array.from({ length: 30 }, (_, i) => i + 1).map((d) => (
-              <option key={d} value={d}>Delete after {d} day{d === 1 ? "" : "s"}</option>
+            {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map((d) => (
+              <option key={d} value={d}>Delete after {d} days</option>
             ))}
           </select>
           <p className="text-[11px] text-muted-foreground">Pruned after each backup. Applies to both SFTP and local; other files untouched.</p>

@@ -34,6 +34,7 @@ RUN BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 
 # Stage 4 — runner: lean production image
 FROM node:20-slim AS runner
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@10
 ENV NODE_ENV=production
 WORKDIR /app

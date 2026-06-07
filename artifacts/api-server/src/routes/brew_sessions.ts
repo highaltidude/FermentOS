@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { and, eq, desc } from "drizzle-orm";
-import { db, brewSessionsTable, fermentationReadingsTable, brewSessionStatusLogTable } from "@workspace/db";
+import { and, eq, desc, gte, lte } from "drizzle-orm";
+import { db, brewSessionsTable, fermentationReadingsTable, brewSessionStatusLogTable, sensorReadingsTable } from "@workspace/db";
 import {
   ListBrewSessionsQueryParams,
   CreateBrewSessionBody,
@@ -225,6 +225,30 @@ router.post("/brew-sessions/:id/readings", async (req, res) => {
 router.delete("/readings/:id", async (req, res) => {
   const params = DeleteFermentationReadingParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) return res.status(400).json({ error: "Invalid id" });
+
+  // Fetch the reading before deleting so we know the source and readingAt
+  const [reading] = await db
+    .select()
+    .from(fermentationReadingsTable)
+    .where(eq(fermentationReadingsTable.id, params.data.id));
+
+  if (reading?.source === "ispindel") {
+    // Unlink the corresponding sensor reading from this brew session
+    // Match by brewSessionId and readingAt timestamp (within 1 minute tolerance)
+    const readingTime = new Date(reading.readingAt);
+    const windowStart = new Date(readingTime.getTime() - 60_000);
+    const windowEnd = new Date(readingTime.getTime() + 60_000);
+    await db
+      .update(sensorReadingsTable)
+      .set({ brewSessionId: null })
+      .where(
+        and(
+          eq(sensorReadingsTable.brewSessionId, reading.brewSessionId),
+          gte(sensorReadingsTable.receivedAt, windowStart),
+          lte(sensorReadingsTable.receivedAt, windowEnd),
+        )
+      );
+  }
 
   await db.delete(fermentationReadingsTable).where(eq(fermentationReadingsTable.id, params.data.id));
   return res.status(204).send();

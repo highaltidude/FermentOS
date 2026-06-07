@@ -145,8 +145,12 @@ export default function BrewSessionDetail() {
   });
 
   const { data: sensorDevices } = useListSensorDevices({
-    query: { enabled: showAssignPanel, queryKey: getListSensorDevicesQueryKey() },
+    query: { queryKey: getListSensorDevicesQueryKey() },
   });
+
+  const unassignedDevice = (sensorDevices as any[] | undefined)?.find(
+    (d: any) => d.device.enabled && !d.assignedBrewSessionId,
+  ) ?? null;
 
   const assignMutation = useAssignSensorDevice({
     mutation: {
@@ -160,6 +164,11 @@ export default function BrewSessionDetail() {
       onError: () => toast({ title: "Failed to assign device", variant: "destructive" }),
     },
   });
+
+  const handleAssignDevice = () => {
+    if (!unassignedDevice) return;
+    assignMutation.mutate({ id: unassignedDevice.device.id, data: { brewSessionId: id } });
+  };
 
   const sensorConnStatus = (() => {
     if (!telemetry?.latestReading) return "unknown";
@@ -530,6 +539,27 @@ export default function BrewSessionDetail() {
               Enter OG
             </Button>
           )}
+        </div>
+      )}
+
+      {["brew_day", "fermenting", "conditioning"].includes(session.status) && unassignedDevice && !telemetry?.device && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+          <span className="text-blue-500 shrink-0">📡</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">Unassigned iSpindel detected</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {unassignedDevice.device.deviceName} is not assigned to a brew. Assign it to start tracking gravity automatically.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-blue-500/40 text-blue-600 hover:bg-blue-500/10"
+            onClick={handleAssignDevice}
+            disabled={assignMutation.isPending}
+          >
+            Assign
+          </Button>
         </div>
       )}
 

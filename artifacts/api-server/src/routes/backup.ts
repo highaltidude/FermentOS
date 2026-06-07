@@ -222,6 +222,50 @@ export async function runBackup(target: BackupTarget = "sftp"): Promise<{ ok: bo
   }
 }
 
+async function runScheduledBackup(): Promise<void> {
+  const cfg = await getConfig();
+
+  // Try SFTP first if host is configured
+  if (cfg.sftp?.host && cfg.sftp?.username) {
+    const result = await runBackup("sftp");
+    if (result.ok) {
+      logger.info("Scheduled backup succeeded via SFTP");
+      return;
+    }
+    // SFTP failed — fall through to local
+    logger.warn({ message: result.message }, "Scheduled SFTP backup failed, falling back to local");
+
+    // Save an interim status so the UI shows what happened
+    await saveStatus({
+      lastRun: new Date().toISOString(),
+      lastResult: "error",
+      lastMessage: `SFTP failed (${result.message}) — attempting local fallback`,
+    });
+  }
+
+  // No SFTP configured or SFTP failed — run local
+  const localResult = await runBackup("local");
+  if (localResult.ok) {
+    // Overwrite status with a message that explains what happened
+    const usedFallback = cfg.sftp?.host && cfg.sftp?.username;
+    await saveStatus({
+      lastRun: new Date().toISOString(),
+      lastResult: "success",
+      lastMessage: usedFallback
+        ? `SFTP unavailable — ${localResult.message}`
+        : localResult.message,
+    });
+    logger.info({ message: localResult.message }, "Scheduled backup succeeded via local");
+  } else {
+    await saveStatus({
+      lastRun: new Date().toISOString(),
+      lastResult: "error",
+      lastMessage: `Both SFTP and local backup failed: ${localResult.message}`,
+    });
+    logger.error({ message: localResult.message }, "Scheduled backup failed on both SFTP and local");
+  }
+}
+
 let activeCronJob: ScheduledTask | null = null;
 
 function cronExpression(schedule: BackupConfig["schedule"]): string | null {
@@ -236,7 +280,7 @@ export function startScheduler(schedule: BackupConfig["schedule"]) {
   if (!expr) { logger.info("Backup scheduler disabled"); return; }
   activeCronJob = cron.schedule(expr, () => {
     logger.info({ schedule }, "Running scheduled backup");
-    runBackup("sftp").catch((e) => logger.error({ e }, "Scheduled backup error"));
+    runScheduledBackup().catch((e) => logger.error({ e }, "Scheduled backup error"));
   });
   logger.info({ schedule, expr }, "Backup scheduler started");
 }

@@ -75,6 +75,17 @@ EOF
   success ".env created with secure random credentials"
 fi
 
+# ── Sync latest code ─────────────────────────
+step "Syncing latest code from GitHub"
+if git rev-parse --git-dir &>/dev/null; then
+  git clean -fd
+  git fetch origin
+  git reset --hard origin/main
+  success "Code synced to latest"
+else
+  warn "Not a git repo — skipping sync"
+fi
+
 # ── Build and start the stack ────────────────
 step "Starting FermentOS"
 cd "$INSTALL_DIR"

@@ -345,23 +345,23 @@ async function runRestoreFromFile(filePath: string): Promise<{ message: string }
     );
   }
 
-  const combinedFile = `${filePath}.combined.sql`;
-  try {
-    const wipeSql = `DROP SCHEMA IF EXISTS public CASCADE;\nCREATE SCHEMA public;\nGRANT ALL ON SCHEMA public TO PUBLIC;\n`;
-    fs.writeFileSync(combinedFile, wipeSql);
-    await new Promise<void>((resolve, reject) => {
-      const src = fs.createReadStream(filePath);
-      const dst = fs.createWriteStream(combinedFile, { flags: "a" });
-      src.on("error", reject);
-      dst.on("error", reject);
-      dst.on("close", resolve);
-      src.pipe(dst);
-    });
-    execSync(`psql "${dbUrl}" -v ON_ERROR_STOP=1 -1 -f "${combinedFile}"`, { timeout: 120000 });
-    return { message: "Database restored. Restart the app for a fully clean state." };
-  } finally {
-    try { fs.unlinkSync(combinedFile); } catch { /* ignore */ }
-  }
+  // Step 1: wipe the schema
+  execSync(
+    `psql "${dbUrl}" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO PUBLIC;"`,
+    { timeout: 30000 },
+  );
+
+  // Step 2: recreate all tables via Drizzle migrations
+  execSync(`pnpm --filter @workspace/db run push`, {
+    timeout: 60000,
+    env: { ...process.env },
+    stdio: "pipe",
+  });
+
+  // Step 3: replay the dump
+  execSync(`psql "${dbUrl}" -v ON_ERROR_STOP=1 -f "${filePath}"`, { timeout: 120000 });
+
+  return { message: "Database restored. Restart the app for a fully clean state." };
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────

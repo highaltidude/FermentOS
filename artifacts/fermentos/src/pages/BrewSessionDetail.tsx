@@ -212,7 +212,10 @@ export default function BrewSessionDetail() {
 
   const deleteReadingMutation = useDeleteFermentationReading({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }),
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetBrewSensorTelemetryQueryKey(id) });
+      },
     },
   });
 

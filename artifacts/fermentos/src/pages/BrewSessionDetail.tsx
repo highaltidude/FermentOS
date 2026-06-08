@@ -184,7 +184,17 @@ export default function BrewSessionDetail() {
 
   const updateMutation = useUpdateBrewSession({
     mutation: {
-      onSuccess: () => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); setEditing(false); toast({ title: "Session updated" }); },
+      onSuccess: (data) => {
+        qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
+        setEditing(false);
+        toast({ title: "Session updated" });
+        if ((data as any).devicesUnassigned > 0) {
+          toast({
+            title: "Sensor device unassigned",
+            description: `${(data as any).devicesUnassigned} sensor device${(data as any).devicesUnassigned > 1 ? "s have" : " has"} been unassigned now that this batch is packaged.`,
+          });
+        }
+      },
     },
   });
 

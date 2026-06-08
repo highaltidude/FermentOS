@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { and, eq, desc, gte, lte } from "drizzle-orm";
-import { db, brewSessionsTable, fermentationReadingsTable, brewSessionStatusLogTable, sensorReadingsTable } from "@workspace/db";
+import { and, eq, desc, gte, lte, isNull } from "drizzle-orm";
+import { db, brewSessionsTable, fermentationReadingsTable, brewSessionStatusLogTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable } from "@workspace/db";
 import {
   ListBrewSessionsQueryParams,
   CreateBrewSessionBody,
@@ -184,7 +184,23 @@ router.put("/brew-sessions/:id", async (req, res) => {
     });
   }
 
-  return res.json(session);
+  // Auto-unassign any active sensor devices when a session is marked packaged
+  let devicesUnassigned = 0;
+  if (body.data.status === "packaged") {
+    const result = await db
+      .update(sensorDeviceBrewAssignmentsTable)
+      .set({ unassignedAt: new Date() })
+      .where(
+        and(
+          eq(sensorDeviceBrewAssignmentsTable.brewSessionId, params.data.id),
+          isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
+        )
+      )
+      .returning();
+    devicesUnassigned = result.length;
+  }
+
+  return res.json({ ...session, devicesUnassigned });
 });
 
 router.delete("/brew-sessions/:id", async (req, res) => {

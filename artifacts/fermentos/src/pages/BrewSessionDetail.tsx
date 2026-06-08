@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { fetchFermentTempUnit } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -255,11 +256,11 @@ export default function BrewSessionDetail() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${import.meta.env.BASE_URL}api/settings/ferment-temp-unit`).then((r) => r.json() as Promise<{ unit: string }>),
+      fetchFermentTempUnit(),
       fetch(`${import.meta.env.BASE_URL}api/settings/temp-alert-readings`).then((r) => r.json() as Promise<{ count: number }>),
     ])
-      .then(([unitData, countData]) => {
-        setTempUnit(unitData.unit === "C" ? "C" : "F");
+      .then(([unit, countData]) => {
+        setTempUnit(unit);
         setTempAlertThreshold(countData.count ?? 2);
       })
       .catch(() => {});
@@ -397,6 +398,7 @@ export default function BrewSessionDetail() {
       notes: session.notes ?? "",
       fermentTempMin: (session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "",
       fermentTempMax: (session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "",
+      fermentTempIdeal: (session as any).fermentTempIdeal != null ? String((session as any).fermentTempIdeal) : "",
     });
     setEditing(true);
   };
@@ -416,6 +418,7 @@ export default function BrewSessionDetail() {
         notes: editForm.notes || undefined,
         fermentTempMin: editForm.fermentTempMin ? Number(editForm.fermentTempMin) : null,
         fermentTempMax: editForm.fermentTempMax ? Number(editForm.fermentTempMax) : null,
+        fermentTempIdeal: editForm.fermentTempIdeal ? Number(editForm.fermentTempIdeal) : null,
       } as any,
     });
   };
@@ -536,19 +539,28 @@ export default function BrewSessionDetail() {
                 </div>
               </div>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Min Ferment Temp (°{tempUnit})</label>
-              <Input type="number" step="0.1"
-                value={editForm.fermentTempMin ?? ""}
-                onChange={(e) => setEditForm({ ...editForm, fermentTempMin: e.target.value })}
-                placeholder={(session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "from recipe"} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Max Ferment Temp (°{tempUnit})</label>
-              <Input type="number" step="0.1"
-                value={editForm.fermentTempMax ?? ""}
-                onChange={(e) => setEditForm({ ...editForm, fermentTempMax: e.target.value })}
-                placeholder={(session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "from recipe"} />
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Min Temp (°{tempUnit})</label>
+                <Input type="number" step="0.1"
+                  value={editForm.fermentTempMin ?? ""}
+                  onChange={(e) => setEditForm({ ...editForm, fermentTempMin: e.target.value })}
+                  placeholder={(session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "from recipe"} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Ideal Temp (°{tempUnit})</label>
+                <Input type="number" step="0.1"
+                  value={editForm.fermentTempIdeal ?? ""}
+                  onChange={(e) => setEditForm({ ...editForm, fermentTempIdeal: e.target.value })}
+                  placeholder={(session as any).fermentTempIdeal != null ? String((session as any).fermentTempIdeal) : "from recipe"} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Max Temp (°{tempUnit})</label>
+                <Input type="number" step="0.1"
+                  value={editForm.fermentTempMax ?? ""}
+                  onChange={(e) => setEditForm({ ...editForm, fermentTempMax: e.target.value })}
+                  placeholder={(session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "from recipe"} />
+              </div>
             </div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Notes</label><Textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} /></div>
           </div>
@@ -1149,6 +1161,45 @@ export default function BrewSessionDetail() {
                     label={{ value: "■ Ferm end", position: "insideTopRight", fontSize: 9, fill: "#3b82f6", dy: -2 }}
                   />
                 )}
+                {showTemp && (telemetry as any)?.tempRange?.ideal != null && (
+                  <ReferenceLine
+                    yAxisId="temp"
+                    y={(() => {
+                      const tr = (telemetry as any).tempRange;
+                      return tr.unit === "C" ? tr.ideal * 9 / 5 + 32 : tr.ideal;
+                    })()}
+                    stroke="#22c55e"
+                    strokeDasharray="5 3"
+                    strokeWidth={1.5}
+                    label={{ value: "Ideal", position: "insideTopRight", fontSize: 9, fill: "#22c55e" }}
+                  />
+                )}
+                {showTemp && (telemetry as any)?.tempRange?.min != null && (
+                  <ReferenceLine
+                    yAxisId="temp"
+                    y={(() => {
+                      const tr = (telemetry as any).tempRange;
+                      return tr.unit === "C" ? tr.min * 9 / 5 + 32 : tr.min;
+                    })()}
+                    stroke="#ef4444"
+                    strokeDasharray="3 3"
+                    strokeWidth={1}
+                    label={{ value: "Min", position: "insideBottomRight", fontSize: 9, fill: "#ef4444" }}
+                  />
+                )}
+                {showTemp && (telemetry as any)?.tempRange?.max != null && (
+                  <ReferenceLine
+                    yAxisId="temp"
+                    y={(() => {
+                      const tr = (telemetry as any).tempRange;
+                      return tr.unit === "C" ? tr.max * 9 / 5 + 32 : tr.max;
+                    })()}
+                    stroke="#ef4444"
+                    strokeDasharray="3 3"
+                    strokeWidth={1}
+                    label={{ value: "Max", position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
+                  />
+                )}
                 {showTemp && (
                   <Line
                     yAxisId="temp"
@@ -1263,11 +1314,30 @@ export default function BrewSessionDetail() {
                           </span>
                         </div>
                         <div className="flex items-center gap-3 flex-1 flex-wrap">
-                          {reading.temperatureFahrenheit != null && (
-                            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                              <Thermometer className="w-3.5 h-3.5" />{reading.temperatureFahrenheit.toFixed(1)}°F
-                            </span>
-                          )}
+                          {reading.temperatureFahrenheit != null && (() => {
+                            const tr = (telemetry as any)?.tempRange;
+                            const tempF = reading.temperatureFahrenheit;
+                            let devEl: React.ReactNode = null;
+                            if (tr?.ideal != null) {
+                              const idealF = tr.unit === "C" ? tr.ideal * 9 / 5 + 32 : tr.ideal;
+                              const dev = tempF - idealF;
+                              const minF = tr.min != null ? (tr.unit === "C" ? tr.min * 9 / 5 + 32 : tr.min) : null;
+                              const maxF = tr.max != null ? (tr.unit === "C" ? tr.max * 9 / 5 + 32 : tr.max) : null;
+                              const outOfRange = (minF != null && tempF < minF) || (maxF != null && tempF > maxF);
+                              const nearLimit = !outOfRange && ((minF != null && tempF - minF < 2) || (maxF != null && maxF - tempF < 2));
+                              const color = outOfRange ? "text-red-600 dark:text-red-400" : nearLimit ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400";
+                              devEl = <span className={`text-xs ${color}`}>{dev >= 0 ? "+" : ""}{dev.toFixed(1)}°F</span>;
+                            }
+                            return (
+                              <>
+                                <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                                  <Thermometer className="w-3.5 h-3.5" />{tempF.toFixed(1)}°F
+                                </span>
+                                {devEl}
+                              </>
+                            );
+                          })()}
+                          {reading.temperatureFahrenheit == null && null}
                           {reading.gravity != null && (
                             <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
                               <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}

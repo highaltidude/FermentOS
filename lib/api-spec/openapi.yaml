@@ -1277,6 +1277,10 @@ components:
           type: number
           nullable: true
           description: Maximum fermentation temperature threshold
+        fermentTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal fermentation temperature target
         daysPlanned:
           type: integer
           nullable: true
@@ -1430,6 +1434,10 @@ components:
           type: number
           nullable: true
           description: Maximum fermentation temperature threshold
+        fermentTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal fermentation temperature target
         daysPlanned:
           type: integer
           nullable: true
@@ -1491,6 +1499,10 @@ components:
           type: number
           nullable: true
           description: Maximum fermentation temperature threshold
+        fermentTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal fermentation temperature target
         daysPlanned:
           type: integer
           nullable: true
@@ -1625,6 +1637,10 @@ components:
           type: number
           nullable: true
           description: Maximum fermentation temperature threshold
+        fermentTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal fermentation temperature target
         tastingNotes:
           type: string
           nullable: true
@@ -1717,6 +1733,10 @@ components:
           type: number
           nullable: true
           description: Maximum fermentation temperature threshold
+        fermentTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal fermentation temperature target
       required: [recipeName, status, brewDate, batchSizeGallons]
 
     UpdateBrewSessionBody:
@@ -1765,6 +1785,10 @@ components:
           type: number
           nullable: true
           description: Maximum fermentation temperature threshold
+        fermentTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal fermentation temperature target
         tastingNotes:
           type: string
           nullable: true

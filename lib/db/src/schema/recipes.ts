@@ -18,6 +18,7 @@ export const recipesTable = pgTable("recipes", {
   notes: text("notes"),
   fermentTempMin: real("ferment_temp_min"),
   fermentTempMax: real("ferment_temp_max"),
+  fermentTempIdeal: real("ferment_temp_ideal"),
   daysPlanned: integer("days_planned"),
   daysBrewing: integer("days_brewing"),
   daysFermenting: integer("days_fermenting"),

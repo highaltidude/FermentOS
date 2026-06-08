@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, appConfigTable, fermentationReadingsTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, appConfigTable, fermentationReadingsTable, brewSessionsTable } from "@workspace/db";
 import { eq, desc, isNull, and, count, gte, lte } from "drizzle-orm";
 import { calcConnectionStatus, buildAlerts } from "./sensors";
 import { estimateBatteryPercent } from "../lib/batteryUtil";
@@ -98,8 +98,20 @@ async function ingestReading(opts: {
     })
     .returning();
 
-  // Mirror to fermentation_readings so existing brew charts pick up device data
-  if (brewSessionId && (opts.gravity != null || opts.temperature != null)) {
+  // Mirror to fermentation_readings so existing brew charts pick up device data.
+  // Skip mirroring if the assigned session is already packaged — raw sensor
+  // readings are still stored above for audit purposes, but we don't want to
+  // append to the fermentation chart of a finished batch.
+  let sessionIsPackaged = false;
+  if (brewSessionId) {
+    const [assignedSession] = await db
+      .select({ status: brewSessionsTable.status })
+      .from(brewSessionsTable)
+      .where(eq(brewSessionsTable.id, brewSessionId));
+    sessionIsPackaged = assignedSession?.status === "packaged";
+  }
+
+  if (!sessionIsPackaged && brewSessionId && (opts.gravity != null || opts.temperature != null)) {
     // Convert temperature to °F for the fermentation_readings table (stored in °F)
     let tempF: number | null = null;
     if (opts.temperature != null) {

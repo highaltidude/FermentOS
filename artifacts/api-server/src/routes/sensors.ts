@@ -252,6 +252,7 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
 
   // For device display / connection status use the most recent assignment's device.
   const latestAssignment = assignments[assignments.length - 1]!;
+  const isDeviceActive = latestAssignment.unassignedAt == null;
   const [device] = await db
     .select()
     .from(sensorDevicesTable)
@@ -338,7 +339,7 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
     }
   }
 
-  return res.json({ brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange });
+  return res.json({ brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive });
 });
 
 export { calcConnectionStatus, buildAlerts };

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { fetchFermentTempUnit } from "@/lib/utils";
 
 const STATUSES = ["brew_day", "fermenting", "conditioning", "packaged"];
 const STATUS_LABELS: Record<string, string> = {
@@ -24,16 +25,11 @@ export default function NewBrewSession() {
   const [form, setForm] = useState({
     recipeName: "", status: "brew_day", brewDate: new Date().toISOString().split("T")[0],
     batchSizeGallons: "5.5", originalGravityActual: "", finalGravityActual: "", notes: "",
-    fermentTempMin: "", fermentTempMax: "",
+    fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
   });
   const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
 
-  useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}api/settings/ferment-temp-unit`)
-      .then((r) => r.json() as Promise<{ unit: string }>)
-      .then((d) => setTempUnit(d.unit === "C" ? "C" : "F"))
-      .catch(() => {});
-  }, []);
+  useEffect(() => { fetchFermentTempUnit().then(setTempUnit); }, []);
 
   const createMutation = useCreateBrewSession({
     mutation: {
@@ -74,6 +70,7 @@ export default function NewBrewSession() {
           batchSizeGallons: String(recipe.batchSizeGallons),
           fermentTempMin: recipe.fermentTempMin != null ? String(recipe.fermentTempMin) : f.fermentTempMin,
           fermentTempMax: recipe.fermentTempMax != null ? String(recipe.fermentTempMax) : f.fermentTempMax,
+          fermentTempIdeal: (recipe as any).fermentTempIdeal != null ? String((recipe as any).fermentTempIdeal) : f.fermentTempIdeal,
         }));
       }
     }
@@ -97,6 +94,7 @@ export default function NewBrewSession() {
         notes: form.notes || undefined,
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
+        fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : undefined,
       },
     });
   };
@@ -149,13 +147,17 @@ export default function NewBrewSession() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Min Ferment Temp (°{tempUnit})</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Min Temp (°{tempUnit})</label>
             <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Max Ferment Temp (°{tempUnit})</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Ideal Temp (°{tempUnit})</label>
+            <Input type="number" step="0.1" value={form.fermentTempIdeal} onChange={(e) => setForm({ ...form, fermentTempIdeal: e.target.value })} placeholder="e.g., 68" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Max Temp (°{tempUnit})</label>
             <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
           </div>
         </div>

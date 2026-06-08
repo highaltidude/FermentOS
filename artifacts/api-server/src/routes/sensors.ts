@@ -75,7 +75,7 @@ function buildAlerts(
   device: { lastSeenAt: Date | null },
   reading: { battery?: number | null; batteryPercentEstimate?: number | null; gravity?: number | null; receivedAt: Date; reportedInterval?: number | null; temperature?: number | null; temperatureUnit?: string | null } | null,
   connectionStatus: string,
-  tempRange?: { min: number | null; max: number | null; unit: "F" | "C" } | null,
+  tempRange?: { min: number | null; max: number | null; ideal: number | null; unit: "F" | "C" } | null,
 ): { type: string; message: string; triggeredAt: string }[] {
   const alerts: { type: string; message: string; triggeredAt: string }[] = [];
   const now = new Date();
@@ -294,6 +294,7 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
     .select({
       fermentTempMin: brewSessionsTable.fermentTempMin,
       fermentTempMax: brewSessionsTable.fermentTempMax,
+      fermentTempIdeal: brewSessionsTable.fermentTempIdeal,
       recipeId: brewSessionsTable.recipeId,
     })
     .from(brewSessionsTable)
@@ -301,22 +302,26 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
 
   let tempMin: number | null = brewSession?.fermentTempMin ?? null;
   let tempMax: number | null = brewSession?.fermentTempMax ?? null;
+  let tempIdeal: number | null = brewSession?.fermentTempIdeal ?? null;
 
-  if ((tempMin == null || tempMax == null) && brewSession?.recipeId) {
+  if ((tempMin == null || tempMax == null || tempIdeal == null) && brewSession?.recipeId) {
     const [recipe] = await db
-      .select({ fermentTempMin: recipesTable.fermentTempMin, fermentTempMax: recipesTable.fermentTempMax })
+      .select({ fermentTempMin: recipesTable.fermentTempMin, fermentTempMax: recipesTable.fermentTempMax, fermentTempIdeal: recipesTable.fermentTempIdeal })
       .from(recipesTable)
       .where(eq(recipesTable.id, brewSession.recipeId));
     if (recipe) {
       tempMin = tempMin ?? recipe.fermentTempMin ?? null;
       tempMax = tempMax ?? recipe.fermentTempMax ?? null;
+      tempIdeal = tempIdeal ?? recipe.fermentTempIdeal ?? null;
     }
   }
 
   const [tempUnitRow] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, "ferment_temp_unit"));
   const tempUnit = (tempUnitRow?.value === "C" ? "C" : "F") as "F" | "C";
 
-  const tempRange = (tempMin != null || tempMax != null) ? { min: tempMin, max: tempMax, unit: tempUnit } : null;
+  const tempRange = (tempMin != null || tempMax != null || tempIdeal != null)
+    ? { min: tempMin, max: tempMax, ideal: tempIdeal, unit: tempUnit }
+    : null;
 
   const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
 
@@ -333,7 +338,7 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
     }
   }
 
-  return res.json({ brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts });
+  return res.json({ brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange });
 });
 
 export { calcConnectionStatus, buildAlerts };

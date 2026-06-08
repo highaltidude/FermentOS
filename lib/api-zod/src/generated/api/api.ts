@@ -52,6 +52,10 @@ export const GetDashboardSummaryResponse = zod.object({
         .number()
         .nullish()
         .describe("Maximum fermentation temperature threshold"),
+      fermentTempIdeal: zod
+        .number()
+        .nullish()
+        .describe("Ideal fermentation temperature target"),
       tastingNotes: zod.string().nullish(),
       photoPath: zod.string().nullish(),
       createdAt: zod.string().datetime({}),
@@ -130,6 +134,10 @@ export const ListRecipesResponseItem = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -166,6 +174,10 @@ export const CreateRecipeBody = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -212,6 +224,10 @@ export const GetRecipeResponse = zod
       .number()
       .nullish()
       .describe("Maximum fermentation temperature threshold"),
+    fermentTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal fermentation temperature target"),
     daysPlanned: zod.number().nullish(),
     daysBrewing: zod.number().nullish(),
     daysFermenting: zod.number().nullish(),
@@ -307,6 +323,10 @@ export const UpdateRecipeBody = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -336,6 +356,10 @@ export const UpdateRecipeResponse = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -649,6 +673,10 @@ export const ListBrewSessionsResponseItem = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   createdAt: zod.string().datetime({}),
@@ -680,6 +708,10 @@ export const CreateBrewSessionBody = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
 });
 
 /**
@@ -718,6 +750,10 @@ export const GetBrewSessionResponse = zod
       .number()
       .nullish()
       .describe("Maximum fermentation temperature threshold"),
+    fermentTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal fermentation temperature target"),
     tastingNotes: zod.string().nullish(),
     photoPath: zod.string().nullish(),
     createdAt: zod.string().datetime({}),
@@ -784,6 +820,10 @@ export const UpdateBrewSessionBody = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
   tastingNotes: zod.string().nullish(),
 });
 
@@ -815,6 +855,10 @@ export const UpdateBrewSessionResponse = zod.object({
     .number()
     .nullish()
     .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   createdAt: zod.string().datetime({}),

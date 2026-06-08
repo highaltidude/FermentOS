@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
+import { fetchFermentTempUnit } from "@/lib/utils";
 
 function StyleSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { data: styles } = useListBeerStyles();
@@ -80,16 +81,11 @@ export default function NewRecipe() {
     name: "", style: "", batchSizeGallons: "5.5", originalGravity: "", finalGravity: "", abv: "", ibu: "",
     colorSrm: "", estimatedBrewTimeMinutes: "", efficiencyPercent: "", caloriesPerServing: "", notes: "",
     daysPlanned: "", daysBrewing: "", daysFermenting: "", daysConditioning: "", daysPackaged: "",
-    fermentTempMin: "", fermentTempMax: "",
+    fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
   });
   const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
 
-  useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}api/settings/ferment-temp-unit`)
-      .then((r) => r.json() as Promise<{ unit: string }>)
-      .then((d) => setTempUnit(d.unit === "C" ? "C" : "F"))
-      .catch(() => {});
-  }, []);
+  useEffect(() => { fetchFermentTempUnit().then(setTempUnit); }, []);
 
   const [ingredients, setIngredients] = useState<PendingIngredient[]>([emptyIngredient()]);
   const [steps, setSteps] = useState<PendingStep[]>([emptyStep()]);
@@ -140,6 +136,7 @@ export default function NewRecipe() {
         notes: form.notes || undefined,
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
+        fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : undefined,
         daysPlanned: form.daysPlanned ? Number(form.daysPlanned) : undefined,
         daysBrewing: form.daysBrewing ? Number(form.daysBrewing) : undefined,
         daysFermenting: form.daysFermenting ? Number(form.daysFermenting) : undefined,
@@ -258,16 +255,20 @@ export default function NewRecipe() {
 
         <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">Fermentation Temperature Range</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Optional — used to trigger alerts when sensor temp goes out of range</p>
+            <h2 className="text-sm font-semibold text-foreground">Fermentation Temperature</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Optional — used for alerts and deviation tracking</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Min Temp (°{tempUnit})</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Min (°{tempUnit})</label>
               <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Max Temp (°{tempUnit})</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Ideal (°{tempUnit})</label>
+              <Input type="number" step="0.1" value={form.fermentTempIdeal} onChange={(e) => setForm({ ...form, fermentTempIdeal: e.target.value })} placeholder="e.g., 68" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Max (°{tempUnit})</label>
               <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
             </div>
           </div>

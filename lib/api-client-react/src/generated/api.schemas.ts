@@ -65,6 +65,8 @@ export interface Recipe {
   fermentTempMin?: number | null;
   /** Maximum fermentation temperature threshold */
   fermentTempMax?: number | null;
+  /** Ideal fermentation temperature target */
+  fermentTempIdeal?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -152,6 +154,8 @@ export interface CreateRecipeBody {
   fermentTempMin?: number | null;
   /** Maximum fermentation temperature threshold */
   fermentTempMax?: number | null;
+  /** Ideal fermentation temperature target */
+  fermentTempIdeal?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -176,6 +180,8 @@ export interface UpdateRecipeBody {
   fermentTempMin?: number | null;
   /** Maximum fermentation temperature threshold */
   fermentTempMax?: number | null;
+  /** Ideal fermentation temperature target */
+  fermentTempIdeal?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -222,6 +228,8 @@ export interface BrewSession {
   fermentTempMin?: number | null;
   /** Maximum fermentation temperature threshold */
   fermentTempMax?: number | null;
+  /** Ideal fermentation temperature target */
+  fermentTempIdeal?: number | null;
   tastingNotes?: string | null;
   photoPath?: string | null;
   createdAt: string;
@@ -277,6 +285,8 @@ export interface CreateBrewSessionBody {
   fermentTempMin?: number | null;
   /** Maximum fermentation temperature threshold */
   fermentTempMax?: number | null;
+  /** Ideal fermentation temperature target */
+  fermentTempIdeal?: number | null;
 }
 
 export interface UpdateBrewSessionBody {
@@ -296,6 +306,8 @@ export interface UpdateBrewSessionBody {
   fermentTempMin?: number | null;
   /** Maximum fermentation temperature threshold */
   fermentTempMax?: number | null;
+  /** Ideal fermentation temperature target */
+  fermentTempIdeal?: number | null;
   tastingNotes?: string | null;
 }
 

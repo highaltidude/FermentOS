@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { fetchFermentTempUnit } from "@/lib/utils";
 
 function StyleSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { data: styles } = useListBeerStyles();
@@ -463,6 +464,9 @@ export default function RecipeDetail() {
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [showAddStep, setShowAddStep] = useState(false);
   const [startingBrew, setStartingBrew] = useState(false);
+  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
+
+  useEffect(() => { fetchFermentTempUnit().then(setTempUnit); }, []);
 
   const { data: recipe, isLoading } = useGetRecipe(id, { query: { enabled: !!id, queryKey: getGetRecipeQueryKey(id) } });
 
@@ -515,6 +519,7 @@ export default function RecipeDetail() {
     abv: "", ibu: "", colorSrm: "", estimatedBrewTimeMinutes: "", efficiencyPercent: "",
     caloriesPerServing: "", notes: "", daysPlanned: "", daysBrewing: "", daysFermenting: "",
     daysConditioning: "", daysPackaged: "",
+    fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
   });
 
   const startEdit = () => {
@@ -537,6 +542,9 @@ export default function RecipeDetail() {
         daysFermenting: recipe.daysFermenting != null ? String(recipe.daysFermenting) : "",
         daysConditioning: recipe.daysConditioning != null ? String(recipe.daysConditioning) : "",
         daysPackaged: recipe.daysPackaged != null ? String(recipe.daysPackaged) : "",
+        fermentTempMin: (recipe as any).fermentTempMin != null ? String((recipe as any).fermentTempMin) : "",
+        fermentTempMax: (recipe as any).fermentTempMax != null ? String((recipe as any).fermentTempMax) : "",
+        fermentTempIdeal: (recipe as any).fermentTempIdeal != null ? String((recipe as any).fermentTempIdeal) : "",
       });
     }
     setEditing(true);
@@ -563,7 +571,10 @@ export default function RecipeDetail() {
         daysFermenting: form.daysFermenting ? Number(form.daysFermenting) : undefined,
         daysConditioning: form.daysConditioning ? Number(form.daysConditioning) : undefined,
         daysPackaged: form.daysPackaged ? Number(form.daysPackaged) : undefined,
-      },
+        fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : null,
+        fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : null,
+        fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : null,
+      } as any,
     });
   };
 
@@ -671,6 +682,16 @@ export default function RecipeDetail() {
                 </div>
               </div>
             )}
+            {((recipe as any).fermentTempMin != null || (recipe as any).fermentTempIdeal != null || (recipe as any).fermentTempMax != null) && (
+              <div className="border-t border-border pt-3 mt-3">
+                <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
+                <div className="flex items-center gap-3 text-sm">
+                  {(recipe as any).fermentTempMin != null && <span className="text-muted-foreground">Min: <span className="text-foreground font-medium">{(recipe as any).fermentTempMin}°{tempUnit}</span></span>}
+                  {(recipe as any).fermentTempIdeal != null && <span className="text-primary font-semibold">Ideal: {(recipe as any).fermentTempIdeal}°{tempUnit}</span>}
+                  {(recipe as any).fermentTempMax != null && <span className="text-muted-foreground">Max: <span className="text-foreground font-medium">{(recipe as any).fermentTempMax}°{tempUnit}</span></span>}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="space-y-3">
@@ -703,6 +724,23 @@ export default function RecipeDetail() {
                     <Input type="number" min="0" value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder="—" />
                   </div>
                 ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Min (°{tempUnit})</label>
+                  <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Ideal (°{tempUnit})</label>
+                  <Input type="number" step="0.1" value={form.fermentTempIdeal} onChange={(e) => setForm({ ...form, fermentTempIdeal: e.target.value })} placeholder="e.g., 68" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Max (°{tempUnit})</label>
+                  <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
+                </div>
               </div>
             </div>
           </div>

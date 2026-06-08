@@ -278,7 +278,7 @@ export default function BrewSessionDetail() {
 
   useEffect(() => {
     const alerts: { type: string }[] = (telemetry as any)?.alerts ?? [];
-    const hasOutOfRange = alerts.some((a) => a.type === "temp_out_of_range");
+    const hasOutOfRange = (telemetry as any)?.isDeviceActive && alerts.some((a) => a.type === "temp_out_of_range");
     if (hasOutOfRange) {
       tempAlertCount.current += 1;
       if (tempAlertCount.current >= tempAlertThreshold) {

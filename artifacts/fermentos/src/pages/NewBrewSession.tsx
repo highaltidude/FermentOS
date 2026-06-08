@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { useCreateBrewSession, useListRecipes } from "@workspace/api-client-react";
@@ -24,7 +24,16 @@ export default function NewBrewSession() {
   const [form, setForm] = useState({
     recipeName: "", status: "brew_day", brewDate: new Date().toISOString().split("T")[0],
     batchSizeGallons: "5.5", originalGravityActual: "", finalGravityActual: "", notes: "",
+    fermentTempMin: "", fermentTempMax: "",
   });
+  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
+
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}api/settings/ferment-temp-unit`)
+      .then((r) => r.json() as Promise<{ unit: string }>)
+      .then((d) => setTempUnit(d.unit === "C" ? "C" : "F"))
+      .catch(() => {});
+  }, []);
 
   const createMutation = useCreateBrewSession({
     mutation: {
@@ -63,6 +72,8 @@ export default function NewBrewSession() {
           ...f,
           recipeName: recipe.name,
           batchSizeGallons: String(recipe.batchSizeGallons),
+          fermentTempMin: recipe.fermentTempMin != null ? String(recipe.fermentTempMin) : f.fermentTempMin,
+          fermentTempMax: recipe.fermentTempMax != null ? String(recipe.fermentTempMax) : f.fermentTempMax,
         }));
       }
     }
@@ -84,6 +95,8 @@ export default function NewBrewSession() {
         originalGravityActual: form.originalGravityActual ? Number(form.originalGravityActual) : undefined,
         finalGravityActual: form.finalGravityActual ? Number(form.finalGravityActual) : undefined,
         notes: form.notes || undefined,
+        fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
+        fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
       },
     });
   };
@@ -133,6 +146,17 @@ export default function NewBrewSession() {
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Original Gravity (actual)</label>
             <Input type="number" step="0.001" value={form.originalGravityActual} onChange={(e) => setForm({ ...form, originalGravityActual: e.target.value })} placeholder="1.065" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Min Ferment Temp (°{tempUnit})</label>
+            <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Max Ferment Temp (°{tempUnit})</label>
+            <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
           </div>
         </div>
 

@@ -23,6 +23,8 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   abvActual: real("abv_actual"),
   rating: integer("rating"),
   notes: text("notes"),
+  fermentTempMin: real("ferment_temp_min"),
+  fermentTempMax: real("ferment_temp_max"),
   tastingNotes: text("tasting_notes"),
   photoPath: text("photo_path"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

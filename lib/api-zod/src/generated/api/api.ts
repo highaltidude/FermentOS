@@ -44,6 +44,14 @@ export const GetDashboardSummaryResponse = zod.object({
       abvActual: zod.number().nullish(),
       rating: zod.number().nullish(),
       notes: zod.string().nullish(),
+      fermentTempMin: zod
+        .number()
+        .nullish()
+        .describe("Minimum fermentation temperature threshold"),
+      fermentTempMax: zod
+        .number()
+        .nullish()
+        .describe("Maximum fermentation temperature threshold"),
       tastingNotes: zod.string().nullish(),
       photoPath: zod.string().nullish(),
       createdAt: zod.string().datetime({}),
@@ -114,6 +122,14 @@ export const ListRecipesResponseItem = zod.object({
   efficiencyPercent: zod.number().nullish(),
   caloriesPerServing: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -142,6 +158,14 @@ export const CreateRecipeBody = zod.object({
   efficiencyPercent: zod.number().nullish(),
   caloriesPerServing: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -180,6 +204,14 @@ export const GetRecipeResponse = zod
     efficiencyPercent: zod.number().nullish(),
     caloriesPerServing: zod.number().nullish(),
     notes: zod.string().nullish(),
+    fermentTempMin: zod
+      .number()
+      .nullish()
+      .describe("Minimum fermentation temperature threshold"),
+    fermentTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum fermentation temperature threshold"),
     daysPlanned: zod.number().nullish(),
     daysBrewing: zod.number().nullish(),
     daysFermenting: zod.number().nullish(),
@@ -267,6 +299,14 @@ export const UpdateRecipeBody = zod.object({
   efficiencyPercent: zod.number().nullish(),
   caloriesPerServing: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -288,6 +328,14 @@ export const UpdateRecipeResponse = zod.object({
   efficiencyPercent: zod.number().nullish(),
   caloriesPerServing: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -593,6 +641,14 @@ export const ListBrewSessionsResponseItem = zod.object({
   abvActual: zod.number().nullish(),
   rating: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   createdAt: zod.string().datetime({}),
@@ -616,6 +672,14 @@ export const CreateBrewSessionBody = zod.object({
   abvActual: zod.number().nullish(),
   rating: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
 });
 
 /**
@@ -646,6 +710,14 @@ export const GetBrewSessionResponse = zod
     abvActual: zod.number().nullish(),
     rating: zod.number().nullish(),
     notes: zod.string().nullish(),
+    fermentTempMin: zod
+      .number()
+      .nullish()
+      .describe("Minimum fermentation temperature threshold"),
+    fermentTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum fermentation temperature threshold"),
     tastingNotes: zod.string().nullish(),
     photoPath: zod.string().nullish(),
     createdAt: zod.string().datetime({}),
@@ -704,6 +776,14 @@ export const UpdateBrewSessionBody = zod.object({
   abvActual: zod.number().nullish(),
   rating: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
   tastingNotes: zod.string().nullish(),
 });
 
@@ -727,6 +807,14 @@ export const UpdateBrewSessionResponse = zod.object({
   abvActual: zod.number().nullish(),
   rating: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   createdAt: zod.string().datetime({}),
@@ -885,6 +973,42 @@ export const SetDefaultReadingsShownBody = zod.object({
 });
 
 export const SetDefaultReadingsShownResponse = zod.object({
+  count: zod.number(),
+});
+
+/**
+ * @summary Get the fermentation temperature unit preference
+ */
+export const GetFermentTempUnitResponse = zod.object({
+  unit: zod.enum(["F", "C"]),
+});
+
+/**
+ * @summary Set the fermentation temperature unit preference
+ */
+export const SetFermentTempUnitBody = zod.object({
+  unit: zod.enum(["F", "C"]),
+});
+
+export const SetFermentTempUnitResponse = zod.object({
+  unit: zod.enum(["F", "C"]),
+});
+
+/**
+ * @summary Get the consecutive out-of-range readings before alerting
+ */
+export const GetTempAlertReadingsResponse = zod.object({
+  count: zod.number(),
+});
+
+/**
+ * @summary Set the consecutive out-of-range readings before alerting
+ */
+export const SetTempAlertReadingsBody = zod.object({
+  count: zod.number(),
+});
+
+export const SetTempAlertReadingsResponse = zod.object({
   count: zod.number(),
 });
 

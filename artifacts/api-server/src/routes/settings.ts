@@ -129,4 +129,44 @@ router.put("/settings/default-readings-shown", async (req, res) => {
   return res.json({ count });
 });
 
+const VALID_FERMENT_TEMP_UNITS = new Set(["F", "C"]);
+const FERMENT_TEMP_UNIT_KEY = "ferment_temp_unit";
+const TEMP_ALERT_READINGS_KEY = "temp_alert_consecutive_readings";
+
+router.get("/settings/ferment-temp-unit", async (_req, res) => {
+  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, FERMENT_TEMP_UNIT_KEY));
+  return res.json({ unit: row?.value ?? "F" });
+});
+
+router.put("/settings/ferment-temp-unit", async (req, res) => {
+  const { unit } = req.body as { unit: unknown };
+  if (typeof unit !== "string" || !VALID_FERMENT_TEMP_UNITS.has(unit)) {
+    return res.status(400).json({ error: "unit must be 'F' or 'C'" });
+  }
+  await db
+    .insert(appConfigTable)
+    .values({ key: FERMENT_TEMP_UNIT_KEY, value: unit })
+    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: unit, updatedAt: new Date() } });
+  return res.json({ unit });
+});
+
+router.get("/settings/temp-alert-readings", async (_req, res) => {
+  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, TEMP_ALERT_READINGS_KEY));
+  const parsed = row?.value ? parseInt(row.value, 10) : 2;
+  const count = Number.isFinite(parsed) && parsed >= 2 && parsed <= 10 ? parsed : 2;
+  return res.json({ count });
+});
+
+router.put("/settings/temp-alert-readings", async (req, res) => {
+  const { count } = req.body as { count: unknown };
+  if (typeof count !== "number" || !Number.isInteger(count) || count < 2 || count > 10) {
+    return res.status(400).json({ error: "count must be an integer between 2 and 10" });
+  }
+  await db
+    .insert(appConfigTable)
+    .values({ key: TEMP_ALERT_READINGS_KEY, value: String(count) })
+    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: String(count), updatedAt: new Date() } });
+  return res.json({ count });
+});
+
 export default router;

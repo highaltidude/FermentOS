@@ -16,6 +16,8 @@ export const recipesTable = pgTable("recipes", {
   efficiencyPercent: real("efficiency_percent"),
   caloriesPerServing: integer("calories_per_serving"),
   notes: text("notes"),
+  fermentTempMin: real("ferment_temp_min"),
+  fermentTempMax: real("ferment_temp_max"),
   daysPlanned: integer("days_planned"),
   daysBrewing: integer("days_brewing"),
   daysFermenting: integer("days_fermenting"),

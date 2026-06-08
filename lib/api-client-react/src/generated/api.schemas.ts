@@ -61,6 +61,10 @@ export interface Recipe {
   efficiencyPercent?: number | null;
   caloriesPerServing?: number | null;
   notes?: string | null;
+  /** Minimum fermentation temperature threshold */
+  fermentTempMin?: number | null;
+  /** Maximum fermentation temperature threshold */
+  fermentTempMax?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -144,6 +148,10 @@ export interface CreateRecipeBody {
   efficiencyPercent?: number | null;
   caloriesPerServing?: number | null;
   notes?: string | null;
+  /** Minimum fermentation temperature threshold */
+  fermentTempMin?: number | null;
+  /** Maximum fermentation temperature threshold */
+  fermentTempMax?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -164,6 +172,10 @@ export interface UpdateRecipeBody {
   efficiencyPercent?: number | null;
   caloriesPerServing?: number | null;
   notes?: string | null;
+  /** Minimum fermentation temperature threshold */
+  fermentTempMin?: number | null;
+  /** Maximum fermentation temperature threshold */
+  fermentTempMax?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -206,6 +218,10 @@ export interface BrewSession {
   abvActual?: number | null;
   rating?: number | null;
   notes?: string | null;
+  /** Minimum fermentation temperature threshold */
+  fermentTempMin?: number | null;
+  /** Maximum fermentation temperature threshold */
+  fermentTempMax?: number | null;
   tastingNotes?: string | null;
   photoPath?: string | null;
   createdAt: string;
@@ -257,6 +273,10 @@ export interface CreateBrewSessionBody {
   abvActual?: number | null;
   rating?: number | null;
   notes?: string | null;
+  /** Minimum fermentation temperature threshold */
+  fermentTempMin?: number | null;
+  /** Maximum fermentation temperature threshold */
+  fermentTempMax?: number | null;
 }
 
 export interface UpdateBrewSessionBody {
@@ -272,6 +292,10 @@ export interface UpdateBrewSessionBody {
   abvActual?: number | null;
   rating?: number | null;
   notes?: string | null;
+  /** Minimum fermentation temperature threshold */
+  fermentTempMin?: number | null;
+  /** Maximum fermentation temperature threshold */
+  fermentTempMax?: number | null;
   tastingNotes?: string | null;
 }
 
@@ -317,6 +341,38 @@ export interface DefaultReadingsShownBody {
 
 export interface BreweryNameResponse {
   name: string | null;
+}
+
+export type FermentTempUnitResponseUnit =
+  (typeof FermentTempUnitResponseUnit)[keyof typeof FermentTempUnitResponseUnit];
+
+export const FermentTempUnitResponseUnit = {
+  F: "F",
+  C: "C",
+} as const;
+
+export interface FermentTempUnitResponse {
+  unit: FermentTempUnitResponseUnit;
+}
+
+export type FermentTempUnitBodyUnit =
+  (typeof FermentTempUnitBodyUnit)[keyof typeof FermentTempUnitBodyUnit];
+
+export const FermentTempUnitBodyUnit = {
+  F: "F",
+  C: "C",
+} as const;
+
+export interface FermentTempUnitBody {
+  unit: FermentTempUnitBodyUnit;
+}
+
+export interface TempAlertReadingsResponse {
+  count: number;
+}
+
+export interface TempAlertReadingsBody {
+  count: number;
 }
 
 export interface BreweryNameBody {

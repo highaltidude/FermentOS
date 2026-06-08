@@ -3384,6 +3384,106 @@ function DefaultReadingsShownPanel() {
   );
 }
 
+function FermentTempPanel() {
+  const BASE = import.meta.env.BASE_URL;
+  const { toast } = useToast();
+  const [unit, setUnit] = useState<"F" | "C">("F");
+  const [alertCount, setAlertCount] = useState(2);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${BASE}api/settings/ferment-temp-unit`).then((r) => r.json() as Promise<{ unit: string }>),
+      fetch(`${BASE}api/settings/temp-alert-readings`).then((r) => r.json() as Promise<{ count: number }>),
+    ])
+      .then(([unitData, countData]) => {
+        setUnit(unitData.unit === "C" ? "C" : "F");
+        setAlertCount(countData.count ?? 2);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [BASE]);
+
+  const handleUnitChange = async (next: "F" | "C") => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE}api/settings/ferment-temp-unit`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unit: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setUnit(next);
+      toast({ title: "Temperature unit updated" });
+    } catch (e) {
+      toast({ title: "Failed to update", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAlertCountChange = async (next: number) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE}api/settings/temp-alert-readings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setAlertCount(next);
+      toast({ title: "Alert threshold updated" });
+    } catch (e) {
+      toast({ title: "Failed to update", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <Skeleton className="h-24 rounded-md" />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 p-3 rounded-md border border-border bg-background">
+        <div className="space-y-0.5">
+          <div className="text-sm font-medium text-foreground">Temperature Unit</div>
+          <div className="text-xs text-muted-foreground">Used for fermentation temperature thresholds and alerts</div>
+        </div>
+        <div className="flex items-center rounded-md border border-border bg-muted/30 overflow-hidden shrink-0">
+          {(["F", "C"] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              disabled={saving}
+              onClick={() => handleUnitChange(u)}
+              className={`px-3 py-1.5 text-xs transition-colors ${unit === u ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:text-foreground"} ${saving ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              °{u}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-start justify-between gap-3 p-3 rounded-md border border-border bg-background">
+        <div className="space-y-0.5 flex-1">
+          <div className="text-sm font-medium text-foreground">Temperature Alert Threshold</div>
+          <div className="text-xs text-muted-foreground">Number of consecutive out-of-range readings before alerting</div>
+        </div>
+        <select
+          value={alertCount}
+          disabled={saving}
+          onChange={(e) => handleAlertCountChange(Number(e.target.value))}
+          className="text-sm rounded-md border border-input bg-background px-2 py-1.5 shrink-0 disabled:opacity-50"
+        >
+          {Array.from({ length: 9 }, (_, i) => i + 2).map((n) => (
+            <option key={n} value={n}>{n} readings</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 type SettingsTab = "brewing" | "system";
 
 export default function Settings() {
@@ -3585,6 +3685,21 @@ export default function Settings() {
             </div>
             <div className="p-4">
               <ReadingRetentionPanel />
+            </div>
+          </div>
+
+          <div className="bg-card border border-card-border rounded-lg">
+            <div className="px-4 py-3 border-b border-card-border">
+              <div className="flex items-center gap-2">
+                <Thermometer className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Fermentation Temperature</h2>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Unit and alert sensitivity for fermentation temperature range monitoring.
+              </p>
+            </div>
+            <div className="p-4">
+              <FermentTempPanel />
             </div>
           </div>
         </div>

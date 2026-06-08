@@ -678,6 +678,66 @@ paths:
               schema:
                 $ref: "#/components/schemas/DefaultReadingsShownResponse"
 
+  /settings/ferment-temp-unit:
+    get:
+      operationId: getFermentTempUnit
+      tags: [settings]
+      summary: Get the fermentation temperature unit preference
+      responses:
+        "200":
+          description: Current fermentation temperature unit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FermentTempUnitResponse"
+    put:
+      operationId: setFermentTempUnit
+      tags: [settings]
+      summary: Set the fermentation temperature unit preference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FermentTempUnitBody"
+      responses:
+        "200":
+          description: Updated fermentation temperature unit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FermentTempUnitResponse"
+
+  /settings/temp-alert-readings:
+    get:
+      operationId: getTempAlertReadings
+      tags: [settings]
+      summary: Get the consecutive out-of-range readings before alerting
+      responses:
+        "200":
+          description: Current temp alert readings count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TempAlertReadingsResponse"
+    put:
+      operationId: setTempAlertReadings
+      tags: [settings]
+      summary: Set the consecutive out-of-range readings before alerting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TempAlertReadingsBody"
+      responses:
+        "200":
+          description: Updated temp alert readings count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TempAlertReadingsResponse"
+
   /inventory:
     get:
       operationId: listInventory
@@ -1209,6 +1269,14 @@ components:
         notes:
           type: string
           nullable: true
+        fermentTempMin:
+          type: number
+          nullable: true
+          description: Minimum fermentation temperature threshold
+        fermentTempMax:
+          type: number
+          nullable: true
+          description: Maximum fermentation temperature threshold
         daysPlanned:
           type: integer
           nullable: true
@@ -1354,6 +1422,14 @@ components:
         notes:
           type: string
           nullable: true
+        fermentTempMin:
+          type: number
+          nullable: true
+          description: Minimum fermentation temperature threshold
+        fermentTempMax:
+          type: number
+          nullable: true
+          description: Maximum fermentation temperature threshold
         daysPlanned:
           type: integer
           nullable: true
@@ -1407,6 +1483,14 @@ components:
         notes:
           type: string
           nullable: true
+        fermentTempMin:
+          type: number
+          nullable: true
+          description: Minimum fermentation temperature threshold
+        fermentTempMax:
+          type: number
+          nullable: true
+          description: Maximum fermentation temperature threshold
         daysPlanned:
           type: integer
           nullable: true
@@ -1533,6 +1617,14 @@ components:
         notes:
           type: string
           nullable: true
+        fermentTempMin:
+          type: number
+          nullable: true
+          description: Minimum fermentation temperature threshold
+        fermentTempMax:
+          type: number
+          nullable: true
+          description: Maximum fermentation temperature threshold
         tastingNotes:
           type: string
           nullable: true
@@ -1617,6 +1709,14 @@ components:
         notes:
           type: string
           nullable: true
+        fermentTempMin:
+          type: number
+          nullable: true
+          description: Minimum fermentation temperature threshold
+        fermentTempMax:
+          type: number
+          nullable: true
+          description: Maximum fermentation temperature threshold
       required: [recipeName, status, brewDate, batchSizeGallons]
 
     UpdateBrewSessionBody:
@@ -1657,6 +1757,14 @@ components:
         notes:
           type: string
           nullable: true
+        fermentTempMin:
+          type: number
+          nullable: true
+          description: Minimum fermentation temperature threshold
+        fermentTempMax:
+          type: number
+          nullable: true
+          description: Maximum fermentation temperature threshold
         tastingNotes:
           type: string
           nullable: true
@@ -1762,6 +1870,36 @@ components:
           type: string
           nullable: true
       required: [name]
+
+    FermentTempUnitResponse:
+      type: object
+      properties:
+        unit:
+          type: string
+          enum: [F, C]
+      required: [unit]
+
+    FermentTempUnitBody:
+      type: object
+      properties:
+        unit:
+          type: string
+          enum: [F, C]
+      required: [unit]
+
+    TempAlertReadingsResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+      required: [count]
+
+    TempAlertReadingsBody:
+      type: object
+      properties:
+        count:
+          type: integer
+      required: [count]
 
     BreweryNameBody:
       type: object

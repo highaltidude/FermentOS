@@ -39,6 +39,8 @@ import type {
   DefaultReadingsShownResponse,
   Equipment,
   ErrorResponse,
+  FermentTempUnitBody,
+  FermentTempUnitResponse,
   FermentationReading,
   GetISpindelStatus200,
   GetUpcomingBrewsParams,
@@ -68,6 +70,8 @@ import type {
   SimulateISpindelReading200,
   SimulateReadingBody,
   StyleCount,
+  TempAlertReadingsBody,
+  TempAlertReadingsResponse,
   UnitSystemBody,
   UnitSystemResponse,
   UpcomingBrew,
@@ -3389,6 +3393,328 @@ export const useSetDefaultReadingsShown = <
   TContext
 > => {
   return useMutation(getSetDefaultReadingsShownMutationOptions(options));
+};
+
+/**
+ * @summary Get the fermentation temperature unit preference
+ */
+export const getGetFermentTempUnitUrl = () => {
+  return `/api/settings/ferment-temp-unit`;
+};
+
+export const getFermentTempUnit = async (
+  options?: RequestInit,
+): Promise<FermentTempUnitResponse> => {
+  return customFetch<FermentTempUnitResponse>(getGetFermentTempUnitUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFermentTempUnitQueryKey = () => {
+  return [`/api/settings/ferment-temp-unit`] as const;
+};
+
+export const getGetFermentTempUnitQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFermentTempUnit>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFermentTempUnit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFermentTempUnitQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFermentTempUnit>>
+  > = ({ signal }) => getFermentTempUnit({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFermentTempUnit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFermentTempUnitQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFermentTempUnit>>
+>;
+export type GetFermentTempUnitQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the fermentation temperature unit preference
+ */
+
+export function useGetFermentTempUnit<
+  TData = Awaited<ReturnType<typeof getFermentTempUnit>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFermentTempUnit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFermentTempUnitQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set the fermentation temperature unit preference
+ */
+export const getSetFermentTempUnitUrl = () => {
+  return `/api/settings/ferment-temp-unit`;
+};
+
+export const setFermentTempUnit = async (
+  fermentTempUnitBody: FermentTempUnitBody,
+  options?: RequestInit,
+): Promise<FermentTempUnitResponse> => {
+  return customFetch<FermentTempUnitResponse>(getSetFermentTempUnitUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(fermentTempUnitBody),
+  });
+};
+
+export const getSetFermentTempUnitMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setFermentTempUnit>>,
+    TError,
+    { data: BodyType<FermentTempUnitBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setFermentTempUnit>>,
+  TError,
+  { data: BodyType<FermentTempUnitBody> },
+  TContext
+> => {
+  const mutationKey = ["setFermentTempUnit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setFermentTempUnit>>,
+    { data: BodyType<FermentTempUnitBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setFermentTempUnit(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetFermentTempUnitMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setFermentTempUnit>>
+>;
+export type SetFermentTempUnitMutationBody = BodyType<FermentTempUnitBody>;
+export type SetFermentTempUnitMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the fermentation temperature unit preference
+ */
+export const useSetFermentTempUnit = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setFermentTempUnit>>,
+    TError,
+    { data: BodyType<FermentTempUnitBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setFermentTempUnit>>,
+  TError,
+  { data: BodyType<FermentTempUnitBody> },
+  TContext
+> => {
+  return useMutation(getSetFermentTempUnitMutationOptions(options));
+};
+
+/**
+ * @summary Get the consecutive out-of-range readings before alerting
+ */
+export const getGetTempAlertReadingsUrl = () => {
+  return `/api/settings/temp-alert-readings`;
+};
+
+export const getTempAlertReadings = async (
+  options?: RequestInit,
+): Promise<TempAlertReadingsResponse> => {
+  return customFetch<TempAlertReadingsResponse>(getGetTempAlertReadingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTempAlertReadingsQueryKey = () => {
+  return [`/api/settings/temp-alert-readings`] as const;
+};
+
+export const getGetTempAlertReadingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTempAlertReadings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTempAlertReadings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTempAlertReadingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTempAlertReadings>>
+  > = ({ signal }) => getTempAlertReadings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTempAlertReadings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTempAlertReadingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTempAlertReadings>>
+>;
+export type GetTempAlertReadingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the consecutive out-of-range readings before alerting
+ */
+
+export function useGetTempAlertReadings<
+  TData = Awaited<ReturnType<typeof getTempAlertReadings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTempAlertReadings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTempAlertReadingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set the consecutive out-of-range readings before alerting
+ */
+export const getSetTempAlertReadingsUrl = () => {
+  return `/api/settings/temp-alert-readings`;
+};
+
+export const setTempAlertReadings = async (
+  tempAlertReadingsBody: TempAlertReadingsBody,
+  options?: RequestInit,
+): Promise<TempAlertReadingsResponse> => {
+  return customFetch<TempAlertReadingsResponse>(getSetTempAlertReadingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tempAlertReadingsBody),
+  });
+};
+
+export const getSetTempAlertReadingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setTempAlertReadings>>,
+    TError,
+    { data: BodyType<TempAlertReadingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setTempAlertReadings>>,
+  TError,
+  { data: BodyType<TempAlertReadingsBody> },
+  TContext
+> => {
+  const mutationKey = ["setTempAlertReadings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setTempAlertReadings>>,
+    { data: BodyType<TempAlertReadingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setTempAlertReadings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetTempAlertReadingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setTempAlertReadings>>
+>;
+export type SetTempAlertReadingsMutationBody = BodyType<TempAlertReadingsBody>;
+export type SetTempAlertReadingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the consecutive out-of-range readings before alerting
+ */
+export const useSetTempAlertReadings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setTempAlertReadings>>,
+    TError,
+    { data: BodyType<TempAlertReadingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setTempAlertReadings>>,
+  TError,
+  { data: BodyType<TempAlertReadingsBody> },
+  TContext
+> => {
+  return useMutation(getSetTempAlertReadingsMutationOptions(options));
 };
 
 /**

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { useCreateRecipe, useAddRecipeIngredient, useAddRecipeStep, useDeleteRecipe, useListBeerStyles, useListInventory, getGetRecipeQueryKey } from "@workspace/api-client-react";
@@ -80,7 +80,16 @@ export default function NewRecipe() {
     name: "", style: "", batchSizeGallons: "5.5", originalGravity: "", finalGravity: "", abv: "", ibu: "",
     colorSrm: "", estimatedBrewTimeMinutes: "", efficiencyPercent: "", caloriesPerServing: "", notes: "",
     daysPlanned: "", daysBrewing: "", daysFermenting: "", daysConditioning: "", daysPackaged: "",
+    fermentTempMin: "", fermentTempMax: "",
   });
+  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
+
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}api/settings/ferment-temp-unit`)
+      .then((r) => r.json() as Promise<{ unit: string }>)
+      .then((d) => setTempUnit(d.unit === "C" ? "C" : "F"))
+      .catch(() => {});
+  }, []);
 
   const [ingredients, setIngredients] = useState<PendingIngredient[]>([emptyIngredient()]);
   const [steps, setSteps] = useState<PendingStep[]>([emptyStep()]);
@@ -129,6 +138,8 @@ export default function NewRecipe() {
         efficiencyPercent: form.efficiencyPercent ? Number(form.efficiencyPercent) : undefined,
         caloriesPerServing: form.caloriesPerServing ? Number(form.caloriesPerServing) : undefined,
         notes: form.notes || undefined,
+        fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
+        fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
         daysPlanned: form.daysPlanned ? Number(form.daysPlanned) : undefined,
         daysBrewing: form.daysBrewing ? Number(form.daysBrewing) : undefined,
         daysFermenting: form.daysFermenting ? Number(form.daysFermenting) : undefined,
@@ -242,6 +253,23 @@ export default function NewRecipe() {
                 <Input type="number" min="0" value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder="—" />
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Fermentation Temperature Range</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Optional — used to trigger alerts when sensor temp goes out of range</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Min Temp (°{tempUnit})</label>
+              <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Max Temp (°{tempUnit})</label>
+              <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
+            </div>
           </div>
         </div>
 

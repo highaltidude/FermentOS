@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, fermentationReadingsTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, fermentationReadingsTable, recipesTable, appConfigTable } from "@workspace/db";
 import { eq, desc, isNull, and, gte, lte } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
 
@@ -73,8 +73,9 @@ function calcConnectionStatus(
 
 function buildAlerts(
   device: { lastSeenAt: Date | null },
-  reading: { battery?: number | null; batteryPercentEstimate?: number | null; gravity?: number | null; receivedAt: Date; reportedInterval?: number | null } | null,
+  reading: { battery?: number | null; batteryPercentEstimate?: number | null; gravity?: number | null; receivedAt: Date; reportedInterval?: number | null; temperature?: number | null; temperatureUnit?: string | null } | null,
   connectionStatus: string,
+  tempRange?: { min: number | null; max: number | null; unit: "F" | "C" } | null,
 ): { type: string; message: string; triggeredAt: string }[] {
   const alerts: { type: string; message: string; triggeredAt: string }[] = [];
   const now = new Date();
@@ -91,6 +92,24 @@ function buildAlerts(
       message: `Battery ${level}: ${reading!.battery != null ? `${Number(reading!.battery).toFixed(2)}V ` : ""}(~${Math.round(pct)}%)`,
       triggeredAt: now.toISOString(),
     });
+  }
+
+  if (tempRange && reading?.temperature != null) {
+    let tempForCompare = reading.temperature;
+    const readingUnit = (reading.temperatureUnit ?? "C").toUpperCase();
+    const rangeUnit = tempRange.unit;
+    if (readingUnit === "C" && rangeUnit === "F") {
+      tempForCompare = reading.temperature * 9 / 5 + 32;
+    } else if (readingUnit === "F" && rangeUnit === "C") {
+      tempForCompare = (reading.temperature - 32) * 5 / 9;
+    }
+    const { min, max } = tempRange;
+    const unit = rangeUnit === "F" ? "°F" : "°C";
+    if (min != null && tempForCompare < min) {
+      alerts.push({ type: "temp_out_of_range", message: `Temperature ${tempForCompare.toFixed(1)}${unit} is below minimum ${min}${unit}`, triggeredAt: now.toISOString() });
+    } else if (max != null && tempForCompare > max) {
+      alerts.push({ type: "temp_out_of_range", message: `Temperature ${tempForCompare.toFixed(1)}${unit} is above maximum ${max}${unit}`, triggeredAt: now.toISOString() });
+    }
   }
 
   return alerts;
@@ -269,7 +288,37 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
   const insights = calcInsights(readings);
 
   const connectionStatus = calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
-  const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus);
+
+  // Fetch temp range from session, falling back to linked recipe
+  const [brewSession] = await db
+    .select({
+      fermentTempMin: brewSessionsTable.fermentTempMin,
+      fermentTempMax: brewSessionsTable.fermentTempMax,
+      recipeId: brewSessionsTable.recipeId,
+    })
+    .from(brewSessionsTable)
+    .where(eq(brewSessionsTable.id, brewId));
+
+  let tempMin: number | null = brewSession?.fermentTempMin ?? null;
+  let tempMax: number | null = brewSession?.fermentTempMax ?? null;
+
+  if ((tempMin == null || tempMax == null) && brewSession?.recipeId) {
+    const [recipe] = await db
+      .select({ fermentTempMin: recipesTable.fermentTempMin, fermentTempMax: recipesTable.fermentTempMax })
+      .from(recipesTable)
+      .where(eq(recipesTable.id, brewSession.recipeId));
+    if (recipe) {
+      tempMin = tempMin ?? recipe.fermentTempMin ?? null;
+      tempMax = tempMax ?? recipe.fermentTempMax ?? null;
+    }
+  }
+
+  const [tempUnitRow] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, "ferment_temp_unit"));
+  const tempUnit = (tempUnitRow?.value === "C" ? "C" : "F") as "F" | "C";
+
+  const tempRange = (tempMin != null || tempMax != null) ? { min: tempMin, max: tempMax, unit: tempUnit } : null;
+
+  const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
 
   // Gravity stall alert — gravity unchanged for 24h
   if (readings.length >= 2) {

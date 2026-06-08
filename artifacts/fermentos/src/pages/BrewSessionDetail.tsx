@@ -105,6 +105,9 @@ export default function BrewSessionDetail() {
   const qc = useQueryClient();
 
   const [editing, setEditing] = useState(false);
+  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
+  const [tempAlertThreshold, setTempAlertThreshold] = useState(2);
+  const tempAlertCount = useRef(0);
   const [showReadingForm, setShowReadingForm] = useState(false);
   const [readingForm, setReadingForm] = useState({ readingAt: toDatetimeLocalValue(new Date()), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
   const [editForm, setEditForm] = useState<any>({});
@@ -250,6 +253,33 @@ export default function BrewSessionDetail() {
     if (session?.tastingNotes != null) setTastingNotes(session.tastingNotes);
   }, [session?.tastingNotes]);
 
+  useEffect(() => {
+    Promise.all([
+      fetch(`${import.meta.env.BASE_URL}api/settings/ferment-temp-unit`).then((r) => r.json() as Promise<{ unit: string }>),
+      fetch(`${import.meta.env.BASE_URL}api/settings/temp-alert-readings`).then((r) => r.json() as Promise<{ count: number }>),
+    ])
+      .then(([unitData, countData]) => {
+        setTempUnit(unitData.unit === "C" ? "C" : "F");
+        setTempAlertThreshold(countData.count ?? 2);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const alerts: { type: string }[] = (telemetry as any)?.alerts ?? [];
+    const hasOutOfRange = alerts.some((a) => a.type === "temp_out_of_range");
+    if (hasOutOfRange) {
+      tempAlertCount.current += 1;
+      if (tempAlertCount.current >= tempAlertThreshold) {
+        const outAlert = alerts.find((a) => a.type === "temp_out_of_range") as any;
+        toast({ title: "Fermentation temp out of range", description: outAlert?.message ?? "Temperature is outside the configured range", variant: "destructive" });
+        tempAlertCount.current = 0;
+      }
+    } else {
+      tempAlertCount.current = 0;
+    }
+  }, [telemetry, tempAlertThreshold, toast]);
+
   const saveOgMutation = useUpdateBrewSession({
     mutation: {
       onSuccess: () => {
@@ -365,6 +395,8 @@ export default function BrewSessionDetail() {
       abvActual: session.abvActual != null ? String(session.abvActual) : "",
       rating: session.rating != null ? String(session.rating) : "",
       notes: session.notes ?? "",
+      fermentTempMin: (session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "",
+      fermentTempMax: (session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "",
     });
     setEditing(true);
   };
@@ -382,7 +414,9 @@ export default function BrewSessionDetail() {
         abvActual: editForm.abvActual ? Number(editForm.abvActual) : undefined,
         rating: editForm.rating ? Number(editForm.rating) : undefined,
         notes: editForm.notes || undefined,
-      },
+        fermentTempMin: editForm.fermentTempMin ? Number(editForm.fermentTempMin) : null,
+        fermentTempMax: editForm.fermentTempMax ? Number(editForm.fermentTempMax) : null,
+      } as any,
     });
   };
 
@@ -501,6 +535,20 @@ export default function BrewSessionDetail() {
                   )}
                 </div>
               </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Min Ferment Temp (°{tempUnit})</label>
+              <Input type="number" step="0.1"
+                value={editForm.fermentTempMin ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, fermentTempMin: e.target.value })}
+                placeholder={(session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "from recipe"} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Max Ferment Temp (°{tempUnit})</label>
+              <Input type="number" step="0.1"
+                value={editForm.fermentTempMax ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, fermentTempMax: e.target.value })}
+                placeholder={(session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "from recipe"} />
             </div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Notes</label><Textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} /></div>
           </div>

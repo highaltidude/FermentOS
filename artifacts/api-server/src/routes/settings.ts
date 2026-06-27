@@ -169,4 +169,21 @@ router.put("/settings/temp-alert-readings", async (req, res) => {
   return res.json({ count });
 });
 
+const AUTO_CONDITIONING_KEY = "auto_advance_to_conditioning";
+
+router.get("/settings/auto-conditioning", async (_req, res) => {
+  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, AUTO_CONDITIONING_KEY));
+  return res.json({ enabled: row?.value === "true" });
+});
+
+router.put("/settings/auto-conditioning", async (req, res) => {
+  const { enabled } = req.body as { enabled: unknown };
+  if (typeof enabled !== "boolean") return res.status(400).json({ error: "Body must be { enabled: boolean }" });
+  await db
+    .insert(appConfigTable)
+    .values({ key: AUTO_CONDITIONING_KEY, value: String(enabled) })
+    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: String(enabled), updatedAt: new Date() } });
+  return res.json({ enabled });
+});
+
 export default router;

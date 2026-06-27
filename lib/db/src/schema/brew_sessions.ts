@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real, integer, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, boolean, timestamp, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { recipesTable } from "./recipes";
@@ -26,6 +26,7 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   fermentTempMin: real("ferment_temp_min"),
   fermentTempMax: real("ferment_temp_max"),
   fermentTempIdeal: real("ferment_temp_ideal"),
+  autoAdvanceToConditioning: boolean("auto_advance_to_conditioning"),
   tastingNotes: text("tasting_notes"),
   photoPath: text("photo_path"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -109,6 +109,8 @@ export default function BrewSessionDetail() {
   const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
   const [tempAlertThreshold, setTempAlertThreshold] = useState(2);
   const tempAlertCount = useRef(0);
+  const [globalAutoConditioning, setGlobalAutoConditioning] = useState(false);
+  const autoAdvancedRef = useRef(false);
   const [showReadingForm, setShowReadingForm] = useState(false);
   const [readingForm, setReadingForm] = useState({ readingAt: toDatetimeLocalValue(new Date()), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
   const [editForm, setEditForm] = useState<any>({});
@@ -268,10 +270,12 @@ export default function BrewSessionDetail() {
     Promise.all([
       fetchFermentTempUnit(),
       fetch(`${import.meta.env.BASE_URL}api/settings/temp-alert-readings`).then((r) => r.json() as Promise<{ count: number }>),
+      fetch(`${import.meta.env.BASE_URL}api/settings/auto-conditioning`).then((r) => r.json() as Promise<{ enabled: boolean }>),
     ])
-      .then(([unit, countData]) => {
+      .then(([unit, countData, autoData]) => {
         setTempUnit(unit);
         setTempAlertThreshold(countData.count ?? 2);
+        setGlobalAutoConditioning(autoData.enabled ?? false);
       })
       .catch(() => {});
   }, []);
@@ -290,6 +294,17 @@ export default function BrewSessionDetail() {
       tempAlertCount.current = 0;
     }
   }, [telemetry, tempAlertThreshold, toast]);
+
+  useEffect(() => {
+    const perBrew = (session as any)?.autoAdvanceToConditioning;
+    const effectiveAutoAdvance = perBrew !== null && perBrew !== undefined ? perBrew : globalAutoConditioning;
+    if (!effectiveAutoAdvance) return;
+    if (session?.status !== "fermenting") { autoAdvancedRef.current = false; return; }
+    if ((telemetry as any)?.insights?.fermentationStatus !== "possibly_complete") return;
+    if (autoAdvancedRef.current || quickStatusMutation.isPending) return;
+    autoAdvancedRef.current = true;
+    handleStatusClick("conditioning");
+  }, [telemetry, globalAutoConditioning, session]);
 
   const saveOgMutation = useUpdateBrewSession({
     mutation: {
@@ -409,6 +424,7 @@ export default function BrewSessionDetail() {
       fermentTempMin: (session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "",
       fermentTempMax: (session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "",
       fermentTempIdeal: (session as any).fermentTempIdeal != null ? String((session as any).fermentTempIdeal) : "",
+      autoAdvanceToConditioning: (session as any).autoAdvanceToConditioning ?? null,
     });
     setEditing(true);
   };
@@ -429,6 +445,7 @@ export default function BrewSessionDetail() {
         fermentTempMin: editForm.fermentTempMin ? Number(editForm.fermentTempMin) : null,
         fermentTempMax: editForm.fermentTempMax ? Number(editForm.fermentTempMax) : null,
         fermentTempIdeal: editForm.fermentTempIdeal ? Number(editForm.fermentTempIdeal) : null,
+        autoAdvanceToConditioning: editForm.autoAdvanceToConditioning,
       } as any,
     });
   };
@@ -571,6 +588,20 @@ export default function BrewSessionDetail() {
                   onChange={(e) => setEditForm({ ...editForm, fermentTempMax: e.target.value })}
                   placeholder={(session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "from recipe"} />
               </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Auto-advance to Conditioning</label>
+              <Select
+                value={editForm.autoAdvanceToConditioning === true ? "on" : editForm.autoAdvanceToConditioning === false ? "off" : "global"}
+                onValueChange={(v) => setEditForm({ ...editForm, autoAdvanceToConditioning: v === "on" ? true : v === "off" ? false : null })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">Use global setting</SelectItem>
+                  <SelectItem value="on">Always auto-advance</SelectItem>
+                  <SelectItem value="off">Never auto-advance (manual only)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Notes</label><Textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} /></div>
           </div>

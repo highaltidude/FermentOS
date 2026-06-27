@@ -1641,6 +1641,10 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        autoAdvanceToConditioning:
+          type: boolean
+          nullable: true
+          description: "null = use global setting, true = always auto-advance, false = always manual"
         tastingNotes:
           type: string
           nullable: true
@@ -1789,6 +1793,10 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        autoAdvanceToConditioning:
+          type: boolean
+          nullable: true
+          description: "null = use global setting, true = always auto-advance, false = always manual"
         tastingNotes:
           type: string
           nullable: true

@@ -46,6 +46,8 @@ export function calcInsights(
     fermentationStatus = "likely_active";
   } else if (velocityLast24h > 0.001) {
     fermentationStatus = "slowing";
+  } else if (velocityLast24h < -0.001) {
+    fermentationStatus = "likely_active";
   } else {
     const hoursSinceStart =
       (new Date(last.receivedAt).getTime() - new Date(first.receivedAt).getTime()) / 3_600_000;

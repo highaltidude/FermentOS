@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, fermentationReadingsTable, recipesTable, appConfigTable } from "@workspace/db";
-import { eq, desc, isNull, and, gte, lte } from "drizzle-orm";
+import { eq, desc, isNull, isNotNull, and, gte, lte } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
 
 const router = Router();
@@ -268,6 +268,7 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
       const conditions: ReturnType<typeof eq>[] = [
         eq(sensorReadingsTable.deviceId, a.deviceId),
         gte(sensorReadingsTable.receivedAt, a.assignedAt),
+        isNotNull(sensorReadingsTable.brewSessionId),
       ];
       if (a.unassignedAt != null) {
         conditions.push(lte(sensorReadingsTable.receivedAt, a.unassignedAt));

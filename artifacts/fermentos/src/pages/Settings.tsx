@@ -2704,6 +2704,10 @@ function RestartAppPanel() {
 
   useEffect(() => () => stopProbe(), []);
 
+  const handleReloadNow = () => {
+    window.location.reload();
+  };
+
   const handleRestart = async () => {
     if (!confirm("Restart the fermentos service?\n\nThe app will be unreachable for ~5–15 seconds.")) return;
     stopProbe();

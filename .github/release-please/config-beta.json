@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "prerelease": true,
+  "prerelease-type": "beta",
+  "packages": {
+    ".": {
+      "package-name": "fermentos",
+      "changelog-path": "CHANGELOG.md",
+      "bootstrap-sha": "21d350644c3a9200a911acf915cc5734a0f1a322",
+      "extra-files": [
+        { "type": "json", "path": "package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}

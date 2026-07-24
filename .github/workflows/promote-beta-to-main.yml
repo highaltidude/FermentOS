@@ -1,0 +1,42 @@
+name: Promote beta to main
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open or update beta -> main PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          COMMITS="$(git log origin/main..origin/beta --oneline)"
+          if [ -z "$COMMITS" ]; then
+            echo "beta is not ahead of main — nothing to promote."
+            exit 0
+          fi
+
+          BODY="Commits being promoted from beta to main:
+
+          $COMMITS"
+
+          EXISTING="$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head beta --json number --jq '.[0].number // empty')"
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+            echo "Updated existing PR #$EXISTING"
+          else
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main --head beta \
+              --title "chore: promote beta to main" --body "$BODY"
+          fi

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.0.0...fermentos-v1.0.1) (2026-07-25)
+
+
+### Bug Fixes
+
+* stop beta and main release-please from colliding on shared files ([#113](https://github.com/highaltidude/FermentOS/issues/113)) ([3a8a025](https://github.com/highaltidude/FermentOS/commit/3a8a025d769939d94bab873a6a4c8f7fd05012df))
+
 ## 1.0.0 (2026-07-25)
 
 

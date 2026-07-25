@@ -2075,6 +2075,9 @@ components:
           format: date
         daysSinceBrew:
           type: integer
+        daysInCurrentStage:
+          type: integer
+          nullable: true
         latestTemperature:
           type: number
           nullable: true
@@ -2082,6 +2085,9 @@ components:
           type: number
           nullable: true
         targetFinalGravity:
+          type: number
+          nullable: true
+        originalGravityActual:
           type: number
           nullable: true
       required: [id, recipeName, status, brewDate, daysSinceBrew]

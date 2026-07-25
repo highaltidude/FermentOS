@@ -56,6 +56,12 @@ export const GetDashboardSummaryResponse = zod.object({
         .number()
         .nullish()
         .describe("Ideal fermentation temperature target"),
+      autoAdvanceToConditioning: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "null = use global setting, true = always auto-advance, false = always manual",
+        ),
       tastingNotes: zod.string().nullish(),
       photoPath: zod.string().nullish(),
       createdAt: zod.string().datetime({}),
@@ -73,9 +79,11 @@ export const GetActiveBrewsResponseItem = zod.object({
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   daysSinceBrew: zod.number(),
+  daysInCurrentStage: zod.number().nullish(),
   latestTemperature: zod.number().nullish(),
   latestGravity: zod.number().nullish(),
   targetFinalGravity: zod.number().nullish(),
+  originalGravityActual: zod.number().nullish(),
 });
 export const GetActiveBrewsResponse = zod.array(GetActiveBrewsResponseItem);
 
@@ -677,6 +685,12 @@ export const ListBrewSessionsResponseItem = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  autoAdvanceToConditioning: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "null = use global setting, true = always auto-advance, false = always manual",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   createdAt: zod.string().datetime({}),
@@ -754,6 +768,12 @@ export const GetBrewSessionResponse = zod
       .number()
       .nullish()
       .describe("Ideal fermentation temperature target"),
+    autoAdvanceToConditioning: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "null = use global setting, true = always auto-advance, false = always manual",
+      ),
     tastingNotes: zod.string().nullish(),
     photoPath: zod.string().nullish(),
     createdAt: zod.string().datetime({}),
@@ -824,6 +844,12 @@ export const UpdateBrewSessionBody = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  autoAdvanceToConditioning: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "null = use global setting, true = always auto-advance, false = always manual",
+    ),
   tastingNotes: zod.string().nullish(),
 });
 
@@ -859,6 +885,12 @@ export const UpdateBrewSessionResponse = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  autoAdvanceToConditioning: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "null = use global setting, true = always auto-advance, false = always manual",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   createdAt: zod.string().datetime({}),

@@ -230,6 +230,8 @@ export interface BrewSession {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** null = use global setting, true = always auto-advance, false = always manual */
+  autoAdvanceToConditioning?: boolean | null;
   tastingNotes?: string | null;
   photoPath?: string | null;
   createdAt: string;
@@ -308,6 +310,8 @@ export interface UpdateBrewSessionBody {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** null = use global setting, true = always auto-advance, false = always manual */
+  autoAdvanceToConditioning?: boolean | null;
   tastingNotes?: string | null;
 }
 
@@ -453,9 +457,11 @@ export interface ActiveBrew {
   status: BrewStatus;
   brewDate: string;
   daysSinceBrew: number;
+  daysInCurrentStage?: number | null;
   latestTemperature?: number | null;
   latestGravity?: number | null;
   targetFinalGravity?: number | null;
+  originalGravityActual?: number | null;
 }
 
 export interface UpcomingBrew {

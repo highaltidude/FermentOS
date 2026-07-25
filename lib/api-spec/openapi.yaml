@@ -1960,6 +1960,9 @@ components:
           type: number
         unit:
           type: string
+        cost:
+          type: number
+          nullable: true
         purchasedDate:
           type: string
           format: date
@@ -1996,6 +1999,9 @@ components:
           type: number
         unit:
           type: string
+        cost:
+          type: number
+          nullable: true
         purchasedDate:
           type: string
           format: date
@@ -2026,6 +2032,9 @@ components:
           type: number
         unit:
           type: string
+        cost:
+          type: number
+          nullable: true
         purchasedDate:
           type: string
           format: date

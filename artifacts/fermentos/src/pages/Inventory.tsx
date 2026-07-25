@@ -49,7 +49,7 @@ function useUnitOptions(): { unitOptions: string[]; defaultUnit: string; loading
 }
 
 const emptyForm = (defaultUnit = "lbs") => ({
-  name: "", type: "malt", maltType: "", amount: "", unit: defaultUnit,
+  name: "", type: "malt", maltType: "", amount: "", unit: defaultUnit, cost: "",
   purchasedDate: "", expiryDate: "", supplier: "", notes: "",
 });
 
@@ -107,7 +107,8 @@ function InventoryForm({ form, setForm, isEdit = false, isPending, onSubmit, onC
         )}
         <div><label className="text-xs text-muted-foreground mb-1 block">Purchased</label><Input type="date" value={form.purchasedDate} onChange={(e) => setForm({ ...form, purchasedDate: e.target.value })} className="text-sm" /></div>
         <div><label className="text-xs text-muted-foreground mb-1 block">Expiry</label><Input type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} className="text-sm" /></div>
-        <Input placeholder="Supplier (optional)" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} className="text-sm col-span-2" />
+        <Input placeholder="Cost/unit (optional)" type="number" step="0.01" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="text-sm" />
+        <Input placeholder="Supplier (optional)" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} className="text-sm" />
         <Input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="text-sm col-span-2" />
       </div>
       <div className="flex gap-2 justify-end">
@@ -160,6 +161,7 @@ export default function Inventory() {
         maltType: (form.type === "malt" && form.maltType) ? form.maltType as any : undefined,
         amount: Number(form.amount),
         unit: form.unit,
+        cost: form.cost ? Number(form.cost) : undefined,
         purchasedDate: form.purchasedDate || undefined,
         expiryDate: form.expiryDate || undefined,
         supplier: form.supplier || undefined,
@@ -178,6 +180,7 @@ export default function Inventory() {
         maltType: (form.type === "malt" && form.maltType) ? form.maltType as any : null,
         amount: Number(form.amount),
         unit: form.unit,
+        cost: form.cost ? Number(form.cost) : null,
         purchasedDate: form.purchasedDate || undefined,
         expiryDate: form.expiryDate || undefined,
         supplier: form.supplier || undefined,
@@ -190,6 +193,7 @@ export default function Inventory() {
     setForm({
       name: item.name, type: item.type, maltType: item.maltType ?? "",
       amount: String(item.amount), unit: item.unit,
+      cost: item.cost != null ? String(item.cost) : "",
       purchasedDate: item.purchasedDate ?? "", expiryDate: item.expiryDate ?? "",
       supplier: item.supplier ?? "", notes: item.notes ?? "",
     });
@@ -275,6 +279,7 @@ export default function Inventory() {
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">{item.amount} {item.unit}</span>
+                      {item.cost != null && <span>${item.cost.toFixed(2)}/{item.unit}</span>}
                       {item.supplier && <span>{item.supplier}</span>}
                       {item.expiryDate && <span>Exp: {parseLocalDate(item.expiryDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>}
                       {item.notes && <span className="truncate">{item.notes}</span>}

@@ -1,0 +1,20 @@
+name: Release (beta)
+
+on:
+  push:
+    branches:
+      - beta
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          target-branch: beta
+          config-file: .github/release-please/config-beta.json
+          manifest-file: .github/release-please/manifest-beta.json

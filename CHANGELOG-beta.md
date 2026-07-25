@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 (2026-07-25)
+## 1.0.0-beta1 (2026-07-25)
 
 
 ### Features
@@ -50,11 +50,14 @@
 * auto-rollback to previous commit if build fails during update ([#46](https://github.com/highaltidude/FermentOS/issues/46)) ([56e1698](https://github.com/highaltidude/FermentOS/commit/56e1698d4786db1c6f4dc6672acba2cbaa51a2f7))
 * auto-sync git repo before docker build in install script ([#86](https://github.com/highaltidude/FermentOS/issues/86)) ([eacfa2d](https://github.com/highaltidude/FermentOS/commit/eacfa2db124c07e18098da1eef0b911c33012c47))
 * backup and restore .env during install to prevent data loss ([#53](https://github.com/highaltidude/FermentOS/issues/53)) ([39d5c36](https://github.com/highaltidude/FermentOS/commit/39d5c36c37c6fc8d08e3d4ec03cd11be330e2d74))
+* default PORT/BASE_PATH in mockup-sandbox vite config instead of throwing ([#103](https://github.com/highaltidude/FermentOS/issues/103)) ([36f9b14](https://github.com/highaltidude/FermentOS/commit/36f9b14a3b3f151f1f6170529e0867be289df3ef))
 * defer Reload now button until server confirms ready after update ([#67](https://github.com/highaltidude/FermentOS/issues/67)) ([92eb2c6](https://github.com/highaltidude/FermentOS/commit/92eb2c6fa095221378f17200eb96d05483de2c70))
 * docker enhancements ([40ba35c](https://github.com/highaltidude/FermentOS/commit/40ba35ce8858d63fe7685ad65b2ad3725460cfee))
 * hide live sensor card when device is unassigned from brew session ([#97](https://github.com/highaltidude/FermentOS/issues/97)) ([6d77d2e](https://github.com/highaltidude/FermentOS/commit/6d77d2e84b239e00a7fc3217a3dfead683f75e65))
 * install postgresql-client in Docker runner stage for pg_dump and psql ([#91](https://github.com/highaltidude/FermentOS/issues/91)) ([9f3108e](https://github.com/highaltidude/FermentOS/commit/9f3108e6570a10d73f2e17d892b4ffab9b1d54c4))
 * iSpindel brew telemetry uses assignment time windows, not brewSessionId ([#33](https://github.com/highaltidude/FermentOS/issues/33)) ([f69b4a3](https://github.com/highaltidude/FermentOS/commit/f69b4a315a492f06b1f7c821fadaad5a2d96d3cc))
+* nest prerelease config under packages, add main-&gt;beta sync workflow ([#107](https://github.com/highaltidude/FermentOS/issues/107)) ([3a367b0](https://github.com/highaltidude/FermentOS/commit/3a367b05fa79feff3c6bfed7f47ba8307e331c99))
+* pin beta's first release to 1.0.0-beta1 via initial-version ([#111](https://github.com/highaltidude/FermentOS/issues/111)) ([fdc7d56](https://github.com/highaltidude/FermentOS/commit/fdc7d56b9011c031386428a1278cfc5223403955))
 * prevent file permission changes from blocking GUI updates ([#49](https://github.com/highaltidude/FermentOS/issues/49)) ([d04d2df](https://github.com/highaltidude/FermentOS/commit/d04d2df556619020ef80ae794cd5a68041666638))
 * prevent file permission changes from blocking GUI updates ([#50](https://github.com/highaltidude/FermentOS/issues/50)) ([04cb935](https://github.com/highaltidude/FermentOS/commit/04cb935743ae871b57e9723dc8172455cbf0d39a))
 * prevent premature auto-advance to conditioning when iSpindel gravity rises during normalization ([#100](https://github.com/highaltidude/FermentOS/issues/100)) ([21d3506](https://github.com/highaltidude/FermentOS/commit/21d350644c3a9200a911acf915cc5734a0f1a322))
@@ -66,9 +69,11 @@
 * remove git clean -fd from update script ([#52](https://github.com/highaltidude/FermentOS/issues/52)) ([0068083](https://github.com/highaltidude/FermentOS/commit/00680831dfeecbdd1c8474503a2fb6e0f2390a67))
 * remove redundant git pull from UI update instructions ([#87](https://github.com/highaltidude/FermentOS/issues/87)) ([5ab139b](https://github.com/highaltidude/FermentOS/commit/5ab139bff39cb7134ecd835d6022e872ed7c39f5))
 * run drizzle migrations between schema wipe and data replay on restore ([#92](https://github.com/highaltidude/FermentOS/issues/92)) ([950d0e4](https://github.com/highaltidude/FermentOS/commit/950d0e4444377b2b46f9b3a16b380176995bea56))
+* select prerelease versioning strategy for beta so tags don't collide with main ([#109](https://github.com/highaltidude/FermentOS/issues/109)) ([d10c56d](https://github.com/highaltidude/FermentOS/commit/d10c56dd796c0a373e3191980f59d96409e8b616))
 * show update progress UI immediately with placeholder text during verifying phase ([#71](https://github.com/highaltidude/FermentOS/issues/71)) ([456d2de](https://github.com/highaltidude/FermentOS/commit/456d2dec5985bfce101188b4d2b648b2ae0eda44))
 * skip fermentation reading mirror for packaged brew sessions ([#93](https://github.com/highaltidude/FermentOS/issues/93)) ([d795d11](https://github.com/highaltidude/FermentOS/commit/d795d117fa2a275b76947c54cec7741bbc0f5e6e))
 * suppress temp out of range toast when sensor device is inactive ([#98](https://github.com/highaltidude/FermentOS/issues/98)) ([858a11b](https://github.com/highaltidude/FermentOS/commit/858a11b7b21ccf125922c0205e127d07eaedfde3))
+* sync generated API client with OpenAPI spec, fix stale reload handler ([#102](https://github.com/highaltidude/FermentOS/issues/102)) ([505ab0b](https://github.com/highaltidude/FermentOS/commit/505ab0b285890826d859d503eff76425b8885c8c))
 * unlink sensor reading from brew session when fermentation reading is deleted ([#81](https://github.com/highaltidude/FermentOS/issues/81)) ([2c4e66f](https://github.com/highaltidude/FermentOS/commit/2c4e66f79ae2cfe67feb834a283f674e8130bdce))
 * use timestamptz for all event timestamps, fix frontend date parsing ([94ccfbc](https://github.com/highaltidude/FermentOS/commit/94ccfbcf31f78bd96d3ba0761bedeb2cd4229328))
 * use timestamptz for all event timestamps, fix frontend date parsing ([00bb8cb](https://github.com/highaltidude/FermentOS/commit/00bb8cbfa42c3310dc0fbee82fbf37411cd7fd91))

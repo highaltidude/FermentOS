@@ -4,15 +4,12 @@
   "packages": {
     ".": {
       "package-name": "fermentos",
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "CHANGELOG-beta.md",
       "bootstrap-sha": "21d350644c3a9200a911acf915cc5734a0f1a322",
       "versioning": "prerelease",
       "prerelease": true,
       "prerelease-type": "beta",
-      "initial-version": "1.0.0-beta1",
-      "extra-files": [
-        { "type": "json", "path": "package.json", "jsonpath": "$.version" }
-      ]
+      "initial-version": "1.0.0-beta1"
     }
   }
 }

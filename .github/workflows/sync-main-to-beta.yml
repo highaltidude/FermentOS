@@ -1,0 +1,39 @@
+name: Sync main to beta
+
+# Keeps beta from drifting behind main. Runs on every push to main (a
+# beta->main promotion merge, a release-please version-bump commit, or a
+# hotfix landed directly on main) and merges that content into beta.
+#
+# This is a direct merge + push, not a PR: anything reaching main already
+# went through review (either the promote-beta-to-main PR, or its own
+# hotfix PR), so re-reviewing it a second time on the way into beta adds
+# a manual click with no real safety benefit. If a genuine conflict comes
+# up (beta diverged on the same lines independently), the merge step fails
+# and the job goes red instead of pushing anything broken.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout beta
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          fetch-depth: 0
+
+      - name: Merge main into beta
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git push origin beta

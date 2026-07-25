@@ -6,6 +6,7 @@
       "package-name": "fermentos",
       "changelog-path": "CHANGELOG.md",
       "bootstrap-sha": "21d350644c3a9200a911acf915cc5734a0f1a322",
+      "versioning": "prerelease",
       "prerelease": true,
       "prerelease-type": "beta",
       "extra-files": [

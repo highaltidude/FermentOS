@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0-beta4](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.0.0-beta3...fermentos-v1.0.0-beta4) (2026-08-06)
+
+
+### Features
+
+* **inventory:** add cost per unit to ingredients ([8cdb841](https://github.com/highaltidude/FermentOS/commit/8cdb8415af09bd060c7088a2cc66293da24ee57b))
+
+
+### Bug Fixes
+
+* **admin:** correct release-notes newer-than-current flag and hide cross-channel prereleases ([7157560](https://github.com/highaltidude/FermentOS/commit/7157560598199dff5b528db56c03f702a617d7d6))
+* **settings:** correct stale Home Assistant integration docs ([40845e8](https://github.com/highaltidude/FermentOS/commit/40845e851f963a9207d9a76bf83b9baac9dea335))
+
 ## [1.0.0-beta3](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.0.0-beta2...fermentos-v1.0.0-beta3) (2026-08-06)
 
 

@@ -12,6 +12,7 @@ export const inventoryTable = pgTable("inventory", {
   maltType: text("malt_type", { enum: maltTypeEnum }),
   amount: real("amount").notNull(),
   unit: text("unit").notNull(),
+  cost: real("cost"),
   purchasedDate: date("purchased_date"),
   expiryDate: date("expiry_date"),
   supplier: text("supplier"),

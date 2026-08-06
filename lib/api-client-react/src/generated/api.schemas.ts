@@ -410,6 +410,7 @@ export interface InventoryItem {
   maltType?: MaltType | null;
   amount: number;
   unit: string;
+  cost?: number | null;
   purchasedDate?: string | null;
   expiryDate?: string | null;
   supplier?: string | null;
@@ -424,6 +425,7 @@ export interface CreateInventoryItemBody {
   maltType?: MaltType | null;
   amount: number;
   unit: string;
+  cost?: number | null;
   purchasedDate?: string | null;
   expiryDate?: string | null;
   supplier?: string | null;
@@ -436,6 +438,7 @@ export interface UpdateInventoryItemBody {
   maltType?: MaltType | null;
   amount?: number;
   unit?: string;
+  cost?: number | null;
   purchasedDate?: string | null;
   expiryDate?: string | null;
   supplier?: string | null;

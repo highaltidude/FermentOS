@@ -936,73 +936,60 @@ function HomeAssistantPanel() {
 
   const endpointUrl = `http://${window.location.hostname}/api/ha/status`;
 
+  // /api/ha/status returns an array of your configured sensor devices, not a
+  // single "current brew" object — replace iSpindel001 below with the
+  // deviceName shown for your device on the Sensors page.
   const restSensorYaml = `rest:
   - resource: ${endpointUrl}
     scan_interval: 60
     sensor:
-      - name: "FermentOS Active Brews"
-        unique_id: fermentos_active_brews
-        value_template: "{{ value_json.fermentos.active }}"
+      - name: "FermentOS iSpindel001 Gravity"
+        unique_id: fermentos_ispindel001_gravity
+        value_template: >-
+          {% set d = value_json | selectattr('deviceName','eq','iSpindel001') | first %}
+          {{ d.latestReading.gravity if d and d.latestReading else '' }}
         state_class: measurement
-      - name: "FermentOS Current Brew"
-        unique_id: fermentos_current_brew
+      - name: "FermentOS iSpindel001 Temperature"
+        unique_id: fermentos_ispindel001_temperature
         value_template: >-
-          {{ value_json.current_brew.name
-             if value_json.current_brew is not none
-             else 'No active brew' }}
-      - name: "FermentOS Brew Status"
-        unique_id: fermentos_brew_status
-        value_template: >-
-          {{ value_json.current_brew.status
-             if value_json.current_brew is not none
-             else 'none' }}
-      - name: "FermentOS Brew Temperature"
-        unique_id: fermentos_brew_temperature
-        value_template: >-
-          {{ value_json.current_brew.temperature_f
-             if value_json.current_brew is not none
-             else '' }}
-        unit_of_measurement: "°F"
+          {% set d = value_json | selectattr('deviceName','eq','iSpindel001') | first %}
+          {{ d.latestReading.temperature if d and d.latestReading else '' }}
         state_class: measurement
-      - name: "FermentOS Brew Gravity"
-        unique_id: fermentos_brew_gravity
+      - name: "FermentOS iSpindel001 Connection"
+        unique_id: fermentos_ispindel001_connection
         value_template: >-
-          {{ value_json.current_brew.gravity
-             if value_json.current_brew is not none
-             else '' }}
-        state_class: measurement
-      - name: "FermentOS Days In Progress"
-        unique_id: fermentos_brew_days
+          {% set d = value_json | selectattr('deviceName','eq','iSpindel001') | first %}
+          {{ d.connectionStatus if d else 'unknown' }}
+      - name: "FermentOS iSpindel001 Assigned Brew"
+        unique_id: fermentos_ispindel001_brew
         value_template: >-
-          {{ value_json.current_brew.days_in_progress
-             if value_json.current_brew is not none
-             else '' }}
-        unit_of_measurement: "days"
-        state_class: measurement`;
+          {% set d = value_json | selectattr('deviceName','eq','iSpindel001') | first %}
+          {{ d.assignedBrewName if d and d.assignedBrewName else 'Unassigned' }}
+      - name: "FermentOS iSpindel001 Fermentation Status"
+        unique_id: fermentos_ispindel001_fermentation_status
+        value_template: >-
+          {% set d = value_json | selectattr('deviceName','eq','iSpindel001') | first %}
+          {{ d.insights.fermentationStatus if d and d.insights else 'unknown' }}`;
 
   const lovelaceCardYaml = `type: markdown
 title: 🍺 FermentOS
 content: >-
-  {% if states('sensor.fermentos_current_brew') != 'No active brew' %}
-  ## {{ states('sensor.fermentos_current_brew') }}
+  {% if states('sensor.fermentos_ispindel001_connection') != 'unknown' %}
+  ## {{ states('sensor.fermentos_ispindel001_assigned_brew') }}
 
-  **Status:** {{ states('sensor.fermentos_brew_status') | replace('_', ' ') | title }}
+  **Connection:** {{ states('sensor.fermentos_ispindel001_connection') | title }}
 
-  **Day:** {{ states('sensor.fermentos_brew_days') }}
+  **Fermentation:** {{ states('sensor.fermentos_ispindel001_fermentation_status') | replace('_', ' ') | title }}
 
-  {% if states('sensor.fermentos_brew_temperature') != '' %}
-  **Temp:** {{ states('sensor.fermentos_brew_temperature') }}°F
+  {% if states('sensor.fermentos_ispindel001_gravity') != '' %}
+  **Gravity:** {{ states('sensor.fermentos_ispindel001_gravity') }}
   {% endif %}
 
-  {% if states('sensor.fermentos_brew_gravity') != '' %}
-  **Gravity:** {{ states('sensor.fermentos_brew_gravity') }}
+  {% if states('sensor.fermentos_ispindel001_temperature') != '' %}
+  **Temp:** {{ states('sensor.fermentos_ispindel001_temperature') }}
   {% endif %}
-
-  **Active brews:** {{ states('sensor.fermentos_active_brews') }}
   {% else %}
-  *No active brew.*
-
-  **Active brews:** {{ states('sensor.fermentos_active_brews') }}
+  *iSpindel001 hasn't reported yet.*
   {% endif %}`;
 
   return (
@@ -1029,7 +1016,7 @@ content: >-
           </div>
           <p className="text-[11px] text-muted-foreground leading-snug">
             Always accessible — no Bearer token needed even when API auth is enabled.
-            Returns <code className="font-mono">current_brew: null</code> when all sessions are packaged or no active brew exists.
+            Returns a JSON array of your configured sensor devices, each with its latest reading, connection status, assigned brew, and fermentation insights (<code className="font-mono">[]</code> if no devices are registered yet).
           </p>
         </div>
 

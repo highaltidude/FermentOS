@@ -649,71 +649,119 @@ type GithubRelease = {
   draft: boolean;
 };
 
+type GithubTag = {
+  name: string;
+  commit: { sha: string };
+};
+
 // In-memory cache to stay well under GitHub's 60-req/hr unauthenticated rate
 // limit. Settings page mounts and "Check for updates" both hit this; without
 // caching a user spamming refresh could lock themselves out for an hour.
-let releaseCache: { fetchedAt: number; data: GithubRelease[]; error: string | null } | null = null;
+let releaseCache: { fetchedAt: number; data: GithubRelease[]; tagShas: Record<string, string>; error: string | null } | null = null;
 const RELEASE_CACHE_TTL_MS = 5 * 60 * 1000;
 
-async function getReleases(): Promise<{ data: GithubRelease[]; error: string | null; cachedAt: number }> {
+async function getReleases(): Promise<{ data: GithubRelease[]; tagShas: Record<string, string>; error: string | null; cachedAt: number }> {
   const now = Date.now();
   if (releaseCache && now - releaseCache.fetchedAt < RELEASE_CACHE_TTL_MS) {
-    return { data: releaseCache.data, error: releaseCache.error, cachedAt: releaseCache.fetchedAt };
+    return { data: releaseCache.data, tagShas: releaseCache.tagShas, error: releaseCache.error, cachedAt: releaseCache.fetchedAt };
   }
   try {
     // 5s timeout — release notes are nice-to-have, never block the UI.
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=10`, {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "FermentOS-self-host" },
-      signal: ctrl.signal,
-    });
+    const headers = { Accept: "application/vnd.github+json", "User-Agent": "FermentOS-self-host" };
+    const [releasesRes, tagsRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=10`, { headers, signal: ctrl.signal }),
+      fetch(`https://api.github.com/repos/${GITHUB_REPO}/tags?per_page=30`, { headers, signal: ctrl.signal }),
+    ]);
     clearTimeout(timer);
-    if (!res.ok) {
-      const error = res.status === 403
+    if (!releasesRes.ok) {
+      const error = releasesRes.status === 403
         ? "GitHub API rate limit reached. Try again in a few minutes."
-        : `GitHub API returned HTTP ${res.status}`;
-      releaseCache = { fetchedAt: now, data: [], error };
-      return { data: [], error, cachedAt: now };
+        : `GitHub API returned HTTP ${releasesRes.status}`;
+      releaseCache = { fetchedAt: now, data: [], tagShas: {}, error };
+      return { data: [], tagShas: {}, error, cachedAt: now };
     }
-    const raw = (await res.json()) as GithubRelease[];
+    const raw = (await releasesRes.json()) as GithubRelease[];
     // Drop drafts (private to repo maintainers) but keep prereleases — homelab
-    // users may explicitly opt into running them.
+    // users may explicitly opt into running them (though /release-notes below
+    // only surfaces prereleases when this install is actually on beta).
     const data = Array.isArray(raw) ? raw.filter((r) => !r.draft) : [];
-    releaseCache = { fetchedAt: now, data, error: null };
-    return { data, error: null, cachedAt: now };
+
+    // Best-effort: resolve each release's tag to its commit SHA so /release-notes
+    // can check ancestry against the running commit instead of comparing
+    // timestamps. If this fetch fails, tagShas stays empty and every entry's
+    // isNewerThanCurrent just falls back to false (see isAncestorOfRunning).
+    let tagShas: Record<string, string> = {};
+    if (tagsRes.ok) {
+      const rawTags = (await tagsRes.json()) as GithubTag[];
+      if (Array.isArray(rawTags)) {
+        tagShas = Object.fromEntries(rawTags.map((t) => [t.name, t.commit.sha]));
+      }
+    }
+
+    releaseCache = { fetchedAt: now, data, tagShas, error: null };
+    return { data, tagShas, error: null, cachedAt: now };
   } catch (e) {
     const error = e instanceof Error && e.name === "AbortError"
       ? "GitHub API timed out (no internet?)"
       : `Could not reach GitHub: ${e instanceof Error ? e.message : String(e)}`;
-    releaseCache = { fetchedAt: now, data: [], error };
-    return { data: [], error, cachedAt: now };
+    releaseCache = { fetchedAt: now, data: [], tagShas: {}, error };
+    return { data: [], tagShas: {}, error, cachedAt: now };
+  }
+}
+
+// Whether `sha` is already included in what's currently running, using real
+// commit ancestry rather than timestamps. Returns null when we can't tell
+// (Docker has no .git directory, the commit isn't in local history, or we
+// never resolved a SHA for this tag) — callers should treat null as "not
+// newer" rather than guessing, same conservative default as before.
+function isAncestorOfRunning(sha: string): boolean | null {
+  if (IS_DOCKER || RUNNING_HASH === "unknown") return null;
+  try {
+    execSync(`git merge-base --is-ancestor ${sha} ${RUNNING_HASH}`, { cwd: REPO_ROOT, stdio: "pipe" });
+    return true;
+  } catch (err) {
+    // exit 1 = definitively not an ancestor (confirmed newer, or a different
+    // channel entirely). Any other exit (unknown revision, not a git repo,
+    // etc.) means we genuinely can't tell — don't guess "newer" from that.
+    const status = (err as { status?: number } | null)?.status;
+    return status === 1 ? false : null;
   }
 }
 
 // GET /api/admin/release-notes
 // Returns the most recent GitHub Releases for the upstream repo, lightly
-// pre-processed: each entry includes whether it's "newer" than the currently
-// running commit (best-effort: we compare tag dates to the running commit's
-// commit date since we can't resolve tags → SHAs without a fetch).
+// pre-processed:
+//  - isNewerThanCurrent is computed by resolving each release's tag to a
+//    commit SHA (via getReleases' tagShas) and checking ancestry against the
+//    running commit. It used to compare the release's `published_at` to the
+//    running commit's commit date, but a GitHub Release is always created
+//    slightly *after* the commit it's for (release-please publishes it as a
+//    follow-up step), so that comparison flagged the exact release currently
+//    running as "newer than current."
+//  - prerelease entries (beta) are only included when this install is
+//    actually running the beta branch, so a main install doesn't see beta
+//    release notes mixed in with no way to tell they're a different channel.
 router.get("/release-notes", async (_req, res) => {
-  const { data, error, cachedAt } = await getReleases();
-  let runningCommitDate: string | null = null;
-  try {
-    runningCommitDate = execSync(`git log -1 --format=%cI ${RUNNING_HASH}`, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
-  } catch {
-    // running commit not in local history (shallow clone?) — skip the "newer than current" flag
-  }
-  const entries = data.map((r) => ({
-    tag: r.tag_name,
-    name: r.name,
-    body: r.body,
-    url: r.html_url,
-    publishedAt: r.published_at,
-    prerelease: r.prerelease,
-    isNewerThanCurrent:
-      !!runningCommitDate && !!r.published_at && new Date(r.published_at).getTime() > new Date(runningCommitDate).getTime(),
-  }));
+  const { data, tagShas, error, cachedAt } = await getReleases();
+  const { branch } = getGitInfo();
+  const showPrereleases = branch === "beta";
+
+  const visible = data.filter((r) => !r.prerelease || showPrereleases);
+  const entries = visible.map((r) => {
+    const sha = tagShas[r.tag_name];
+    const ancestor = sha ? isAncestorOfRunning(sha) : null;
+    return {
+      tag: r.tag_name,
+      name: r.name,
+      body: r.body,
+      url: r.html_url,
+      publishedAt: r.published_at,
+      prerelease: r.prerelease,
+      isNewerThanCurrent: ancestor === false,
+    };
+  });
   res.json({ entries, error, cachedAt, repo: GITHUB_REPO });
 });
 

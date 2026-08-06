@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.1.0...fermentos-v1.1.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* **admin:** correct release-notes newer-than-current flag and hide cross-channel prereleases ([7157560](https://github.com/highaltidude/FermentOS/commit/7157560598199dff5b528db56c03f702a617d7d6))
+
 ## [1.1.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.0.1...fermentos-v1.1.0) (2026-08-06)
 
 

@@ -36,4 +36,37 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git merge --no-edit origin/main
-          git push origin beta
+
+      - name: Anchor beta prerelease to main's version
+        # config-beta.json uses release-please's "prerelease" versioning
+        # strategy: once a manifest version has a prerelease suffix, it only
+        # ever increments the trailing -betaN counter and never recomputes
+        # the X.Y.Z base from commit types. Left alone, beta stays on
+        # whatever base it was bootstrapped with forever (it sat at
+        # 1.0.0-beta1..5 while main went 1.0.0 -> 1.1.2). Whenever main's
+        # released version moves past beta's current base, reset beta's
+        # manifest to "<main-version>-beta1" so the next beta release reads
+        # as a prerelease of the version beta is actually built on. This is
+        # release-please's documented way to force the next version: editing
+        # the manifest directly, no matching tag required — the changelog
+        # commit range is still computed from the last tag it actually made.
+        run: |
+          set -euo pipefail
+          MANIFEST=.github/release-please/manifest-beta.json
+          MAIN_VERSION=$(jq -r '."."' .github/release-please/manifest-main.json)
+          BETA_VERSION=$(jq -r '."."' "$MANIFEST")
+          BETA_BASE=$(echo "$BETA_VERSION" | sed -E 's/-beta[0-9]+$//')
+
+          if [ "$MAIN_VERSION" != "$BETA_BASE" ] && \
+             [ "$(printf '%s\n%s\n' "$MAIN_VERSION" "$BETA_BASE" | sort -V | tail -n1)" = "$MAIN_VERSION" ]; then
+            echo "Anchoring beta ($BETA_VERSION) to main's v$MAIN_VERSION"
+            jq --arg v "${MAIN_VERSION}-beta1" '."." = $v' "$MANIFEST" > "$MANIFEST.tmp"
+            mv "$MANIFEST.tmp" "$MANIFEST"
+            git add "$MANIFEST"
+            git commit -m "chore(beta): anchor prerelease version to v${MAIN_VERSION}"
+          else
+            echo "Beta ($BETA_VERSION) already anchored at or ahead of main's v$MAIN_VERSION — nothing to do"
+          fi
+
+      - name: Push beta
+        run: git push origin beta

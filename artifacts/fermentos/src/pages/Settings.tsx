@@ -1650,9 +1650,14 @@ function escapeHtml(s: string) {
   );
 }
 function renderReleaseMarkdown(src: string): string {
+  // release-please always opens a release body with a heading like
+  // "## [1.1.1](compare-url) (2026-08-06)" — that duplicates the tag/name/
+  // date already shown in the row header above this body, so drop it before
+  // anything else runs. No-op if the body doesn't start with that pattern.
+  const body = src.replace(/^\s*#{1,3}\s+.*\(\d{4}-\d{2}-\d{2}\)\s*\n+/, "");
   // Escape first — every transform below operates on already-safe text and
   // emits a fixed set of tags, so nothing user-controlled reaches the DOM raw.
-  let html = escapeHtml(src);
+  let html = escapeHtml(body);
   // Fenced code blocks ```...``` (do this before inline so backticks inside
   // aren't mangled).
   html = html.replace(/```([\s\S]*?)```/g, (_, code) =>
@@ -1661,9 +1666,16 @@ function renderReleaseMarkdown(src: string): string {
   html = html.replace(/`([^`\n]+)`/g, '<code class="font-mono text-[11px] bg-muted/60 px-1 py-0.5 rounded">$1</code>');
   // Bold **...**
   html = html.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-  // Markdown links [text](url) — only allow http(s) URLs.
-  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, text, url) =>
-    `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-primary underline">${text}</a>`);
+  // Markdown links [text](url) — only allow http(s) URLs. PR references
+  // (#123) stay prominent; bare commit hashes are secondary metadata, so
+  // render them smaller/muted instead of competing equally for attention.
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, text, url) => {
+    const isCommitHash = /^[0-9a-f]{7,40}$/i.test(text);
+    const cls = isCommitHash
+      ? "font-mono text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
+      : "text-primary underline";
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="${cls}">${text}</a>`;
+  });
   // Bare URLs
   html = html.replace(/(^|[\s(])(https?:\/\/[^\s)]+)/g, (_m, pre, url) =>
     `${pre}<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-primary underline">${url}</a>`);
@@ -1753,6 +1765,10 @@ function SystemUpdatePanel() {
   const [releases, setReleases] = useState<ReleaseNote[]>([]);
   const [releasesError, setReleasesError] = useState<string | null>(null);
   const [releasesOpen, setReleasesOpen] = useState(false);
+  // Only the newest release auto-expands; older ones start collapsed to a
+  // summary row so opening "Release notes" doesn't dump every changelog at
+  // once. Tracks tags the user has manually expanded.
+  const [expandedReleaseTags, setExpandedReleaseTags] = useState<Set<string>>(new Set());
   const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
   const logBoxRef = useRef<HTMLPreElement>(null);
@@ -2170,14 +2186,9 @@ function SystemUpdatePanel() {
           </div>
           {version.message && <p className="text-xs text-muted-foreground truncate" title={version.message}>{version.message}</p>}
           {version.date && (
-            <p className="text-xs text-muted-foreground">
-              {new Date(version.date).toLocaleString()}
-            </p>
-          )}
-          {version.date && (
-            <span className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground" title={new Date(version.date).toLocaleString()}>
               Deployed {timeAgo(version.date)}
-            </span>
+            </p>
           )}
         </div>
         <Button size="sm" variant="outline" onClick={() => { fetchVersion(); fetchAuditCoverage(); }} disabled={checking || inProgress} title="Check GitHub for the latest version">
@@ -2314,13 +2325,23 @@ function SystemUpdatePanel() {
               {releasesError && (
                 <div className="px-3 py-2 text-xs text-muted-foreground">{releasesError}</div>
               )}
-              {releases.map((rel) => (
-                <div key={rel.tag + (rel.publishedAt ?? "")} className="px-3 py-2 space-y-1.5">
+              {releases.map((rel, i) => {
+                // Newest release is always shown expanded; older ones start
+                // collapsed to a summary row and expand on click.
+                const canToggle = i > 0;
+                const isExpanded = !canToggle || expandedReleaseTags.has(rel.tag);
+                const header = (
                   <div className="flex items-center gap-2 flex-wrap">
+                    {canToggle && (
+                      isExpanded
+                        ? <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
+                        : <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                    )}
                     <a
                       href={rel.url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="text-xs font-mono font-medium text-foreground hover:underline"
                     >
                       {rel.tag}
@@ -2344,18 +2365,37 @@ function SystemUpdatePanel() {
                       </span>
                     )}
                   </div>
-                  {rel.body ? (
-                    <div
-                      className="text-xs text-muted-foreground leading-relaxed max-h-48 overflow-auto"
-                      // Body is sanitized server-side-style: escapeHtml + whitelist
-                      // transforms in renderReleaseMarkdown. No raw HTML reaches here.
-                      dangerouslySetInnerHTML={{ __html: renderReleaseMarkdown(rel.body) }}
-                    />
-                  ) : (
-                    <div className="text-xs text-muted-foreground italic">No release notes.</div>
-                  )}
-                </div>
-              ))}
+                );
+                return (
+                  <div key={rel.tag + (rel.publishedAt ?? "")} className="px-3 py-2 space-y-1.5">
+                    {canToggle ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedReleaseTags((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(rel.tag)) next.delete(rel.tag); else next.add(rel.tag);
+                          return next;
+                        })}
+                        className="w-full text-left"
+                      >
+                        {header}
+                      </button>
+                    ) : header}
+                    {isExpanded && (
+                      rel.body ? (
+                        <div
+                          className="text-xs text-muted-foreground leading-relaxed max-h-48 overflow-auto"
+                          // Body is sanitized server-side-style: escapeHtml + whitelist
+                          // transforms in renderReleaseMarkdown. No raw HTML reaches here.
+                          dangerouslySetInnerHTML={{ __html: renderReleaseMarkdown(rel.body) }}
+                        />
+                      ) : (
+                        <div className="text-xs text-muted-foreground italic">No release notes.</div>
+                      )
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -2381,34 +2421,35 @@ function SystemUpdatePanel() {
         </div>
       )}
 
-      {preBackup !== "none" && phase === "idle" && !restartPending && (
-        <div className="flex items-start gap-2 text-xs text-muted-foreground rounded-md border border-dashed border-border p-3">
-          <Database className="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground" />
-          <span>
-            Pre-update backup is set to <span className="text-foreground font-medium">{preBackup === "sftp" ? "Push to SFTP" : "Save Local"}</span>.
-            If the backup fails the update will be aborted. Change this in <em>Backup Options</em> below.
-          </span>
-        </div>
-      )}
-
       {phase === "idle" && (
-        <div className="flex flex-wrap gap-2">
-          {version.updateAvailable ? (
-            <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled || (auditCoverage !== null && auditCoverage < 100)}>
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              Update now
-            </Button>
-          ) : restartPending ? (
-            <Button size="sm" onClick={handleRestartService} disabled={buttonsDisabled}>
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              Restart to apply
-            </Button>
-          ) : (
-            <Button size="sm" disabled>
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              Up to date
-            </Button>
+        <div className="space-y-1.5">
+          {preBackup !== "none" && !restartPending && (
+            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Database className="w-3 h-3 shrink-0 mt-0.5" />
+              <span>
+                Pre-update backup: <span className="text-foreground font-medium">{preBackup === "sftp" ? "Push to SFTP" : "Save Local"}</span>
+                {" "}— if it fails, the update is aborted. Change this in <em>Backup Options</em> below.
+              </span>
+            </p>
           )}
+          <div className="flex flex-wrap gap-2">
+            {version.updateAvailable ? (
+              <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled || (auditCoverage !== null && auditCoverage < 100)}>
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                Update now
+              </Button>
+            ) : restartPending ? (
+              <Button size="sm" onClick={handleRestartService} disabled={buttonsDisabled}>
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                Restart to apply
+              </Button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-500/15 border border-green-500/30 rounded-md px-2.5 py-1.5">
+                <CheckCircle className="w-3.5 h-3.5" />
+                Up to date
+              </span>
+            )}
+          </div>
         </div>
       )}
 

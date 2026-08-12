@@ -5,7 +5,7 @@ import path from "path";
 import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import errorHandler from "./middleware/errorHandler";
+import errorHandler from "./middlewares/errorHandler";
 
 const app: Express = express();
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta5](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.0.0-beta4...fermentos-v1.0.0-beta5) (2026-08-12)
+
+
+### Bug Fixes
+
+* **settings:** declutter the app updates panel ([f6a6182](https://github.com/highaltidude/FermentOS/commit/f6a618257a7fbecb507f4bf491b1d259e723c68d))
+
 ## [1.0.0-beta4](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.0.0-beta3...fermentos-v1.0.0-beta4) (2026-08-06)
 
 

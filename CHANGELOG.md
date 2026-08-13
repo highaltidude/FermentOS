@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.2.0...fermentos-v1.2.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **ci:** use a PAT for beta sync so pushes cascade to release-beta ([d385882](https://github.com/highaltidude/FermentOS/commit/d38588282746c777b058b26f3d59c558b7cc1167))
+
 ## [1.2.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.1.2...fermentos-v1.2.0) (2026-08-13)
 
 

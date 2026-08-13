@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.1.2...fermentos-v1.2.0) (2026-08-13)
+
+
+### Features
+
+* **system-health:** plain-language status, history trends, and global alert indicator ([73846e0](https://github.com/highaltidude/FermentOS/commit/73846e0373ffe4d040b17aaba6657f836faea020))
+
+
+### Bug Fixes
+
+* **ci:** anchor beta prerelease version to main after each sync ([ffd4614](https://github.com/highaltidude/FermentOS/commit/ffd4614743ee7d4dcf7cf1cec6fe63c03dea4a9e))
+
 ## [1.1.2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.1.1...fermentos-v1.1.2) (2026-08-12)
 
 

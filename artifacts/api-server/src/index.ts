@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { initBackupScheduler } from "./routes/backup";
 import { migrateLegacyStatuses } from "./lib/dataMigrations";
+import { startSystemHealthSampler } from "./services/systemHealthSampler";
 
 const rawPort = process.env["PORT"];
 
@@ -26,4 +27,5 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   initBackupScheduler().catch((e) => logger.error({ e }, "Backup scheduler init failed"));
   migrateLegacyStatuses().catch((e) => logger.error({ e }, "Legacy status migration failed"));
+  startSystemHealthSampler();
 });

@@ -38,7 +38,8 @@ services:
     volumes:
       - ./data/uploads:/app/data/uploads
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/healthz || exit 1"]
+      # node, not wget/curl — the runner image (node:20-slim) doesn't have either installed.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/api/healthz', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3

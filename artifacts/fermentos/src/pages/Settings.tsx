@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, Cpu, MemoryStick, HardDrive, Network, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer } from "lucide-react";
+import { useSearch } from "wouter";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -32,228 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-
-type SystemStats = {
-  hostname: string;
-  uptime: number;
-  loadAvg: [number, number, number];
-  cpu: { model: string; cores: number; usagePercent: number | null };
-  memory: { totalMB: number; usedMB: number; freeMB: number; usedPercent: number };
-  disk: { totalGB: number; usedGB: number; freeGB: number; usedPercent: number } | null;
-  network: Array<{ name: string; rxBytes: number; txBytes: number; rxBytesPerSec: number; txBytesPerSec: number }>;
-  temperatureCelsius: number | null;
-  containerMemoryLimitMB: number | null;
-  isDocker: boolean;
-};
-
-function formatUptime(seconds: number) {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const parts = [];
-  if (d) parts.push(`${d}d`);
-  if (h) parts.push(`${h}h`);
-  parts.push(`${m}m`);
-  return parts.join(" ");
-}
-
-function formatBytes(bytes: number) {
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB/s`;
-  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(0)} KB/s`;
-  return `${bytes} B/s`;
-}
-
-function UsageBar({ percent, color = "bg-primary" }: { percent: number; color?: string }) {
-  const pct = Math.min(100, Math.max(0, percent));
-  const barColor = pct > 85 ? "bg-destructive" : pct > 60 ? "bg-amber-500" : color;
-  return (
-    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-      <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
-function StatCard({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-background border border-border rounded-lg p-3 space-y-2">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-        {icon}
-        {label}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SystemStatsPanel() {
-  const [stats, setStats] = useState<SystemStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fetchingRef = useRef(false);
-
-  const fetchStats = async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-    try {
-      const res = await fetch(`${import.meta.env.BASE_URL}api/system/stats`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: SystemStats = await res.json();
-      setStats(data);
-      setError(null);
-      setLastUpdated(new Date());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-    } finally {
-      setLoading(false);
-      fetchingRef.current = false;
-    }
-  };
-
-  useEffect(() => {
-    fetchStats();
-    intervalRef.current = setInterval(fetchStats, 5000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-2 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
-      </div>
-    );
-  }
-
-  if (error || !stats) {
-    return <p className="text-sm text-muted-foreground text-center py-4">Could not load system stats: {error}</p>;
-  }
-
-  const primaryNet = stats.network[0];
-
-  const memoryPressurePercent = (stats.isDocker && stats.containerMemoryLimitMB)
-    ? Math.round((stats.memory.usedMB / stats.containerMemoryLimitMB) * 100)
-    : stats.memory.usedPercent;
-
-  const maxUsage = Math.max(
-    stats.cpu.usagePercent ?? 0,
-    memoryPressurePercent,
-    stats.disk?.usedPercent ?? 0,
-    stats.temperatureCelsius !== null ? (stats.temperatureCelsius / 85) * 100 : 0,
-  );
-  const statusBadge = maxUsage > 85
-    ? { label: "Critical", cls: "bg-destructive/15 text-destructive border-destructive/30", Icon: AlertCircle }
-    : maxUsage > 60
-    ? { label: "Warning", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30", Icon: AlertTriangle }
-    : { label: "Healthy", cls: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30", Icon: CheckCircle };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${statusBadge.cls}`}>
-          <statusBadge.Icon className="w-3 h-3" />
-          {statusBadge.label}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard icon={<Cpu className="w-3.5 h-3.5" />} label="CPU">
-          <div className="space-y-1">
-            <div className="flex justify-between items-baseline">
-              <span className="text-lg font-bold text-foreground">{stats.cpu.usagePercent ?? "—"}%</span>
-              <span className="text-xs text-muted-foreground">{stats.cpu.cores} cores</span>
-            </div>
-            <UsageBar percent={stats.cpu.usagePercent ?? 0} />
-            <div className="text-xs text-muted-foreground truncate" title={stats.cpu.model}>{stats.cpu.model}</div>
-            <div className="text-xs text-muted-foreground">Load: {stats.loadAvg.map((v) => v.toFixed(2)).join(" / ")}</div>
-          </div>
-        </StatCard>
-
-        {stats.temperatureCelsius !== null && (
-          <StatCard icon={<Thermometer className="w-3.5 h-3.5" />} label="Temperature">
-            <div className="space-y-1">
-              <div className={`text-lg font-bold ${
-                stats.temperatureCelsius >= 75 ? "text-destructive"
-                : stats.temperatureCelsius >= 60 ? "text-amber-500"
-                : "text-foreground"
-              }`}>
-                {stats.temperatureCelsius.toFixed(1)}°C
-              </div>
-              <UsageBar
-                percent={(stats.temperatureCelsius / 85) * 100}
-                color="bg-green-500"
-              />
-              <div className="text-xs text-muted-foreground">
-                {stats.temperatureCelsius >= 75 ? "Thermal throttle risk"
-                 : stats.temperatureCelsius >= 60 ? "Running warm"
-                 : "Normal"}
-              </div>
-            </div>
-          </StatCard>
-        )}
-
-        <StatCard icon={<MemoryStick className="w-3.5 h-3.5" />} label="Memory">
-          <div className="space-y-1">
-            <div className="flex justify-between items-baseline">
-              <span className="text-lg font-bold text-foreground">{stats.memory.usedPercent}%</span>
-              <span className="text-xs text-muted-foreground">{stats.memory.usedMB} / {stats.memory.totalMB} MB</span>
-            </div>
-            <UsageBar percent={memoryPressurePercent} />
-            <div className="text-xs text-muted-foreground">{stats.memory.freeMB} MB free</div>
-            {stats.isDocker && stats.containerMemoryLimitMB !== null && (
-              <div className="text-xs text-muted-foreground">Container limit: {stats.containerMemoryLimitMB} MB</div>
-            )}
-          </div>
-        </StatCard>
-
-        {stats.disk && (
-          <StatCard icon={<HardDrive className="w-3.5 h-3.5" />} label="Disk (/)">
-            <div className="space-y-1">
-              <div className="flex justify-between items-baseline">
-                <span className="text-lg font-bold text-foreground">{stats.disk.usedPercent}%</span>
-                <span className="text-xs text-muted-foreground">{stats.disk.usedGB} / {stats.disk.totalGB} GB</span>
-              </div>
-              <UsageBar percent={stats.disk.usedPercent} />
-              <div className="text-xs text-muted-foreground">{stats.disk.freeGB} GB free</div>
-            </div>
-          </StatCard>
-        )}
-
-        <StatCard icon={<Network className="w-3.5 h-3.5" />} label={primaryNet ? `Network (${primaryNet.name})` : "Network"}>
-          {primaryNet ? (
-            <div className="space-y-1">
-              <div className="flex justify-between text-sm">
-                <div>
-                  <div className="text-xs text-muted-foreground">↓ RX</div>
-                  <div className="font-semibold text-foreground">{formatBytes(primaryNet.rxBytesPerSec)}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-muted-foreground">↑ TX</div>
-                  <div className="font-semibold text-foreground">{formatBytes(primaryNet.txBytesPerSec)}</div>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground pt-0.5">
-                Total RX: {(primaryNet.rxBytes / 1e9).toFixed(2)} GB &nbsp;·&nbsp; TX: {(primaryNet.txBytes / 1e9).toFixed(2)} GB
-              </div>
-            </div>
-          ) : (
-            <div className="text-xs text-muted-foreground">No network interface data</div>
-          )}
-        </StatCard>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <Clock className="w-3 h-3" />
-          Uptime: {formatUptime(stats.uptime)} · Hostname: {stats.hostname}
-        </div>
-        <div className="flex items-center gap-1">
-          <RefreshCw className="w-3 h-3" />
-          {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Updating…"} · auto-refreshes every 5s
-        </div>
-      </div>
-    </div>
-  );
-}
+import { SystemHealthPanel } from "@/components/SystemHealthPanel";
 
 type SftpForm = {
   host: string; port: string; username: string; password: string;
@@ -3590,8 +3370,16 @@ export default function Settings() {
     createMutation.mutate({ data: { name } });
   };
 
-  const [tab, setTab] = useState<SettingsTab>("brewing");
-  const [systemSection, setSystemSection] = useState<"health" | "updates" | "backups" | "connectivity" | "power">("health");
+  const search = useSearch();
+  const searchParams = useMemo(() => new URLSearchParams(search), [search]);
+  const [tab, setTab] = useState<SettingsTab>(() => (searchParams.get("tab") === "system" ? "system" : "brewing"));
+  const [systemSection, setSystemSection] = useState<"health" | "updates" | "backups" | "connectivity" | "power">(
+    () => {
+      const section = searchParams.get("section");
+      const valid = ["health", "updates", "backups", "connectivity", "power"];
+      return valid.includes(section ?? "") ? (section as any) : "health";
+    },
+  );
 
   const beerStylesCard = (
     <div className="bg-card border border-card-border rounded-lg">
@@ -3815,7 +3603,7 @@ export default function Settings() {
                 </div>
               </div>
               <div className="p-4">
-                <SystemStatsPanel />
+                <SystemHealthPanel onGoToBackups={() => setSystemSection("backups")} />
               </div>
             </div>
           )}

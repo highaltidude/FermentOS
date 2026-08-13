@@ -11,7 +11,7 @@ import { appConfigTable } from "@workspace/db/schema";
 import { BACKUP_REGISTRY, EXCLUDED_TABLES } from "@workspace/db/backup-registry";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
-import { runRetentionCleanup } from "../services/readingRetention.js";
+import { runRetentionCleanup, pruneSystemHealthSamples } from "../services/readingRetention.js";
 
 const router = Router();
 
@@ -297,6 +297,9 @@ export async function initBackupScheduler() {
     runRetentionCleanup()
       .then((result) => logger.info(result, "Nightly reading retention cleanup"))
       .catch((e) => logger.error({ e }, "Reading retention cleanup error"));
+    pruneSystemHealthSamples()
+      .then((result) => logger.info(result, "Nightly system health sample cleanup"))
+      .catch((e) => logger.error({ e }, "System health sample cleanup error"));
   });
 }
 

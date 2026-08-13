@@ -28,6 +28,14 @@ jobs:
         with:
           ref: beta
           fetch-depth: 0
+          # Pushes made with the default GITHUB_TOKEN don't trigger other
+          # workflows (GitHub's anti-recursion guardrail) — without this,
+          # the anchor commit below lands on beta but release-beta.yml never
+          # re-runs to pick it up, leaving the beta release PR stale. A PAT
+          # is a normal user token, so its pushes cascade like any other.
+          # Falls back to the default token if SYNC_PAT isn't set, so this
+          # keeps working (without cascading) until the secret is added.
+          token: ${{ secrets.SYNC_PAT || github.token }}
 
       - name: Merge main into beta
         run: |

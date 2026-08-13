@@ -43,6 +43,7 @@ import type {
   FermentTempUnitResponse,
   FermentationReading,
   GetISpindelStatus200,
+  GetSystemHealthHistoryParams,
   GetUpcomingBrewsParams,
   HaStatusResponse,
   HealthStatus,
@@ -70,6 +71,8 @@ import type {
   SimulateISpindelReading200,
   SimulateReadingBody,
   StyleCount,
+  SystemHealthSample,
+  SystemStats,
   TempAlertReadingsBody,
   TempAlertReadingsResponse,
   UnitSystemBody,
@@ -5809,6 +5812,184 @@ export function useListISpindelDeviceReadings<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get live host system stats (CPU, memory, disk, network, temperature)
+ */
+export const getGetSystemStatsUrl = () => {
+  return `/api/system/stats`;
+};
+
+export const getSystemStats = async (
+  options?: RequestInit,
+): Promise<SystemStats> => {
+  return customFetch<SystemStats>(getGetSystemStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSystemStatsQueryKey = () => {
+  return [`/api/system/stats`] as const;
+};
+
+export const getGetSystemStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSystemStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSystemStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSystemStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSystemStats>>> = ({
+    signal,
+  }) => getSystemStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSystemStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSystemStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSystemStats>>
+>;
+export type GetSystemStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get live host system stats (CPU, memory, disk, network, temperature)
+ */
+
+export function useGetSystemStats<
+  TData = Awaited<ReturnType<typeof getSystemStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSystemStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSystemStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get recent periodic system health samples for trend charts
+ */
+export const getGetSystemHealthHistoryUrl = (
+  params?: GetSystemHealthHistoryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/system/health-history?${stringifiedParams}`
+    : `/api/system/health-history`;
+};
+
+export const getSystemHealthHistory = async (
+  params?: GetSystemHealthHistoryParams,
+  options?: RequestInit,
+): Promise<SystemHealthSample[]> => {
+  return customFetch<SystemHealthSample[]>(
+    getGetSystemHealthHistoryUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetSystemHealthHistoryQueryKey = (
+  params?: GetSystemHealthHistoryParams,
+) => {
+  return [`/api/system/health-history`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetSystemHealthHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSystemHealthHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetSystemHealthHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSystemHealthHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSystemHealthHistoryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSystemHealthHistory>>
+  > = ({ signal }) =>
+    getSystemHealthHistory(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSystemHealthHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSystemHealthHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSystemHealthHistory>>
+>;
+export type GetSystemHealthHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get recent periodic system health samples for trend charts
+ */
+
+export function useGetSystemHealthHistory<
+  TData = Awaited<ReturnType<typeof getSystemHealthHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetSystemHealthHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSystemHealthHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSystemHealthHistoryQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

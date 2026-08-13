@@ -1,6 +1,17 @@
 import { eq, lt, and, isNull, or, inArray } from "drizzle-orm";
-import { db, appConfigTable, sensorReadingsTable, fermentationReadingsTable, brewSessionsTable } from "@workspace/db";
+import {
+  db,
+  appConfigTable,
+  sensorReadingsTable,
+  fermentationReadingsTable,
+  brewSessionsTable,
+  systemHealthSamplesTable,
+} from "@workspace/db";
 import { logger } from "../lib/logger.js";
+
+// Fixed retention window for system health history samples, independent of
+// the user-configurable reading_retention_days setting above.
+const SYSTEM_HEALTH_RETENTION_DAYS = 14;
 
 export const CONFIG_KEY = "reading_retention_days";
 
@@ -65,4 +76,15 @@ export async function runRetentionCleanup(): Promise<{ deletedFermentation: numb
 
   logger.info({ cutoff, deletedFermentation, deletedSensor }, "Reading retention cleanup complete");
   return { deletedFermentation, deletedSensor };
+}
+
+export async function pruneSystemHealthSamples(): Promise<{ deleted: number }> {
+  const cutoff = new Date(Date.now() - SYSTEM_HEALTH_RETENTION_DAYS * 86_400_000);
+  const result = await db
+    .delete(systemHealthSamplesTable)
+    .where(lt(systemHealthSamplesTable.sampledAt, cutoff))
+    .returning({ id: systemHealthSamplesTable.id });
+
+  logger.info({ cutoff, deleted: result.length }, "System health sample retention cleanup complete");
+  return { deleted: result.length };
 }

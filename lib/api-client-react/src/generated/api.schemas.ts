@@ -756,6 +756,60 @@ export interface HaDevice {
 
 export type HaStatusResponse = HaDevice[];
 
+export type SystemStatsCpu = {
+  model: string;
+  cores: number;
+  usagePercent: number | null;
+};
+
+export type SystemStatsMemory = {
+  totalMB: number;
+  usedMB: number;
+  freeMB: number;
+  usedPercent: number;
+};
+
+export type SystemStatsDisk = {
+  totalGB: number;
+  usedGB: number;
+  freeGB: number;
+  usedPercent: number;
+} | null;
+
+export type SystemStatsNetworkItem = {
+  name: string;
+  rxBytes: number;
+  txBytes: number;
+  rxBytesPerSec: number;
+  txBytesPerSec: number;
+};
+
+export interface SystemStats {
+  hostname: string;
+  uptime: number;
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  loadAvg: number[];
+  cpu: SystemStatsCpu;
+  memory: SystemStatsMemory;
+  disk: SystemStatsDisk;
+  network: SystemStatsNetworkItem[];
+  temperatureCelsius: number | null;
+  containerMemoryLimitMB: number | null;
+  isDocker: boolean;
+}
+
+export interface SystemHealthSample {
+  id: number;
+  sampledAt: string;
+  cpuPercent: number | null;
+  memoryPercent: number;
+  diskPercent: number | null;
+  temperatureCelsius: number | null;
+}
+
 export type GetUpcomingBrewsParams = {
   /**
    * @minimum 1
@@ -817,3 +871,11 @@ export const ListISpindelDeviceReadingsSort = {
   asc: "asc",
   desc: "desc",
 } as const;
+
+export type GetSystemHealthHistoryParams = {
+  /**
+   * @minimum 1
+   * @maximum 336
+   */
+  hours?: number;
+};

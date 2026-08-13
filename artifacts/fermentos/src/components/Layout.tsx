@@ -1,6 +1,7 @@
 import { Link, useRoute } from "wouter";
 import { useEffect, useState } from "react";
 import { Beer, BookOpen, Package, LayoutDashboard, Wrench, Settings, Sun, Moon, Calculator } from "lucide-react";
+import { useSystemHealth } from "@/hooks/useSystemHealth";
 
 const logoUrl = `${import.meta.env.BASE_URL}fermentos-logo.png`;
 
@@ -51,7 +52,9 @@ const bottomNavItems = [
   { href: "/equipment", label: "Equipment", icon: Wrench },
 ];
 
-function NavItem({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) {
+function NavItem({
+  href, label, icon: Icon, indicator,
+}: { href: string; label: string; icon: React.ElementType; indicator?: "warning" | "critical" }) {
   const [isActive] = useRoute(href === "/" ? "/" : `${href}*`);
   return (
     <Link href={href}>
@@ -62,21 +65,41 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         }`}
       >
-        <Icon className="w-4 h-4 shrink-0" />
+        <span className="relative shrink-0">
+          <Icon className="w-4 h-4" />
+          {indicator && (
+            <span
+              className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-sidebar ${
+                indicator === "critical" ? "bg-destructive" : "bg-amber-500"
+              }`}
+            />
+          )}
+        </span>
         {label}
       </span>
     </Link>
   );
 }
 
-function BottomNavItem({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) {
+function BottomNavItem({
+  href, label, icon: Icon, indicator,
+}: { href: string; label: string; icon: React.ElementType; indicator?: "warning" | "critical" }) {
   const [isActive] = useRoute(href === "/" ? "/" : `${href}*`);
   return (
     <Link href={href}>
       <span className={`flex flex-col items-center gap-0.5 px-3 py-2 cursor-pointer transition-colors ${
         isActive ? "text-primary" : "text-muted-foreground"
       }`}>
-        <Icon className="w-5 h-5" />
+        <span className="relative">
+          <Icon className="w-5 h-5" />
+          {indicator && (
+            <span
+              className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-sidebar ${
+                indicator === "critical" ? "bg-destructive" : "bg-amber-500"
+              }`}
+            />
+          )}
+        </span>
         <span className="text-[10px] font-medium leading-tight">{label}</span>
       </span>
     </Link>
@@ -88,6 +111,13 @@ function BottomNavItem({ href, label, icon: Icon }: { href: string; label: strin
 // are now grouped with the other system-level admin tools.
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  // Slower than the 5s poll used on the open Health panel — a passive sidebar
+  // dot doesn't need near-real-time freshness, and this cuts background
+  // request volume against every other page in the app.
+  const { status } = useSystemHealth({ refetchInterval: 60_000 });
+  const healthIndicator = status && status.overall !== "ok" ? status.overall : undefined;
+  const settingsHref = healthIndicator ? "/settings?tab=system&section=health" : "/settings";
+
   return (
     <div className="flex min-h-screen bg-background">
       <ThemeToggle />
@@ -101,7 +131,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => (
             <NavItem key={item.href} {...item} />
           ))}
-          <NavItem href="/settings" label="Settings" icon={Settings} />
+          <NavItem href={settingsHref} label="Settings" icon={Settings} indicator={healthIndicator} />
         </nav>
       </aside>
 
@@ -120,7 +150,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {bottomNavItems.map((item) => (
           <BottomNavItem key={item.href} {...item} />
         ))}
-        <BottomNavItem href="/settings" label="Settings" icon={Settings} />
+        <BottomNavItem href={settingsHref} label="Settings" icon={Settings} indicator={healthIndicator} />
       </nav>
     </div>
   );

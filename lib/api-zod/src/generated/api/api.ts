@@ -1915,3 +1915,75 @@ export const ListISpindelDeviceReadingsResponse = zod.object({
   limit: zod.number(),
   offset: zod.number(),
 });
+
+/**
+ * @summary Get live host system stats (CPU, memory, disk, network, temperature)
+ */
+export const getSystemStatsResponseLoadAvgMin = 3;
+export const getSystemStatsResponseLoadAvgMax = 3;
+
+export const GetSystemStatsResponse = zod.object({
+  hostname: zod.string(),
+  uptime: zod.number(),
+  loadAvg: zod
+    .array(zod.number())
+    .min(getSystemStatsResponseLoadAvgMin)
+    .max(getSystemStatsResponseLoadAvgMax),
+  cpu: zod.object({
+    model: zod.string(),
+    cores: zod.number(),
+    usagePercent: zod.number().nullable(),
+  }),
+  memory: zod.object({
+    totalMB: zod.number(),
+    usedMB: zod.number(),
+    freeMB: zod.number(),
+    usedPercent: zod.number(),
+  }),
+  disk: zod
+    .object({
+      totalGB: zod.number(),
+      usedGB: zod.number(),
+      freeGB: zod.number(),
+      usedPercent: zod.number(),
+    })
+    .nullable(),
+  network: zod.array(
+    zod.object({
+      name: zod.string(),
+      rxBytes: zod.number(),
+      txBytes: zod.number(),
+      rxBytesPerSec: zod.number(),
+      txBytesPerSec: zod.number(),
+    }),
+  ),
+  temperatureCelsius: zod.number().nullable(),
+  containerMemoryLimitMB: zod.number().nullable(),
+  isDocker: zod.boolean(),
+});
+
+/**
+ * @summary Get recent periodic system health samples for trend charts
+ */
+export const getSystemHealthHistoryQueryHoursDefault = 24;
+export const getSystemHealthHistoryQueryHoursMax = 336;
+
+export const GetSystemHealthHistoryQueryParams = zod.object({
+  hours: zod.coerce
+    .number()
+    .min(1)
+    .max(getSystemHealthHistoryQueryHoursMax)
+    .default(getSystemHealthHistoryQueryHoursDefault),
+});
+
+export const GetSystemHealthHistoryResponseItem = zod.object({
+  id: zod.number(),
+  sampledAt: zod.string().datetime({}),
+  cpuPercent: zod.number().nullable(),
+  memoryPercent: zod.number(),
+  diskPercent: zod.number().nullable(),
+  temperatureCelsius: zod.number().nullable(),
+});
+export const GetSystemHealthHistoryResponse = zod.array(
+  GetSystemHealthHistoryResponseItem,
+);

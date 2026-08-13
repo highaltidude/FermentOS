@@ -30,6 +30,8 @@ tags:
     description: Sensor device management (iSpindel, Tilt, RAPT Pill, etc.)
   - name: integrations
     description: Third-party device integrations and telemetry ingest
+  - name: system
+    description: Host system stats and health history
 paths:
   /healthz:
     get:
@@ -1195,6 +1197,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ISpindelReadingsPage"
+
+  /system/stats:
+    get:
+      operationId: getSystemStats
+      tags: [system]
+      summary: Get live host system stats (CPU, memory, disk, network, temperature)
+      responses:
+        "200":
+          description: Live system stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStats"
+
+  /system/health-history:
+    get:
+      operationId: getSystemHealthHistory
+      tags: [system]
+      summary: Get recent periodic system health samples for trend charts
+      parameters:
+        - name: hours
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 24
+            minimum: 1
+            maximum: 336
+      responses:
+        "200":
+          description: Ordered list of samples (oldest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SystemHealthSample"
 
 components:
   parameters:
@@ -2606,3 +2645,112 @@ components:
       type: array
       items:
         $ref: "#/components/schemas/HaDevice"
+
+    SystemStats:
+      type: object
+      properties:
+        hostname:
+          type: string
+        uptime:
+          type: integer
+        loadAvg:
+          type: array
+          items:
+            type: number
+          minItems: 3
+          maxItems: 3
+        cpu:
+          type: object
+          properties:
+            model:
+              type: string
+            cores:
+              type: integer
+            usagePercent:
+              type: integer
+              nullable: true
+          required: [model, cores, usagePercent]
+        memory:
+          type: object
+          properties:
+            totalMB:
+              type: integer
+            usedMB:
+              type: integer
+            freeMB:
+              type: integer
+            usedPercent:
+              type: integer
+          required: [totalMB, usedMB, freeMB, usedPercent]
+        disk:
+          type: object
+          nullable: true
+          properties:
+            totalGB:
+              type: number
+            usedGB:
+              type: number
+            freeGB:
+              type: number
+            usedPercent:
+              type: integer
+          required: [totalGB, usedGB, freeGB, usedPercent]
+        network:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              rxBytes:
+                type: integer
+              txBytes:
+                type: integer
+              rxBytesPerSec:
+                type: integer
+              txBytesPerSec:
+                type: integer
+            required: [name, rxBytes, txBytes, rxBytesPerSec, txBytesPerSec]
+        temperatureCelsius:
+          type: number
+          nullable: true
+        containerMemoryLimitMB:
+          type: integer
+          nullable: true
+        isDocker:
+          type: boolean
+      required:
+        [
+          hostname,
+          uptime,
+          loadAvg,
+          cpu,
+          memory,
+          disk,
+          network,
+          temperatureCelsius,
+          containerMemoryLimitMB,
+          isDocker,
+        ]
+
+    SystemHealthSample:
+      type: object
+      properties:
+        id:
+          type: integer
+        sampledAt:
+          type: string
+          format: date-time
+        cpuPercent:
+          type: number
+          nullable: true
+        memoryPercent:
+          type: number
+        diskPercent:
+          type: number
+          nullable: true
+        temperatureCelsius:
+          type: number
+          nullable: true
+      required:
+        [id, sampledAt, cpuPercent, memoryPercent, diskPercent, temperatureCelsius]

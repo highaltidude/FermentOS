@@ -7,11 +7,54 @@ const WINDOWS = [
   { label: "7d", hours: 24 * 7 },
 ] as const;
 
+type ChartPoint = { t: string; cpu: number | null; memory: number; disk: number | null; temperature: number | null };
+
 function formatTick(iso: string, hours: number) {
   const d = new Date(iso);
   return hours <= 24
     ? d.toLocaleTimeString("en-US", { hour: "numeric" })
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function SingleMetricTrendCard({
+  title,
+  data,
+  dataKey,
+  unit,
+  color,
+  domain,
+  available,
+}: {
+  title: string;
+  data: ChartPoint[];
+  dataKey: "disk" | "temperature";
+  unit: string;
+  color: string;
+  domain?: [number, number];
+  available: boolean;
+}) {
+  return (
+    <div className="border border-border rounded-lg p-3">
+      <p className="text-xs font-medium text-muted-foreground mb-2">{title}</p>
+      {available ? (
+        <ResponsiveContainer width="100%" height={110}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
+            <XAxis dataKey="t" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
+            <YAxis domain={domain ?? ["auto", "auto"]} tick={{ fontSize: 9 }} unit={unit} width={32} />
+            <Tooltip
+              labelStyle={{ fontSize: 10 }}
+              contentStyle={{ fontSize: 10 }}
+              formatter={(v: number) => [`${v.toFixed(unit === "%" ? 0 : 1)}${unit}`, title]}
+            />
+            <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={1.5} dot={false} connectNulls />
+          </LineChart>
+        </ResponsiveContainer>
+      ) : (
+        <p className="text-xs text-muted-foreground py-6 text-center">Not available on this host</p>
+      )}
+    </div>
+  );
 }
 
 export function HealthHistoryChart() {
@@ -21,7 +64,7 @@ export function HealthHistoryChart() {
     { query: { refetchInterval: 5 * 60 * 1000, queryKey: getGetSystemHealthHistoryQueryKey({ hours }) } },
   );
 
-  const chartData = (samples ?? []).map((s) => ({
+  const chartData: ChartPoint[] = (samples ?? []).map((s) => ({
     t: formatTick(s.sampledAt, hours),
     cpu: s.cpuPercent,
     memory: s.memoryPercent,
@@ -57,7 +100,7 @@ export function HealthHistoryChart() {
       {chartData.length < 2 ? (
         <p className="text-xs text-muted-foreground py-2">Not enough history yet — check back in a few minutes.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="border border-border rounded-lg p-3">
             <p className="text-xs font-medium text-muted-foreground mb-2">CPU &amp; Memory</p>
             <ResponsiveContainer width="100%" height={110}>
@@ -76,32 +119,24 @@ export function HealthHistoryChart() {
             </ResponsiveContainer>
           </div>
 
-          <div className="border border-border rounded-lg p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Disk &amp; Temperature</p>
-            {hasDisk || hasTemp ? (
-              <ResponsiveContainer width="100%" height={110}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
-                  <XAxis dataKey="t" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                  {hasDisk && <YAxis yAxisId="disk" domain={[0, 100]} tick={{ fontSize: 9 }} unit="%" width={32} />}
-                  {hasTemp && (
-                    <YAxis yAxisId="temp" orientation="right" domain={["auto", "auto"]} tick={{ fontSize: 9 }} unit="°" width={30} />
-                  )}
-                  <Tooltip
-                    labelStyle={{ fontSize: 10 }}
-                    contentStyle={{ fontSize: 10 }}
-                    formatter={(v: number, n: string) => (n === "disk" ? [`${v.toFixed(0)}%`, "Disk"] : [`${v.toFixed(1)}°`, "Temp"])}
-                  />
-                  {hasDisk && <Line yAxisId="disk" type="monotone" dataKey="disk" stroke="#7c3aed" strokeWidth={1.5} dot={false} connectNulls />}
-                  {hasTemp && (
-                    <Line yAxisId="temp" type="monotone" dataKey="temperature" stroke="#dc2626" strokeWidth={1.5} dot={false} connectNulls />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-xs text-muted-foreground py-6 text-center">Not available on this host</p>
-            )}
-          </div>
+          <SingleMetricTrendCard
+            title="Disk"
+            data={chartData}
+            dataKey="disk"
+            unit="%"
+            color="#7c3aed"
+            domain={[0, 100]}
+            available={hasDisk}
+          />
+
+          <SingleMetricTrendCard
+            title="Temperature"
+            data={chartData}
+            dataKey="temperature"
+            unit="°"
+            color="#dc2626"
+            available={hasTemp}
+          />
         </div>
       )}
     </div>

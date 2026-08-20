@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.2.1...fermentos-v1.2.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* **system-health:** split disk and temperature into separate trend charts ([64d261c](https://github.com/highaltidude/FermentOS/commit/64d261c247daf8706585ab432f6d20438395c859))
+
 ## [1.2.1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.2.0...fermentos-v1.2.1) (2026-08-13)
 
 

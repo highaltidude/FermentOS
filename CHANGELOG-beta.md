@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0-beta3](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.3.0-beta2...fermentos-v1.3.0-beta3) (2026-08-20)
+
+
+### Features
+
+* **settings:** show release version instead of commit as primary label ([d49c858](https://github.com/highaltidude/FermentOS/commit/d49c858827568817de0ea5aa2b9b69eaa2cc03e8))
+
 ## [1.3.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.3.0-beta1...fermentos-v1.3.0-beta2) (2026-08-20)
 
 

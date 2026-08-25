@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearch } from "wouter";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer, Tag } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -1940,13 +1940,30 @@ function SystemUpdatePanel() {
   // browser's URL so it works regardless of the homelab's hostname / port.
   const repairCurlCmd = `curl -sSL ${window.location.origin}${BASE}api/admin/repair-script | sudo bash`;
 
+  // The newest release entry that isn't confirmed newer than what's actually
+  // running (releases are newest-first) — i.e. the release version this
+  // build is on. Falls back to the raw commit identity below when no match
+  // is available (offline, rate-limited, or every fetched release genuinely
+  // is newer).
+  const currentRelease = releases.find((r) => !r.isNewerThanCurrent);
+  const currentVersionLabel = currentRelease?.tag.replace(/^fermentos-/, "");
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2 text-sm">
-            <GitBranch className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <span className="font-mono text-foreground">{version.hash}</span>
+          {currentVersionLabel && (
+            <div className="flex items-center gap-2 text-sm">
+              <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="font-semibold text-foreground">{currentVersionLabel}</span>
+              {version.updateAvailable && phase === "idle" && (
+                <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">Update available</span>
+              )}
+            </div>
+          )}
+          <div className={`flex items-center gap-2 ${currentVersionLabel ? "text-xs text-muted-foreground" : "text-sm"}`}>
+            <GitBranch className={currentVersionLabel ? "w-3 h-3 shrink-0" : "w-3.5 h-3.5 text-muted-foreground shrink-0"} />
+            <span className={currentVersionLabel ? "font-mono" : "font-mono text-foreground"}>{version.hash}</span>
             <button
               type="button"
               title="Copy commit hash"
@@ -1957,10 +1974,12 @@ function SystemUpdatePanel() {
                 setTimeout(() => setCopiedHash(false), 2000);
               }}
             >
-              {copiedHash ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedHash
+                ? <Check className={currentVersionLabel ? "w-3 h-3" : "w-3.5 h-3.5"} />
+                : <Copy className={currentVersionLabel ? "w-3 h-3" : "w-3.5 h-3.5"} />}
             </button>
-            <span className="text-xs text-muted-foreground">on {version.branch}</span>
-            {version.updateAvailable && phase === "idle" && (
+            <span className={currentVersionLabel ? "" : "text-xs text-muted-foreground"}>on {version.branch}</span>
+            {!currentVersionLabel && version.updateAvailable && phase === "idle" && (
               <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">Update available</span>
             )}
           </div>

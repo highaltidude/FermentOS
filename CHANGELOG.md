@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.3.0...fermentos-v1.4.0) (2026-08-26)
+
+
+### Features
+
+* **brew-sessions:** add tasting scorecard with 1-10 overall rating ([83b9808](https://github.com/highaltidude/FermentOS/commit/83b980876c82465ca0788e334956d171b45fcf1e))
+* **brew-sessions:** replace inline rating form with guided walkthrough ([e0fd77e](https://github.com/highaltidude/FermentOS/commit/e0fd77e370e71f79b7630ebba4380131c92a5177))
+
 ## [1.3.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.2.2...fermentos-v1.3.0) (2026-08-25)
 
 

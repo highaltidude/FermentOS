@@ -36,7 +36,10 @@ router.get("/recipes", async (req, res) => {
   const stats = await db
     .select({
       recipeId: brewSessionsTable.recipeId,
-      avgRating: avg(brewSessionsTable.rating),
+      avgScore: avg(brewSessionsTable.overallScore),
+      // count() over a column skips nulls, so this is the number of *rated*
+      // batches while batchCount below stays the total.
+      ratedBatchCount: count(brewSessionsTable.overallScore),
       batchCount: count(brewSessionsTable.id),
     })
     .from(brewSessionsTable)
@@ -63,7 +66,8 @@ router.get("/recipes", async (req, res) => {
       const s = statsMap.get(r.id);
       return {
         ...r,
-        avgRating: s?.avgRating != null ? Math.round(Number(s.avgRating) * 10) / 10 : null,
+        avgScore: s?.avgScore != null ? Math.round(Number(s.avgScore) * 10) / 10 : null,
+        ratedBatchCount: s?.ratedBatchCount ?? 0,
         batchCount: s?.batchCount ?? 0,
       };
     })
@@ -112,7 +116,41 @@ router.get("/recipes/:id", async (req, res) => {
     .where(eq(recipeStepsTable.recipeId, params.data.id))
     .orderBy(asc(recipeStepsTable.position), asc(recipeStepsTable.id));
 
-  return res.json({ ...recipe, ingredients, steps });
+  // Track record: every scored batch brewed from this recipe, oldest first.
+  const ratedBatches = await db
+    .select({
+      id: brewSessionsTable.id,
+      brewDate: brewSessionsTable.brewDate,
+      recipeName: brewSessionsTable.recipeName,
+      overallScore: brewSessionsTable.overallScore,
+    })
+    .from(brewSessionsTable)
+    .where(
+      and(
+        eq(brewSessionsTable.recipeId, params.data.id),
+        sql`${brewSessionsTable.overallScore} is not null`,
+      ),
+    )
+    .orderBy(asc(brewSessionsTable.brewDate), asc(brewSessionsTable.id));
+
+  const [stats] = await db
+    .select({
+      avgScore: avg(brewSessionsTable.overallScore),
+      ratedBatchCount: count(brewSessionsTable.overallScore),
+      batchCount: count(brewSessionsTable.id),
+    })
+    .from(brewSessionsTable)
+    .where(eq(brewSessionsTable.recipeId, params.data.id));
+
+  return res.json({
+    ...recipe,
+    ingredients,
+    steps,
+    ratedBatches,
+    avgScore: stats?.avgScore != null ? Math.round(Number(stats.avgScore) * 10) / 10 : null,
+    ratedBatchCount: stats?.ratedBatchCount ?? 0,
+    batchCount: stats?.batchCount ?? 0,
+  });
 });
 
 router.put("/recipes/:id", async (req, res) => {

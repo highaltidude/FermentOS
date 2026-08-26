@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, ChevronDown, ChevronRight, Activity, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, ChevronDown, ChevronRight, Activity, Wifi, WifiOff } from "lucide-react";
 import {
   useGetBrewSession,
   useUpdateBrewSession,
@@ -15,6 +15,8 @@ import {
   getListSensorDevicesQueryKey,
   useAssignSensorDevice,
   useGetDefaultReadingsShown,
+  useUpsertBrewRating,
+  useDeleteBrewRating,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StarScore, ScoreScale, ScoreBadge, ScoreReadout, OffFlavorTags, OFF_FLAVOR_LABELS, BREW_AGAIN_LABELS } from "@/components/ui/score-picker";
 import { useToast } from "@/hooks/use-toast";
 import { fetchFermentTempUnit } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
@@ -116,6 +119,21 @@ export default function BrewSessionDetail() {
   const [editForm, setEditForm] = useState<any>({});
   const [tastingNotes, setTastingNotes] = useState("");
   const [tastingEditing, setTastingEditing] = useState(false);
+  const [scorecard, setScorecard] = useState<{
+    appearanceAromaScore: number | null;
+    flavorBalanceScore: number | null;
+    mouthfeelScore: number | null;
+    overallScore: number | null;
+    offFlavors: string[];
+    brewAgain: string | null;
+  }>({
+    appearanceAromaScore: null,
+    flavorBalanceScore: null,
+    mouthfeelScore: null,
+    overallScore: null,
+    offFlavors: [],
+    brewAgain: null,
+  });
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
   const [showSensorHistory, setShowSensorHistory] = useState(false);
@@ -218,7 +236,6 @@ export default function BrewSessionDetail() {
         originalGravityActual: session.originalGravityActual ?? undefined,
         finalGravityActual: session.finalGravityActual ?? undefined,
         abvActual: session.abvActual ?? undefined,
-        rating: session.rating ?? undefined,
         notes: session.notes ?? undefined,
       },
     });
@@ -252,12 +269,23 @@ export default function BrewSessionDetail() {
     },
   });
 
-  const tastingMutation = useUpdateBrewSession({
+  const tastingMutation = useUpsertBrewRating({
     mutation: {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
         setTastingEditing(false);
-        toast({ title: "Tasting notes saved" });
+        toast({ title: "Tasting & rating saved" });
+      },
+      onError: () => toast({ title: "Failed to save rating", description: "Please check your scores and try again.", variant: "destructive" }),
+    },
+  });
+
+  const clearRatingMutation = useDeleteBrewRating({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
+        setTastingEditing(false);
+        toast({ title: "Rating cleared" });
       },
     },
   });
@@ -265,6 +293,18 @@ export default function BrewSessionDetail() {
   useEffect(() => {
     if (session?.tastingNotes != null) setTastingNotes(session.tastingNotes);
   }, [session?.tastingNotes]);
+
+  useEffect(() => {
+    if (!session) return;
+    setScorecard({
+      appearanceAromaScore: session.appearanceAromaScore ?? null,
+      flavorBalanceScore: session.flavorBalanceScore ?? null,
+      mouthfeelScore: session.mouthfeelScore ?? null,
+      overallScore: session.overallScore ?? null,
+      offFlavors: session.offFlavors ?? [],
+      brewAgain: session.brewAgain ?? null,
+    });
+  }, [session?.ratedAt, session?.id]);
 
   useEffect(() => {
     Promise.all([
@@ -332,23 +372,43 @@ export default function BrewSessionDetail() {
     });
   };
 
+  // Goes to /brew-sessions/:id/rating, not the generic update endpoint — the
+  // scorecard deliberately never travels in UpdateBrewSessionBody so that an
+  // unrelated status or gravity save can't null it out.
   const handleSaveTasting = () => {
     if (!session) return;
     tastingMutation.mutate({
       id,
       data: {
-        recipeName: session.recipeName,
-        status: session.status,
-        brewDate: session.brewDate,
-        batchSizeGallons: session.batchSizeGallons,
-        originalGravityActual: session.originalGravityActual ?? undefined,
-        finalGravityActual: session.finalGravityActual ?? undefined,
-        abvActual: session.abvActual ?? undefined,
-        rating: session.rating ?? undefined,
-        notes: session.notes ?? undefined,
-        tastingNotes: tastingNotes || undefined,
+        appearanceAromaScore: scorecard.appearanceAromaScore,
+        flavorBalanceScore: scorecard.flavorBalanceScore,
+        mouthfeelScore: scorecard.mouthfeelScore,
+        overallScore: scorecard.overallScore,
+        offFlavors: scorecard.offFlavors as any,
+        brewAgain: scorecard.brewAgain as any,
+        tastingNotes: tastingNotes || null,
       },
     });
+  };
+
+  // Discards in-progress scorecard edits as well as note edits.
+  const handleCancelTasting = () => {
+    setTastingEditing(false);
+    setTastingNotes(session?.tastingNotes ?? "");
+    setScorecard({
+      appearanceAromaScore: session?.appearanceAromaScore ?? null,
+      flavorBalanceScore: session?.flavorBalanceScore ?? null,
+      mouthfeelScore: session?.mouthfeelScore ?? null,
+      overallScore: session?.overallScore ?? null,
+      offFlavors: session?.offFlavors ?? [],
+      brewAgain: session?.brewAgain ?? null,
+    });
+  };
+
+  const handleClearRating = () => {
+    if (!session) return;
+    if (!confirm("Clear the rating for this batch? Tasting notes are kept.")) return;
+    clearRatingMutation.mutate({ id });
   };
 
   const compressImage = (file: File, maxPx = 1600, quality = 0.82): Promise<Blob> =>
@@ -419,7 +479,6 @@ export default function BrewSessionDetail() {
       originalGravityActual: session.originalGravityActual != null ? String(session.originalGravityActual) : "",
       finalGravityActual: session.finalGravityActual != null ? String(session.finalGravityActual) : "",
       abvActual: session.abvActual != null ? String(session.abvActual) : "",
-      rating: session.rating != null ? String(session.rating) : "",
       notes: session.notes ?? "",
       fermentTempMin: (session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "",
       fermentTempMax: (session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "",
@@ -440,7 +499,6 @@ export default function BrewSessionDetail() {
         originalGravityActual: editForm.originalGravityActual ? Number(editForm.originalGravityActual) : undefined,
         finalGravityActual: editForm.finalGravityActual ? Number(editForm.finalGravityActual) : undefined,
         abvActual: editForm.abvActual ? Number(editForm.abvActual) : undefined,
-        rating: editForm.rating ? Number(editForm.rating) : undefined,
         notes: editForm.notes || undefined,
         fermentTempMin: editForm.fermentTempMin ? Number(editForm.fermentTempMin) : null,
         fermentTempMax: editForm.fermentTempMax ? Number(editForm.fermentTempMax) : null,
@@ -502,13 +560,7 @@ export default function BrewSessionDetail() {
           <>
             <div className="flex items-center gap-2 mb-3">
               <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[session.status] ?? ""}`}>{STATUS_LABELS[session.status] ?? session.status}</span>
-              {session.rating && (
-                <span className="flex items-center gap-0.5">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} className={`w-4 h-4 ${i < session.rating! ? "fill-amber-400 text-amber-400" : "text-muted-foreground/25"}`} />
-                  ))}
-                </span>
-              )}
+              <ScoreBadge value={session.overallScore} />
             </div>
             <div className="mb-3 overflow-x-auto">
               <StatusProgress status={session.status} onStatusChange={handleStatusClick} isPending={quickStatusMutation.isPending} />
@@ -543,28 +595,6 @@ export default function BrewSessionDetail() {
               <div><label className="text-xs text-muted-foreground mb-1 block">OG (actual)</label><Input type="number" step="0.001" value={editForm.originalGravityActual} onChange={(e) => setEditForm({ ...editForm, originalGravityActual: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">FG (actual)</label><Input type="number" step="0.001" value={editForm.finalGravityActual} onChange={(e) => setEditForm({ ...editForm, finalGravityActual: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">ABV % (actual)</label><Input type="number" step="0.1" value={editForm.abvActual} onChange={(e) => setEditForm({ ...editForm, abvActual: e.target.value })} /></div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Rating</label>
-                <div className="flex items-center gap-1 h-9">
-                  {Array.from({ length: 5 }).map((_, i) => {
-                    const val = i + 1;
-                    const current = editForm.rating ? Number(editForm.rating) : 0;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setEditForm({ ...editForm, rating: current === val ? "" : String(val) })}
-                        className="p-0.5 transition-transform hover:scale-110"
-                      >
-                        <Star className={`w-5 h-5 ${val <= current ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30 hover:text-amber-300"}`} />
-                      </button>
-                    );
-                  })}
-                  {editForm.rating && (
-                    <button type="button" onClick={() => setEditForm({ ...editForm, rating: "" })} className="text-xs text-muted-foreground ml-1 hover:text-destructive">clear</button>
-                  )}
-                </div>
-              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -607,6 +637,19 @@ export default function BrewSessionDetail() {
           </div>
         )}
       </div>
+
+      {session.status === "packaged" && !session.ratedAt && !tastingEditing && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+          <span className="text-amber-500 shrink-0">🍺</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">Rate this batch</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Four quick questions — it rolls up to the recipe so you can compare batches</p>
+          </div>
+          <Button size="sm" className="shrink-0" onClick={() => setTastingEditing(true)}>
+            Rate Batch
+          </Button>
+        </div>
+      )}
 
       {session.status === "brew_day" && session.originalGravityActual == null && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
@@ -664,16 +707,17 @@ export default function BrewSessionDetail() {
         </div>
       )}
 
-      {/* Tasting Notes & Photo */}
+      {/* Tasting & Rating */}
       <div className="bg-card border border-card-border rounded-lg">
         <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <NotebookPen className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">Tasting Notes &amp; Photo</h2>
+            <h2 className="text-sm font-semibold text-foreground">Tasting &amp; Rating</h2>
+            {!tastingEditing && <ScoreBadge value={session.overallScore} />}
           </div>
           {!tastingEditing && (
             <Button size="sm" variant="outline" onClick={() => setTastingEditing(true)}>
-              {tastingNotes ? "Edit Notes" : "Add Notes"}
+              {session.ratedAt ? "Edit Rating" : "Rate Batch"}
             </Button>
           )}
         </div>
@@ -741,18 +785,75 @@ export default function BrewSessionDetail() {
               </Button>
             </div>
           )}
-          {/* Tasting Notes */}
+          {/* Scorecard */}
           {tastingEditing ? (
-            <div className="space-y-2">
-              <Textarea
-                value={tastingNotes}
-                onChange={(e) => setTastingNotes(e.target.value)}
-                rows={4}
-                placeholder="Aroma, flavour, mouthfeel, appearance, overall impressions…"
-                autoFocus
+            <div className="space-y-4 border-t border-border pt-4">
+              <div className="grid sm:grid-cols-3 gap-3">
+                <StarScore
+                  label="Appearance & aroma"
+                  hint="1-5"
+                  value={scorecard.appearanceAromaScore}
+                  onChange={(v) => setScorecard({ ...scorecard, appearanceAromaScore: v })}
+                />
+                <StarScore
+                  label="Flavor & balance"
+                  hint="1-5"
+                  value={scorecard.flavorBalanceScore}
+                  onChange={(v) => setScorecard({ ...scorecard, flavorBalanceScore: v })}
+                />
+                <StarScore
+                  label="Mouthfeel & carbonation"
+                  hint="1-5"
+                  value={scorecard.mouthfeelScore}
+                  onChange={(v) => setScorecard({ ...scorecard, mouthfeelScore: v })}
+                />
+              </div>
+
+              <ScoreScale
+                label="Overall — how much did you enjoy drinking it?"
+                hint="1-10"
+                value={scorecard.overallScore}
+                onChange={(v) => setScorecard({ ...scorecard, overallScore: v })}
               />
-              <div className="flex gap-2 justify-end">
-                <Button variant="ghost" size="sm" onClick={() => { setTastingEditing(false); setTastingNotes(session.tastingNotes ?? ""); }}>
+
+              <OffFlavorTags
+                value={scorecard.offFlavors}
+                onChange={(v) => setScorecard({ ...scorecard, offFlavors: v })}
+              />
+
+              <div className="max-w-xs">
+                <label className="text-xs font-medium text-foreground mb-1 block">Would you brew it again?</label>
+                <Select
+                  value={scorecard.brewAgain ?? "unset"}
+                  onValueChange={(v) => setScorecard({ ...scorecard, brewAgain: v === "unset" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unset">Not answered</SelectItem>
+                    {Object.entries(BREW_AGAIN_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1 block">Tasting notes</label>
+                <Textarea
+                  value={tastingNotes}
+                  onChange={(e) => setTastingNotes(e.target.value)}
+                  rows={4}
+                  placeholder="What stood out? What would you change next time?"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end items-center">
+                {session.ratedAt && (
+                  <Button variant="ghost" size="sm" onClick={handleClearRating} disabled={clearRatingMutation.isPending} className="mr-auto text-destructive hover:text-destructive">
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />Clear Rating
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={handleCancelTasting}>
                   <X className="w-3.5 h-3.5 mr-1" />Cancel
                 </Button>
                 <Button size="sm" onClick={handleSaveTasting} disabled={tastingMutation.isPending}>
@@ -760,10 +861,44 @@ export default function BrewSessionDetail() {
                 </Button>
               </div>
             </div>
-          ) : tastingNotes ? (
-            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{tastingNotes}</p>
           ) : (
-            <p className="text-sm text-muted-foreground">No tasting notes yet.</p>
+            <div className="space-y-3 border-t border-border pt-4">
+              {session.ratedAt ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <ScoreReadout label="Appearance & aroma" value={session.appearanceAromaScore} outOf={5} />
+                    <ScoreReadout label="Flavor & balance" value={session.flavorBalanceScore} outOf={5} />
+                    <ScoreReadout label="Mouthfeel & carb" value={session.mouthfeelScore} outOf={5} />
+                    <ScoreReadout label="Overall" value={session.overallScore} outOf={10} />
+                  </div>
+                  {session.offFlavors && session.offFlavors.length > 0 && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Off-flavors</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {session.offFlavors.map((tag) => (
+                          <span key={tag} className="text-xs px-2 py-0.5 rounded-full border bg-destructive/15 text-destructive border-destructive/30">
+                            {OFF_FLAVOR_LABELS[tag] ?? tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {session.brewAgain && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">Brew again? </span>
+                      <span className="text-sm font-medium text-foreground">{BREW_AGAIN_LABELS[session.brewAgain] ?? session.brewAgain}</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Not rated yet.</p>
+              )}
+              {tastingNotes ? (
+                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{tastingNotes}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No tasting notes yet.</p>
+              )}
+            </div>
           )}
         </div>
       </div>

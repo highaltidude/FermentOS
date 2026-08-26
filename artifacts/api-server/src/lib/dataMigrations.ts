@@ -30,6 +30,37 @@ export async function migrateLegacyStatuses(): Promise<void> {
     logger.info({ rows: backfilledCount }, "Backfilled fermentation_readings.source = ispindel for legacy iSpindel mirrors");
   }
 
+  // ── Tasting scorecard (v4) ────────────────────────────────────────────
+  // Same self-healing rationale as above, then a one-time rescale of the
+  // legacy 1-5 star rating onto the new 1-10 overall score. The rescale is a
+  // separate column rather than an in-place UPDATE precisely so it can be
+  // guarded: `overall_score IS NULL` can't be satisfied twice, whereas an
+  // in-place `rating = rating * 2` would re-double a legitimate new score on
+  // the next boot.
+  for (const [column, type] of [
+    ["appearance_aroma_score", "integer"],
+    ["flavor_balance_score", "integer"],
+    ["mouthfeel_score", "integer"],
+    ["overall_score", "integer"],
+    ["off_flavors", "text[]"],
+    ["brew_again", "text"],
+    ["rated_at", "timestamp with time zone"],
+  ] as const) {
+    await db.execute(
+      sql`ALTER TABLE brew_sessions ADD COLUMN IF NOT EXISTS ${sql.raw(column)} ${sql.raw(type)}`,
+    );
+  }
+
+  // LEAST(..., 10) because the old rating column carried no bounds — a stray
+  // value above 5 would otherwise rescale to an out-of-range score.
+  const rescaled = await db.execute(
+    sql`UPDATE brew_sessions SET overall_score = LEAST(rating * 2, 10), rated_at = COALESCE(rated_at, updated_at) WHERE rating IS NOT NULL AND overall_score IS NULL`,
+  );
+  const rescaledCount = (rescaled as { rowCount?: number }).rowCount ?? 0;
+  if (rescaledCount > 0) {
+    logger.info({ rows: rescaledCount }, "Rescaled legacy 1-5 brew_sessions.rating onto 1-10 overall_score");
+  }
+
   // ── Lifecycle simplification (v2) ─────────────────────────────────────
   // Old stages: planned → scheduled → brewing → fermenting → conditioning
   //             → packaged → complete

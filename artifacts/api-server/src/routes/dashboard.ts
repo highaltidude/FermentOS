@@ -17,6 +17,17 @@ router.get("/dashboard/summary", async (req, res) => {
   const activeSessions = sessions.filter((s) => activeStatuses.includes(s.status));
   const recentSessions = sessions.slice().reverse().slice(0, 5);
 
+  const topRatedBrews = sessions
+    .filter((s) => s.overallScore != null)
+    .sort((a, b) => (b.overallScore ?? 0) - (a.overallScore ?? 0))
+    .slice(0, 3)
+    .map((s) => ({
+      id: s.id,
+      recipeName: s.recipeName,
+      brewDate: s.brewDate,
+      overallScore: s.overallScore,
+    }));
+
   return res.json({
     totalRecipes: recipes.length,
     totalBrewSessions: sessions.length,
@@ -24,6 +35,7 @@ router.get("/dashboard/summary", async (req, res) => {
     inventoryItemCount: inventory.length,
     breweryName: breweryNameRow[0]?.value ?? null,
     recentSessions,
+    topRatedBrews,
   });
 });
 

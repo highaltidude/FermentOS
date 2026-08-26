@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Clock, Loader2 } from "lucide-react";
 import {
   useGetRecipe,
@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { fetchFermentTempUnit } from "@/lib/utils";
+import { ScoreBadge } from "@/components/ui/score-picker";
 
 function StyleSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { data: styles } = useListBeerStyles();
@@ -58,6 +59,12 @@ function StyleSelect({ value, onChange }: { value: string; onChange: (v: string)
       </SelectContent>
     </Select>
   );
+}
+
+// Brew dates are plain YYYY-MM-DD; parse as local so they don't shift a day.
+function formatBrewDate(d: string) {
+  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, day ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 const INGREDIENT_TYPE_COLORS: Record<string, string> = {
@@ -815,6 +822,42 @@ export default function RecipeDetail() {
                   ))}
                 </div>
               </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Batch History — the recipe's track record across every scored brew */}
+      <div className="bg-card border border-card-border rounded-lg">
+        <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Batch History</h2>
+          <ScoreBadge
+            value={recipe.avgScore}
+            suffix={`avg of ${recipe.ratedBatchCount}`}
+          />
+        </div>
+        <div className="divide-y divide-border">
+          {recipe.ratedBatches.length === 0 ? (
+            <div className="p-4">
+              <p className="text-sm text-muted-foreground">
+                No rated batches yet.
+                {(recipe.batchCount ?? 0) > 0
+                  ? " Rate a packaged batch to start building this recipe's track record."
+                  : " Brew this recipe and rate the result to start building a track record."}
+              </p>
+            </div>
+          ) : (
+            recipe.ratedBatches.map((batch) => (
+              <Link key={batch.id} href={`/brew-sessions/${batch.id}`}>
+                <div className="px-4 py-3 flex items-center gap-3 hover:bg-muted cursor-pointer">
+                  <Beer className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">{batch.recipeName}</div>
+                    <div className="text-xs text-muted-foreground">{formatBrewDate(batch.brewDate)}</div>
+                  </div>
+                  <ScoreBadge value={batch.overallScore} />
+                </div>
+              </Link>
             ))
           )}
         </div>

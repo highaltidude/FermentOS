@@ -85,6 +85,7 @@ import type {
   UpdateRecipeIngredientBody,
   UpdateRecipeStepBody,
   UpdateSensorDeviceBody,
+  UpsertBrewRatingBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -2151,6 +2152,177 @@ export const useDeleteBrewSession = <
   TContext
 > => {
   return useMutation(getDeleteBrewSessionMutationOptions(options));
+};
+
+/**
+ * @summary Save the tasting scorecard for a brew session
+ */
+export const getUpsertBrewRatingUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/rating`;
+};
+
+export const upsertBrewRating = async (
+  id: number,
+  upsertBrewRatingBody: UpsertBrewRatingBody,
+  options?: RequestInit,
+): Promise<BrewSession> => {
+  return customFetch<BrewSession>(getUpsertBrewRatingUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertBrewRatingBody),
+  });
+};
+
+export const getUpsertBrewRatingMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertBrewRating>>,
+    TError,
+    { id: number; data: BodyType<UpsertBrewRatingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertBrewRating>>,
+  TError,
+  { id: number; data: BodyType<UpsertBrewRatingBody> },
+  TContext
+> => {
+  const mutationKey = ["upsertBrewRating"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertBrewRating>>,
+    { id: number; data: BodyType<UpsertBrewRatingBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return upsertBrewRating(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertBrewRatingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertBrewRating>>
+>;
+export type UpsertBrewRatingMutationBody = BodyType<UpsertBrewRatingBody>;
+export type UpsertBrewRatingMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Save the tasting scorecard for a brew session
+ */
+export const useUpsertBrewRating = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertBrewRating>>,
+    TError,
+    { id: number; data: BodyType<UpsertBrewRatingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertBrewRating>>,
+  TError,
+  { id: number; data: BodyType<UpsertBrewRatingBody> },
+  TContext
+> => {
+  return useMutation(getUpsertBrewRatingMutationOptions(options));
+};
+
+/**
+ * @summary Clear the tasting scorecard for a brew session
+ */
+export const getDeleteBrewRatingUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/rating`;
+};
+
+export const deleteBrewRating = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteBrewRatingUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteBrewRatingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrewRating>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteBrewRating>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteBrewRating"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteBrewRating>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteBrewRating(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteBrewRatingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBrewRating>>
+>;
+
+export type DeleteBrewRatingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Clear the tasting scorecard for a brew session
+ */
+export const useDeleteBrewRating = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBrewRating>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteBrewRating>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteBrewRatingMutationOptions(options));
 };
 
 /**

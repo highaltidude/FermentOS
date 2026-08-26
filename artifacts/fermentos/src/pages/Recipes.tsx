@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Plus, Search, BookOpen, ChevronRight, Beaker, Clock, Star, FlaskConical } from "lucide-react";
+import { Plus, Search, BookOpen, ChevronRight, Beaker, Clock, FlaskConical } from "lucide-react";
 import { useListRecipes, useGetRecipeStyles } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScoreBadge } from "@/components/ui/score-picker";
 
 const STYLE_COLORS: Record<string, string> = {
   "American IPA": "bg-amber-100 text-amber-800",
@@ -14,20 +15,6 @@ const STYLE_COLORS: Record<string, string> = {
 
 function getStyleColor(style: string) {
   return STYLE_COLORS[style] ?? "bg-primary/10 text-primary";
-}
-
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <span className="flex items-center gap-0.5">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Star
-          key={i}
-          className={`w-3 h-3 ${i < Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
-        />
-      ))}
-      <span className="text-xs text-muted-foreground ml-1">{rating.toFixed(1)}</span>
-    </span>
-  );
 }
 
 export default function Recipes() {
@@ -128,9 +115,12 @@ export default function Recipes() {
                         </span>
                       )}
                     </div>
-                    {recipe.avgRating != null && (
+                    {recipe.avgScore != null && (
                       <div className="mt-1.5">
-                        <StarRating rating={recipe.avgRating} />
+                        <ScoreBadge
+                          value={recipe.avgScore}
+                          suffix={`${recipe.ratedBatchCount} rated`}
+                        />
                       </div>
                     )}
                   </div>

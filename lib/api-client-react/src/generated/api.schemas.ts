@@ -22,6 +22,32 @@ export const BrewStatus = {
   packaged: "packaged",
 } as const;
 
+/**
+ * Common homebrew off-flavor. "None" is an empty offFlavors array rather than a member here.
+ */
+export type OffFlavor = (typeof OffFlavor)[keyof typeof OffFlavor];
+
+export const OffFlavor = {
+  diacetyl: "diacetyl",
+  acetaldehyde: "acetaldehyde",
+  dms: "dms",
+  phenolic: "phenolic",
+  oxidized: "oxidized",
+  astringent: "astringent",
+  sour: "sour",
+  solvent: "solvent",
+  sulfur: "sulfur",
+  light_struck: "light_struck",
+} as const;
+
+export type BrewAgain = (typeof BrewAgain)[keyof typeof BrewAgain] | null;
+
+export const BrewAgain = {
+  as_is: "as_is",
+  with_tweaks: "with_tweaks",
+  no: "no",
+} as const;
+
 export type IngredientType =
   (typeof IngredientType)[keyof typeof IngredientType];
 
@@ -72,7 +98,10 @@ export interface Recipe {
   daysFermenting?: number | null;
   daysConditioning?: number | null;
   daysPackaged?: number | null;
-  avgRating?: number | null;
+  /** Mean overallScore across every rated batch of this recipe, 1-10. */
+  avgScore?: number | null;
+  /** Batches carrying a scorecard. Always <= batchCount. */
+  ratedBatchCount: number;
   batchCount: number;
   createdAt: string;
   updatedAt: string;
@@ -112,9 +141,18 @@ export interface RecipeStep {
   durationMinutes?: number | null;
 }
 
+export interface RatedBatch {
+  id: number;
+  brewDate: string;
+  recipeName: string;
+  overallScore: number;
+}
+
 export type RecipeWithIngredients = Recipe & {
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
+  /** Every rated batch brewed from this recipe, oldest first — the recipe's track record. */
+  ratedBatches: RatedBatch[];
 };
 
 export interface CreateRecipeStepBody {
@@ -222,7 +260,31 @@ export interface BrewSession {
   originalGravityActual?: number | null;
   finalGravityActual?: number | null;
   abvActual?: number | null;
-  rating?: number | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  appearanceAromaScore?: number | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  flavorBalanceScore?: number | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  mouthfeelScore?: number | null;
+  /**
+   * Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.
+   * @minimum 1
+   * @maximum 10
+   */
+  overallScore?: number | null;
+  offFlavors?: OffFlavor[] | null;
+  brewAgain?: BrewAgain | null;
+  /** Set whenever the scorecard is saved. Distinguishes "never rated" from a partially filled card. */
+  ratedAt?: string | null;
   notes?: string | null;
   /** Minimum fermentation temperature threshold */
   fermentTempMin?: number | null;
@@ -281,7 +343,6 @@ export interface CreateBrewSessionBody {
   originalGravityActual?: number | null;
   finalGravityActual?: number | null;
   abvActual?: number | null;
-  rating?: number | null;
   notes?: string | null;
   /** Minimum fermentation temperature threshold */
   fermentTempMin?: number | null;
@@ -302,7 +363,6 @@ export interface UpdateBrewSessionBody {
   originalGravityActual?: number | null;
   finalGravityActual?: number | null;
   abvActual?: number | null;
-  rating?: number | null;
   notes?: string | null;
   /** Minimum fermentation temperature threshold */
   fermentTempMin?: number | null;
@@ -312,6 +372,35 @@ export interface UpdateBrewSessionBody {
   fermentTempIdeal?: number | null;
   /** null = use global setting, true = always auto-advance, false = always manual */
   autoAdvanceToConditioning?: boolean | null;
+  tastingNotes?: string | null;
+}
+
+/**
+ * The tasting scorecard. Deliberately kept off UpdateBrewSessionBody: the brew-session detail page re-sends the whole session on every mutation, so a scorecard field living in that body would be silently nulled by an unrelated status or gravity save.
+ */
+export interface UpsertBrewRatingBody {
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  appearanceAromaScore?: number | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  flavorBalanceScore?: number | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  mouthfeelScore?: number | null;
+  /**
+   * @minimum 1
+   * @maximum 10
+   */
+  overallScore?: number | null;
+  offFlavors?: OffFlavor[];
+  brewAgain?: BrewAgain | null;
   tastingNotes?: string | null;
 }
 
@@ -452,6 +541,8 @@ export interface DashboardSummary {
   inventoryItemCount: number;
   breweryName?: string | null;
   recentSessions: BrewSession[];
+  /** The three highest-scoring batches, best first. */
+  topRatedBrews: RatedBatch[];
 }
 
 export interface ActiveBrew {

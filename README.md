@@ -66,7 +66,7 @@ page.
 - **Recipe Manager** — Create and store beer recipes with full ingredient lists, gravity targets, ABV, IBU, and color
 - **Brew Log** — Log brew sessions, track status from grain to glass (brew_day → fermenting → conditioning → packaged)
 - **Response & Stage History** — Every brew session records a timestamped log each time the status changes, always visible on the session page
-- **Tasting Notes & Photo** — Attach a photo, star rating, and tasting notes to any session
+- **Tasting & Rating** — Score a finished batch on a four-question scorecard (appearance & aroma, flavor & balance, mouthfeel & carbonation, each 1–5, plus an overall 1–10), tag any off-flavors, record whether you'd brew it again, and attach a photo and tasting notes. Overall scores roll up to an average on the recipe, so each recipe carries the track record of every batch brewed from it
 - **Fermentation Tracker** — Record temperature, gravity, and pH readings over time with an interactive chart
 - **Ingredients** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. The unit field is a dropdown filtered by your unit system preference
 - **Beer Styles** — Define your own style list (Settings) used as a dropdown when creating recipes
@@ -397,6 +397,8 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 | DELETE | `/api/status-log/:id` | Delete a status log entry |
 | POST | `/api/brew-sessions/:id/photo` | Upload a session photo (multipart/form-data, field: `photo`) |
 | DELETE | `/api/brew-sessions/:id/photo` | Remove the session photo |
+| PUT | `/api/brew-sessions/:id/rating` | Save the tasting scorecard |
+| DELETE | `/api/brew-sessions/:id/rating` | Clear the tasting scorecard |
 
 **POST /api/brew-sessions** body:
 ```json
@@ -411,7 +413,6 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
   "originalGravityActual": 1.064,
   "finalGravityActual": null,
   "abvActual": null,
-  "rating": null,
   "fermentTempMin": 64,
   "fermentTempMax": 70,
   "fermentTempIdeal": 67,
@@ -430,6 +431,28 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 }
 ```
 `readingAt` is required (ISO 8601 datetime); everything else is optional.
+
+**PUT /api/brew-sessions/:id/rating** body:
+```json
+{
+  "appearanceAromaScore": 4,
+  "flavorBalanceScore": 5,
+  "mouthfeelScore": 4,
+  "overallScore": 9,
+  "offFlavors": [],
+  "brewAgain": "as_is",
+  "tastingNotes": "Optional"
+}
+```
+Every field is optional. The three sub-scores are 1–5 and `overallScore` is
+1–10; out-of-range values are rejected with a 400. `brewAgain`: `as_is` |
+`with_tweaks` | `no`. `offFlavors` accepts any of `diacetyl`,
+`acetaldehyde`, `dms`, `phenolic`, `oxidized`, `astringent`, `sour`,
+`solvent`, `sulfur`, `light_struck` — an empty array means none were
+detected. Saving stamps `ratedAt`, which is what marks a batch as rated.
+
+**DELETE /api/brew-sessions/:id/rating** clears the scorecard. Tasting notes
+are kept.
 
 ---
 

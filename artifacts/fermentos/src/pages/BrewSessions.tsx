@@ -4,6 +4,7 @@ import { Plus, Beer, ChevronRight } from "lucide-react";
 import { useListBrewSessions } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScoreBadge } from "@/components/ui/score-picker";
 
 const STATUS_COLORS: Record<string, string> = {
   brew_day: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/40",
@@ -75,8 +76,8 @@ export default function BrewSessions() {
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_COLORS[session.status] ?? ""}`}>
                       {STATUS_LABELS[session.status] ?? session.status}
                     </span>
-                    {session.rating && (
-                      <span className="text-xs text-muted-foreground ml-auto">{"★".repeat(session.rating)}</span>
+                    {session.overallScore != null && (
+                      <span className="ml-auto shrink-0"><ScoreBadge value={session.overallScore} /></span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">

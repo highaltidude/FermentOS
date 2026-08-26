@@ -17,6 +17,14 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get dashboard summary stats
  */
+export const getDashboardSummaryResponseRecentSessionsItemAppearanceAromaScoreMax = 5;
+
+export const getDashboardSummaryResponseRecentSessionsItemFlavorBalanceScoreMax = 5;
+
+export const getDashboardSummaryResponseRecentSessionsItemMouthfeelScoreMax = 5;
+
+export const getDashboardSummaryResponseRecentSessionsItemOverallScoreMax = 10;
+
 export const GetDashboardSummaryResponse = zod.object({
   totalRecipes: zod.number(),
   totalBrewSessions: zod.number(),
@@ -42,7 +50,59 @@ export const GetDashboardSummaryResponse = zod.object({
       originalGravityActual: zod.number().nullish(),
       finalGravityActual: zod.number().nullish(),
       abvActual: zod.number().nullish(),
-      rating: zod.number().nullish(),
+      appearanceAromaScore: zod
+        .number()
+        .min(1)
+        .max(
+          getDashboardSummaryResponseRecentSessionsItemAppearanceAromaScoreMax,
+        )
+        .nullish(),
+      flavorBalanceScore: zod
+        .number()
+        .min(1)
+        .max(getDashboardSummaryResponseRecentSessionsItemFlavorBalanceScoreMax)
+        .nullish(),
+      mouthfeelScore: zod
+        .number()
+        .min(1)
+        .max(getDashboardSummaryResponseRecentSessionsItemMouthfeelScoreMax)
+        .nullish(),
+      overallScore: zod
+        .number()
+        .min(1)
+        .max(getDashboardSummaryResponseRecentSessionsItemOverallScoreMax)
+        .nullish()
+        .describe(
+          "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+        ),
+      offFlavors: zod
+        .array(
+          zod
+            .enum([
+              "diacetyl",
+              "acetaldehyde",
+              "dms",
+              "phenolic",
+              "oxidized",
+              "astringent",
+              "sour",
+              "solvent",
+              "sulfur",
+              "light_struck",
+            ])
+            .describe(
+              'Common homebrew off-flavor. \"None\" is an empty offFlavors array rather than a member here.',
+            ),
+        )
+        .nullish(),
+      brewAgain: zod.enum(["as_is", "with_tweaks", "no"]).nullish(),
+      ratedAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe(
+          'Set whenever the scorecard is saved. Distinguishes \"never rated\" from a partially filled card.',
+        ),
       notes: zod.string().nullish(),
       fermentTempMin: zod
         .number()
@@ -68,6 +128,16 @@ export const GetDashboardSummaryResponse = zod.object({
       updatedAt: zod.string().datetime({}),
     }),
   ),
+  topRatedBrews: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        brewDate: zod.string().date(),
+        recipeName: zod.string(),
+        overallScore: zod.number(),
+      }),
+    )
+    .describe("The three highest-scoring batches, best first."),
 });
 
 /**
@@ -151,7 +221,15 @@ export const ListRecipesResponseItem = zod.object({
   daysFermenting: zod.number().nullish(),
   daysConditioning: zod.number().nullish(),
   daysPackaged: zod.number().nullish(),
-  avgRating: zod.number().nullish(),
+  avgScore: zod
+    .number()
+    .nullish()
+    .describe(
+      "Mean overallScore across every rated batch of this recipe, 1-10.",
+    ),
+  ratedBatchCount: zod
+    .number()
+    .describe("Batches carrying a scorecard. Always <= batchCount."),
   batchCount: zod.number(),
   createdAt: zod.string().datetime({}),
   updatedAt: zod.string().datetime({}),
@@ -241,7 +319,15 @@ export const GetRecipeResponse = zod
     daysFermenting: zod.number().nullish(),
     daysConditioning: zod.number().nullish(),
     daysPackaged: zod.number().nullish(),
-    avgRating: zod.number().nullish(),
+    avgScore: zod
+      .number()
+      .nullish()
+      .describe(
+        "Mean overallScore across every rated batch of this recipe, 1-10.",
+      ),
+    ratedBatchCount: zod
+      .number()
+      .describe("Batches carrying a scorecard. Always <= batchCount."),
     batchCount: zod.number(),
     createdAt: zod.string().datetime({}),
     updatedAt: zod.string().datetime({}),
@@ -300,6 +386,18 @@ export const GetRecipeResponse = zod
           durationMinutes: zod.number().nullish(),
         }),
       ),
+      ratedBatches: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            brewDate: zod.string().date(),
+            recipeName: zod.string(),
+            overallScore: zod.number(),
+          }),
+        )
+        .describe(
+          "Every rated batch brewed from this recipe, oldest first — the recipe's track record.",
+        ),
     }),
   );
 
@@ -373,7 +471,15 @@ export const UpdateRecipeResponse = zod.object({
   daysFermenting: zod.number().nullish(),
   daysConditioning: zod.number().nullish(),
   daysPackaged: zod.number().nullish(),
-  avgRating: zod.number().nullish(),
+  avgScore: zod
+    .number()
+    .nullish()
+    .describe(
+      "Mean overallScore across every rated batch of this recipe, 1-10.",
+    ),
+  ratedBatchCount: zod
+    .number()
+    .describe("Batches carrying a scorecard. Always <= batchCount."),
   batchCount: zod.number(),
   createdAt: zod.string().datetime({}),
   updatedAt: zod.string().datetime({}),
@@ -653,6 +759,14 @@ export const ListBrewSessionsQueryParams = zod.object({
   recipeId: zod.coerce.number().optional(),
 });
 
+export const listBrewSessionsResponseAppearanceAromaScoreMax = 5;
+
+export const listBrewSessionsResponseFlavorBalanceScoreMax = 5;
+
+export const listBrewSessionsResponseMouthfeelScoreMax = 5;
+
+export const listBrewSessionsResponseOverallScoreMax = 10;
+
 export const ListBrewSessionsResponseItem = zod.object({
   id: zod.number(),
   recipeId: zod.number().nullish(),
@@ -671,7 +785,57 @@ export const ListBrewSessionsResponseItem = zod.object({
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
   abvActual: zod.number().nullish(),
-  rating: zod.number().nullish(),
+  appearanceAromaScore: zod
+    .number()
+    .min(1)
+    .max(listBrewSessionsResponseAppearanceAromaScoreMax)
+    .nullish(),
+  flavorBalanceScore: zod
+    .number()
+    .min(1)
+    .max(listBrewSessionsResponseFlavorBalanceScoreMax)
+    .nullish(),
+  mouthfeelScore: zod
+    .number()
+    .min(1)
+    .max(listBrewSessionsResponseMouthfeelScoreMax)
+    .nullish(),
+  overallScore: zod
+    .number()
+    .min(1)
+    .max(listBrewSessionsResponseOverallScoreMax)
+    .nullish()
+    .describe(
+      "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+    ),
+  offFlavors: zod
+    .array(
+      zod
+        .enum([
+          "diacetyl",
+          "acetaldehyde",
+          "dms",
+          "phenolic",
+          "oxidized",
+          "astringent",
+          "sour",
+          "solvent",
+          "sulfur",
+          "light_struck",
+        ])
+        .describe(
+          'Common homebrew off-flavor. \"None\" is an empty offFlavors array rather than a member here.',
+        ),
+    )
+    .nullish(),
+  brewAgain: zod.enum(["as_is", "with_tweaks", "no"]).nullish(),
+  ratedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe(
+      'Set whenever the scorecard is saved. Distinguishes \"never rated\" from a partially filled card.',
+    ),
   notes: zod.string().nullish(),
   fermentTempMin: zod
     .number()
@@ -712,7 +876,6 @@ export const CreateBrewSessionBody = zod.object({
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
   abvActual: zod.number().nullish(),
-  rating: zod.number().nullish(),
   notes: zod.string().nullish(),
   fermentTempMin: zod
     .number()
@@ -735,6 +898,14 @@ export const GetBrewSessionParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getBrewSessionResponseOneAppearanceAromaScoreMax = 5;
+
+export const getBrewSessionResponseOneFlavorBalanceScoreMax = 5;
+
+export const getBrewSessionResponseOneMouthfeelScoreMax = 5;
+
+export const getBrewSessionResponseOneOverallScoreMax = 10;
+
 export const GetBrewSessionResponse = zod
   .object({
     id: zod.number(),
@@ -754,7 +925,57 @@ export const GetBrewSessionResponse = zod
     originalGravityActual: zod.number().nullish(),
     finalGravityActual: zod.number().nullish(),
     abvActual: zod.number().nullish(),
-    rating: zod.number().nullish(),
+    appearanceAromaScore: zod
+      .number()
+      .min(1)
+      .max(getBrewSessionResponseOneAppearanceAromaScoreMax)
+      .nullish(),
+    flavorBalanceScore: zod
+      .number()
+      .min(1)
+      .max(getBrewSessionResponseOneFlavorBalanceScoreMax)
+      .nullish(),
+    mouthfeelScore: zod
+      .number()
+      .min(1)
+      .max(getBrewSessionResponseOneMouthfeelScoreMax)
+      .nullish(),
+    overallScore: zod
+      .number()
+      .min(1)
+      .max(getBrewSessionResponseOneOverallScoreMax)
+      .nullish()
+      .describe(
+        "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+      ),
+    offFlavors: zod
+      .array(
+        zod
+          .enum([
+            "diacetyl",
+            "acetaldehyde",
+            "dms",
+            "phenolic",
+            "oxidized",
+            "astringent",
+            "sour",
+            "solvent",
+            "sulfur",
+            "light_struck",
+          ])
+          .describe(
+            'Common homebrew off-flavor. \"None\" is an empty offFlavors array rather than a member here.',
+          ),
+      )
+      .nullish(),
+    brewAgain: zod.enum(["as_is", "with_tweaks", "no"]).nullish(),
+    ratedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe(
+        'Set whenever the scorecard is saved. Distinguishes \"never rated\" from a partially filled card.',
+      ),
     notes: zod.string().nullish(),
     fermentTempMin: zod
       .number()
@@ -830,7 +1051,6 @@ export const UpdateBrewSessionBody = zod.object({
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
   abvActual: zod.number().nullish(),
-  rating: zod.number().nullish(),
   notes: zod.string().nullish(),
   fermentTempMin: zod
     .number()
@@ -853,6 +1073,14 @@ export const UpdateBrewSessionBody = zod.object({
   tastingNotes: zod.string().nullish(),
 });
 
+export const updateBrewSessionResponseAppearanceAromaScoreMax = 5;
+
+export const updateBrewSessionResponseFlavorBalanceScoreMax = 5;
+
+export const updateBrewSessionResponseMouthfeelScoreMax = 5;
+
+export const updateBrewSessionResponseOverallScoreMax = 10;
+
 export const UpdateBrewSessionResponse = zod.object({
   id: zod.number(),
   recipeId: zod.number().nullish(),
@@ -871,7 +1099,57 @@ export const UpdateBrewSessionResponse = zod.object({
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
   abvActual: zod.number().nullish(),
-  rating: zod.number().nullish(),
+  appearanceAromaScore: zod
+    .number()
+    .min(1)
+    .max(updateBrewSessionResponseAppearanceAromaScoreMax)
+    .nullish(),
+  flavorBalanceScore: zod
+    .number()
+    .min(1)
+    .max(updateBrewSessionResponseFlavorBalanceScoreMax)
+    .nullish(),
+  mouthfeelScore: zod
+    .number()
+    .min(1)
+    .max(updateBrewSessionResponseMouthfeelScoreMax)
+    .nullish(),
+  overallScore: zod
+    .number()
+    .min(1)
+    .max(updateBrewSessionResponseOverallScoreMax)
+    .nullish()
+    .describe(
+      "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+    ),
+  offFlavors: zod
+    .array(
+      zod
+        .enum([
+          "diacetyl",
+          "acetaldehyde",
+          "dms",
+          "phenolic",
+          "oxidized",
+          "astringent",
+          "sour",
+          "solvent",
+          "sulfur",
+          "light_struck",
+        ])
+        .describe(
+          'Common homebrew off-flavor. \"None\" is an empty offFlavors array rather than a member here.',
+        ),
+    )
+    .nullish(),
+  brewAgain: zod.enum(["as_is", "with_tweaks", "no"]).nullish(),
+  ratedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe(
+      'Set whenever the scorecard is saved. Distinguishes \"never rated\" from a partially filled card.',
+    ),
   notes: zod.string().nullish(),
   fermentTempMin: zod
     .number()
@@ -901,6 +1179,179 @@ export const UpdateBrewSessionResponse = zod.object({
  * @summary Delete a brew session
  */
 export const DeleteBrewSessionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Save the tasting scorecard for a brew session
+ */
+export const UpsertBrewRatingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const upsertBrewRatingBodyAppearanceAromaScoreMax = 5;
+
+export const upsertBrewRatingBodyFlavorBalanceScoreMax = 5;
+
+export const upsertBrewRatingBodyMouthfeelScoreMax = 5;
+
+export const upsertBrewRatingBodyOverallScoreMax = 10;
+
+export const UpsertBrewRatingBody = zod
+  .object({
+    appearanceAromaScore: zod
+      .number()
+      .min(1)
+      .max(upsertBrewRatingBodyAppearanceAromaScoreMax)
+      .nullish(),
+    flavorBalanceScore: zod
+      .number()
+      .min(1)
+      .max(upsertBrewRatingBodyFlavorBalanceScoreMax)
+      .nullish(),
+    mouthfeelScore: zod
+      .number()
+      .min(1)
+      .max(upsertBrewRatingBodyMouthfeelScoreMax)
+      .nullish(),
+    overallScore: zod
+      .number()
+      .min(1)
+      .max(upsertBrewRatingBodyOverallScoreMax)
+      .nullish(),
+    offFlavors: zod
+      .array(
+        zod
+          .enum([
+            "diacetyl",
+            "acetaldehyde",
+            "dms",
+            "phenolic",
+            "oxidized",
+            "astringent",
+            "sour",
+            "solvent",
+            "sulfur",
+            "light_struck",
+          ])
+          .describe(
+            'Common homebrew off-flavor. \"None\" is an empty offFlavors array rather than a member here.',
+          ),
+      )
+      .optional(),
+    brewAgain: zod.enum(["as_is", "with_tweaks", "no"]).nullish(),
+    tastingNotes: zod.string().nullish(),
+  })
+  .describe(
+    "The tasting scorecard. Deliberately kept off UpdateBrewSessionBody: the brew-session detail page re-sends the whole session on every mutation, so a scorecard field living in that body would be silently nulled by an unrelated status or gravity save.",
+  );
+
+export const upsertBrewRatingResponseAppearanceAromaScoreMax = 5;
+
+export const upsertBrewRatingResponseFlavorBalanceScoreMax = 5;
+
+export const upsertBrewRatingResponseMouthfeelScoreMax = 5;
+
+export const upsertBrewRatingResponseOverallScoreMax = 10;
+
+export const UpsertBrewRatingResponse = zod.object({
+  id: zod.number(),
+  recipeId: zod.number().nullish(),
+  recipeName: zod.string(),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
+  brewDate: zod.string().date(),
+  plannedDate: zod
+    .string()
+    .date()
+    .nullish()
+    .describe(
+      "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
+    ),
+  packagedDate: zod.string().date().nullish(),
+  batchSizeGallons: zod.number(),
+  originalGravityActual: zod.number().nullish(),
+  finalGravityActual: zod.number().nullish(),
+  abvActual: zod.number().nullish(),
+  appearanceAromaScore: zod
+    .number()
+    .min(1)
+    .max(upsertBrewRatingResponseAppearanceAromaScoreMax)
+    .nullish(),
+  flavorBalanceScore: zod
+    .number()
+    .min(1)
+    .max(upsertBrewRatingResponseFlavorBalanceScoreMax)
+    .nullish(),
+  mouthfeelScore: zod
+    .number()
+    .min(1)
+    .max(upsertBrewRatingResponseMouthfeelScoreMax)
+    .nullish(),
+  overallScore: zod
+    .number()
+    .min(1)
+    .max(upsertBrewRatingResponseOverallScoreMax)
+    .nullish()
+    .describe(
+      "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+    ),
+  offFlavors: zod
+    .array(
+      zod
+        .enum([
+          "diacetyl",
+          "acetaldehyde",
+          "dms",
+          "phenolic",
+          "oxidized",
+          "astringent",
+          "sour",
+          "solvent",
+          "sulfur",
+          "light_struck",
+        ])
+        .describe(
+          'Common homebrew off-flavor. \"None\" is an empty offFlavors array rather than a member here.',
+        ),
+    )
+    .nullish(),
+  brewAgain: zod.enum(["as_is", "with_tweaks", "no"]).nullish(),
+  ratedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe(
+      'Set whenever the scorecard is saved. Distinguishes \"never rated\" from a partially filled card.',
+    ),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  autoAdvanceToConditioning: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "null = use global setting, true = always auto-advance, false = always manual",
+    ),
+  tastingNotes: zod.string().nullish(),
+  photoPath: zod.string().nullish(),
+  createdAt: zod.string().datetime({}),
+  updatedAt: zod.string().datetime({}),
+});
+
+/**
+ * @summary Clear the tasting scorecard for a brew session
+ */
+export const DeleteBrewRatingParams = zod.object({
   id: zod.coerce.number(),
 });
 

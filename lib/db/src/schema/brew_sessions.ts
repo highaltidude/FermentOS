@@ -9,6 +9,25 @@ import { recipesTable } from "./recipes";
 // new values.
 export const brewStatusEnum = ["brew_day", "fermenting", "conditioning", "packaged"] as const;
 
+// Tasting scorecard. Filled in once a batch is packaged: three 1-5 sensory
+// sub-scores plus a 1-10 overall, with off-flavours and brew-again intent
+// recorded alongside but deliberately not scored.
+export const brewAgainEnum = ["as_is", "with_tweaks", "no"] as const;
+
+// "None" is the empty array rather than a tag of its own.
+export const offFlavorEnum = [
+  "diacetyl",
+  "acetaldehyde",
+  "dms",
+  "phenolic",
+  "oxidized",
+  "astringent",
+  "sour",
+  "solvent",
+  "sulfur",
+  "light_struck",
+] as const;
+
 export const brewSessionsTable = pgTable("brew_sessions", {
   id: serial("id").primaryKey(),
   recipeId: integer("recipe_id").references(() => recipesTable.id, { onDelete: "set null" }),
@@ -21,7 +40,19 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   originalGravityActual: real("original_gravity_actual"),
   finalGravityActual: real("final_gravity_actual"),
   abvActual: real("abv_actual"),
+  /** @deprecated legacy 1-5 star score, superseded by overallScore. Retained
+   * so drizzle-kit push doesn't try to drop the column before the boot
+   * migration has rescaled every row; remove in a later push-force cleanup. */
   rating: integer("rating"),
+  appearanceAromaScore: integer("appearance_aroma_score"),
+  flavorBalanceScore: integer("flavor_balance_score"),
+  mouthfeelScore: integer("mouthfeel_score"),
+  overallScore: integer("overall_score"),
+  offFlavors: text("off_flavors", { enum: offFlavorEnum }).array(),
+  brewAgain: text("brew_again", { enum: brewAgainEnum }),
+  // Set whenever the scorecard is saved. This — not overallScore — is what
+  // distinguishes "never rated" from a partially filled card.
+  ratedAt: timestamp("rated_at", { withTimezone: true }),
   notes: text("notes"),
   fermentTempMin: real("ferment_temp_min"),
   fermentTempMax: real("ferment_temp_max"),

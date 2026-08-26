@@ -7,6 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScoreBadge } from "@/components/ui/score-picker";
 
 const STATUS_COLORS: Record<string, string> = {
   brew_day: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/40",
@@ -161,6 +162,42 @@ export default function Dashboard() {
                 <Link href="/brew-sessions/new">
                   <Button variant="outline" size="sm" className="mt-3">Start a Brew</Button>
                 </Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Top Rated */}
+        <div className="bg-card border border-card-border rounded-lg">
+          <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Top Rated</h2>
+            <Link href="/brew-sessions">
+              <span className="text-xs text-primary hover:underline cursor-pointer">View all</span>
+            </Link>
+          </div>
+          <div className="divide-y divide-border">
+            {summaryLoading ? (
+              <div className="p-4 space-y-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : summary?.topRatedBrews && summary.topRatedBrews.length > 0 ? (
+              summary.topRatedBrews.map((brew) => (
+                <Link key={brew.id} href={`/brew-sessions/${brew.id}`}>
+                  <div className="px-4 py-3 hover:bg-muted transition-colors cursor-pointer flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">{brew.recipeName}</div>
+                      <div className="text-xs text-muted-foreground">{formatDate(brew.brewDate)}</div>
+                    </div>
+                    <ScoreBadge value={brew.overallScore} />
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="px-4 py-8 text-center">
+                <Beer className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-40" />
+                <p className="text-sm text-muted-foreground">No rated batches yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Rate a packaged batch to see it here</p>
               </div>
             )}
           </div>

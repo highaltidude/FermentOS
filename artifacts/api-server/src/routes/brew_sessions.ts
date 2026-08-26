@@ -12,6 +12,9 @@ import {
   AddFermentationReadingParams,
   AddFermentationReadingBody,
   DeleteFermentationReadingParams,
+  UpsertBrewRatingParams,
+  UpsertBrewRatingBody,
+  DeleteBrewRatingParams,
 } from "@workspace/api-zod";
 import multer from "multer";
 import path from "path";
@@ -317,6 +320,47 @@ router.delete("/brew-sessions/:id/photo", async (req, res) => {
   }
 
   await db.update(brewSessionsTable).set({ photoPath: null, updatedAt: new Date() }).where(eq(brewSessionsTable.id, id));
+  return res.status(204).send();
+});
+
+// The tasting scorecard lives on its own sub-resource rather than in
+// UpdateBrewSessionBody: the detail page re-sends the whole session on every
+// mutation, so a scorecard field in that body would be nulled out by an
+// unrelated status or gravity save.
+router.put("/brew-sessions/:id/rating", async (req, res) => {
+  const params = UpsertBrewRatingParams.safeParse({ id: Number(req.params.id) });
+  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+
+  const body = UpsertBrewRatingBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "Invalid request body" });
+
+  const [session] = await db
+    .update(brewSessionsTable)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .set({ ...body.data, ratedAt: new Date(), updatedAt: new Date() } as any)
+    .where(eq(brewSessionsTable.id, params.data.id))
+    .returning();
+  if (!session) return res.status(404).json({ error: "Brew session not found" });
+  return res.json(session);
+});
+
+router.delete("/brew-sessions/:id/rating", async (req, res) => {
+  const params = DeleteBrewRatingParams.safeParse({ id: Number(req.params.id) });
+  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+
+  await db
+    .update(brewSessionsTable)
+    .set({
+      appearanceAromaScore: null,
+      flavorBalanceScore: null,
+      mouthfeelScore: null,
+      overallScore: null,
+      offFlavors: null,
+      brewAgain: null,
+      ratedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(brewSessionsTable.id, params.data.id));
   return res.status(204).send();
 });
 

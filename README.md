@@ -18,10 +18,13 @@ FermentOS is a self-hosted web app that runs on a Raspberry Pi or any Linux devi
 - Brew session tracking with status lifecycle (Brew Day → Fermenting → Conditioning → Packaged)
 - iSpindel integration for automatic gravity and temperature readings
 - Fermentation insights — attenuation, velocity, and completion detection
-- Home Assistant integration via REST sensor endpoint
+- Home Assistant integration — REST sensor endpoint plus ready-to-paste `configuration.yaml` and Lovelace card YAML
 - Inventory management with optional enforcement before starting a batch
-- Local backups with optional SFTP export
-- In-app updates — no SSH required
+- System health monitoring — live CPU/memory/disk/network stats with historical trend charts
+- Local backups plus scheduled SFTP export, with a backup-coverage audit
+- In-app updates with rollback — one-click update, GitHub release notes, deploy history, and one-click rollback to a prior deploy
+- Brewing calculators — ABV/attenuation today, more (water chemistry, recipe scaling, batch cost) planned
+- Optional API token lockdown for external clients, with read/write scopes
 
 ## Screenshots
 
@@ -63,20 +66,27 @@ page.
 - **Recipe Manager** — Create and store beer recipes with full ingredient lists, gravity targets, ABV, IBU, and color
 - **Brew Log** — Log brew sessions, track status from grain to glass (brew_day → fermenting → conditioning → packaged)
 - **Response & Stage History** — Every brew session records a timestamped log each time the status changes, always visible on the session page
-- **Tasting Notes & Photo** — Attach a photo, star rating, and tasting notes to any session
+- **Tasting & Rating** — Score a finished batch on a four-question scorecard (appearance & aroma, flavor & balance, mouthfeel & carbonation, each 1–5, plus an overall 1–10), tag any off-flavors, record whether you'd brew it again, and attach a photo and tasting notes. Overall scores roll up to an average on the recipe, so each recipe carries the track record of every batch brewed from it
 - **Fermentation Tracker** — Record temperature, gravity, and pH readings over time with an interactive chart
 - **Ingredients** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. The unit field is a dropdown filtered by your unit system preference
 - **Beer Styles** — Define your own style list (Settings) used as a dropdown when creating recipes
 - **Unit System** — Choose Imperial, Metric, or Both in Settings → Brewing. Controls which units appear in the inventory form; existing items keep their stored units
 - **Dashboard** — At-a-glance view of active fermentations and recent sessions
 - **iSpindel Integration** — Receive live gravity, temperature, battery, and angle readings from iSpindel Wi-Fi hydrometers. Devices auto-register on first POST, readings are mirrored into the fermentation chart, and a live telemetry card appears on the brew session page when a device is assigned
+- **Home Assistant Integration** — A dedicated status endpoint plus a Settings panel that generates a ready-to-paste `configuration.yaml` REST sensor block and a Lovelace markdown card, covering gravity, temperature, connection status, assigned brew, and fermentation insights
+- **Calculators** — An ABV/attenuation calculator (from OG/FG) is available today; Water Chemistry, Recipe Scaling, and Batch Cost calculators are planned
+- **System Health** — Live CPU, memory, disk, and network stats for the host, auto-refreshing every 5 seconds, plus historical trend charts
+- **Backups** — Local backups and scheduled SFTP export, restore from an uploaded file or from local backup history, and a coverage audit that confirms every database table is actually covered (and can block in-app updates below 100% coverage)
+- **In-App Updates & Rollback** — One-click update with live progress, GitHub release notes shown in-app, a deploy history log, and one-click rollback to a previous deploy (bare-metal/systemd installs only — Docker installs update by rebuilding the image)
+- **API Token Security** — Optional bearer-token lockdown for external API clients, with per-token read/write scopes; the browser UI itself always works without a token
 
 ## Tech Stack
 
-- **Frontend**: React + Vite + TypeScript + Tailwind CSS
-- **Backend**: Node.js + Express + TypeScript
+- **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS 4, routed with [wouter](https://github.com/molefrog/wouter), data fetching via [TanStack Query](https://tanstack.com/query), UI primitives from [Radix UI](https://www.radix-ui.com/), charts via [Recharts](https://recharts.org/)
+- **Backend**: Node.js + Express 5 + TypeScript, scheduled jobs via [node-cron](https://github.com/node-cron/node-cron), SFTP backups via [ssh2-sftp-client](https://github.com/theophilusx/ssh2-sftp-client)
 - **Database**: PostgreSQL
-- **ORM**: Drizzle ORM
+- **ORM**: Drizzle ORM, validated with Zod (via drizzle-zod)
+- **API contract**: A single [OpenAPI spec](lib/api-spec/openapi.yaml) is the source of truth for the HTTP API — [orval](https://orval.dev/) generates a typed React Query client and Zod request-validation schemas from it, so the frontend and backend can't drift out of sync
 - **Package Manager**: pnpm (monorepo workspace)
 
 ---
@@ -125,6 +135,7 @@ The script will prompt for a web port (default 3000), generate secure random cre
 
 - Data is persisted in a Docker volume (`postgres_data`); uploaded photos are stored in `./data/uploads`
 - To update: `git pull && bash docker-install.sh`
+- The in-app update/rollback system (Settings → System → Updates) is a bare-metal/systemd feature — Docker installs update by pulling and rebuilding the image instead
 
 **Non-interactive / unattended install:**
 ```bash
@@ -149,7 +160,7 @@ sudo systemctl restart fermentos        # restart the app
 
 ### Updating
 
-The easiest way to update is from the app itself: **Settings → System → App Update → Update now**. It pulls the latest commit, runs migrations, rebuilds, and restarts the services automatically, with a live progress bar.
+The easiest way to update is from the app itself: **Settings → System → App Update → Update now**. It pulls the latest commit, runs migrations, rebuilds, and restarts the services automatically, with a live progress bar. Release notes are shown in-app, and every deploy is recorded in a history log with a one-click rollback if something goes wrong.
 
 To update manually from the command line instead:
 
@@ -246,27 +257,37 @@ All endpoints are prefixed with `/api`. Replace `<host>` with your host's addres
 
 By default no authentication is required — the API is designed for trusted local network use.
 
-You can optionally enable **API token lockdown** under **Settings → Security → API Access**. When enabled, all external clients (scripts, Home Assistant, integrations) must supply a token. Browser requests from the FermentOS UI itself continue to work without a token.
+You can optionally enable **API token lockdown** under **Settings → Security → API Access**. When enabled, all external clients (scripts, Home Assistant, integrations) must supply a token. Browser requests from the FermentOS UI itself continue to work without a token (same-origin requests are always allowed).
 
-**Generating a token:** Settings → Security → API Access → enter a name → Create Token. Copy the token immediately — it is only shown once.
+**Generating a token:** Settings → Security → API Access → enter a name → choose a scope → Create Token. Copy the token immediately — it is only shown once.
 
-**Using a token** (either header works):
+- **Scope**: tokens are `read` or `write` (default `write`). A `read`-scoped token gets `403` on any `POST`/`PUT`/`PATCH`/`DELETE` request.
+
+**Using a token:**
 ```
 Authorization: Bearer <token>
-X-Api-Key: <token>
 ```
+
+**Always-exempt endpoints** (reachable with no token, even under lockdown):
+- `GET /healthz`
+- `GET /api/admin/repair-script`, `GET /api/admin/sudoers-line` — recovery scripts, must stay reachable from a plain `curl` on the host even if you lock yourself out
+- `GET /api/ha/status` — read-only Home Assistant polling target
+- `POST /api/integrations/ispindel`, `GET /api/integrations/ispindel/status` — the iSpindel device itself can't send a bearer token
+
+Note: `/api/admin/auth/*` (the token-management endpoints themselves) are **not** exempt, even under lockdown — otherwise an external caller could mint itself a token or disable the lock entirely.
 
 **Home Assistant example:**
 ```yaml
 sensor:
   - platform: rest
     name: "FermentOS Active Brews"
-    resource: http://192.168.1.239:8080/api/dashboard/summary
+    resource: http://192.168.1.239:8080/api/ha/status
     headers:
       Authorization: "Bearer <token>"
-    value_template: "{{ value_json.activeBrews }}"
+    value_template: "{{ value_json | length }}"
     scan_interval: 300
 ```
+(See the dedicated **Home Assistant** section below for the full response shape, or generate a ready-to-paste config from Settings → System → Integrations → Home Assistant.)
 
 ---
 
@@ -276,6 +297,7 @@ sensor:
 |--------|----------|-------------|
 | GET | `/api/dashboard/summary` | Counts of active brews, total recipes, and inventory items |
 | GET | `/api/dashboard/active-brews` | List of currently active brew sessions |
+| GET | `/api/dashboard/upcoming-brews` | Deprecated compatibility stub — the "scheduled" status no longer exists; always returns `[]` |
 
 ---
 
@@ -305,6 +327,12 @@ sensor:
   "abv": 6.9,
   "ibu": 65,
   "colorSrm": 8,
+  "estimatedBrewTimeMinutes": 240,
+  "efficiencyPercent": 72,
+  "caloriesPerServing": 210,
+  "fermentTempMin": 64,
+  "fermentTempMax": 70,
+  "fermentTempIdeal": 67,
   "notes": "Optional brew notes"
 }
 ```
@@ -317,12 +345,40 @@ sensor:
   "amount": 2,
   "unit": "oz",
   "use": "boil",
-  "time": 60,
+  "timingMinutes": 60,
   "notes": "Optional"
 }
 ```
 `type`: `malt` | `hop` | `yeast` | `adjunct` | `water_agent` | `other`
-`use`: `mash` | `boil` | `whirlpool` | `dry_hop` | `other`
+`use`: `mash` | `boil` | `dry_hop` | `whirlpool` | `primary` | `secondary` | `packaging` | `other`
+
+---
+
+### Recipe Steps
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/recipes/:id/steps` | List steps for a recipe, ordered by position |
+| POST | `/api/recipes/:id/steps` | Add a step (appended to the end if `position` is omitted) |
+| PUT | `/api/steps/:id` | Update a step |
+| DELETE | `/api/steps/:id` | Delete a step |
+| PUT | `/api/recipes/:id/steps/reorder` | Reorder all steps for a recipe |
+
+**POST /api/recipes/:id/steps** body:
+```json
+{
+  "body": "Mash in at 152°F for 60 minutes",
+  "phase": "mash",
+  "durationMinutes": 60
+}
+```
+`phase`: `mash` | `boil` | `fermentation` | `conditioning` | `packaging` | `other`
+
+**PUT /api/recipes/:id/steps/reorder** body:
+```json
+{ "stepIds": [12, 9, 14] }
+```
+Must contain every step ID belonging to the recipe, or the request is rejected.
 
 ---
 
@@ -341,6 +397,8 @@ sensor:
 | DELETE | `/api/status-log/:id` | Delete a status log entry |
 | POST | `/api/brew-sessions/:id/photo` | Upload a session photo (multipart/form-data, field: `photo`) |
 | DELETE | `/api/brew-sessions/:id/photo` | Remove the session photo |
+| PUT | `/api/brew-sessions/:id/rating` | Save the tasting scorecard |
+| DELETE | `/api/brew-sessions/:id/rating` | Clear the tasting scorecard |
 
 **POST /api/brew-sessions** body:
 ```json
@@ -349,11 +407,15 @@ sensor:
   "recipeName": "Pacific IPA",
   "status": "brew_day",
   "brewDate": "2024-03-15",
+  "plannedDate": null,
+  "packagedDate": null,
   "batchSizeGallons": 5.5,
   "originalGravityActual": 1.064,
   "finalGravityActual": null,
   "abvActual": null,
-  "rating": null,
+  "fermentTempMin": 64,
+  "fermentTempMax": 70,
+  "fermentTempIdeal": 67,
   "notes": "Optional"
 }
 ```
@@ -362,12 +424,35 @@ sensor:
 **POST /api/brew-sessions/:id/readings** body:
 ```json
 {
-  "recordedAt": "2024-03-16T10:00:00Z",
-  "temperature": 68.5,
+  "readingAt": "2024-03-16T10:00:00Z",
+  "temperatureFahrenheit": 68.5,
   "gravity": 1.045,
   "ph": 4.2
 }
 ```
+`readingAt` is required (ISO 8601 datetime); everything else is optional.
+
+**PUT /api/brew-sessions/:id/rating** body:
+```json
+{
+  "appearanceAromaScore": 4,
+  "flavorBalanceScore": 5,
+  "mouthfeelScore": 4,
+  "overallScore": 9,
+  "offFlavors": [],
+  "brewAgain": "as_is",
+  "tastingNotes": "Optional"
+}
+```
+Every field is optional. The three sub-scores are 1–5 and `overallScore` is
+1–10; out-of-range values are rejected with a 400. `brewAgain`: `as_is` |
+`with_tweaks` | `no`. `offFlavors` accepts any of `diacetyl`,
+`acetaldehyde`, `dms`, `phenolic`, `oxidized`, `astringent`, `sour`,
+`solvent`, `sulfur`, `light_struck` — an empty array means none were
+detected. Saving stamps `ratedAt`, which is what marks a batch as rated.
+
+**DELETE /api/brew-sessions/:id/rating** clears the scorecard. Tasting notes
+are kept.
 
 ---
 
@@ -466,6 +551,22 @@ The preference is stored in the database and defaults to `imperial` on a fresh i
 
 ---
 
+### Settings — Other Preferences
+
+Each of these follows the same `GET`/`PUT` pattern, returning and accepting the shown body shape.
+
+| Endpoint | Body | Notes |
+|----------|------|-------|
+| `/api/settings/inventory-enforcement` | `{ "enabled": boolean }` | Blocks starting a brew day if required ingredients aren't in stock |
+| `/api/settings/reading-retention` | `{ "days": 0 \| 90 \| 180 \| 365 \| 730 \| null }` | Auto-deletes fermentation readings older than N days; `0`/`null` keeps forever |
+| `/api/settings/brewery-name` | `{ "name": string \| null }` | Shown in the UI header |
+| `/api/settings/default-readings-shown` | `{ "count": 5 \| 10 \| 25 \| 50 \| 100 }` | Default number of readings shown on a fresh fermentation chart |
+| `/api/settings/ferment-temp-unit` | `{ "unit": "F" \| "C" }` | Unit used for fermentation temperature thresholds/readings |
+| `/api/settings/temp-alert-readings` | `{ "count": 2..10 }` | Consecutive out-of-range readings required before a temperature alert fires |
+| `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Auto-advance a brew session to Conditioning once fermentation looks complete |
+
+---
+
 ### Sensors
 
 | Method | Endpoint | Description |
@@ -477,7 +578,7 @@ The preference is stored in the database and defaults to `imperial` on a fresh i
 | DELETE | `/api/sensors/devices/:id` | Delete a device and all its readings |
 | POST | `/api/sensors/devices/:id/assign` | Assign a device to a brew session |
 | DELETE | `/api/sensors/devices/:id/assign` | Unassign a device from its current brew session |
-| GET | `/api/sensors/readings` | List raw sensor readings (filterable by `deviceId`, `brewSessionId`) |
+| GET | `/api/sensors/devices/:id/readings` | List raw readings for a device |
 | GET | `/api/brew-sessions/:id/sensor-telemetry` | Live telemetry for a brew: device info, latest reading, fermentation insights, alerts |
 
 ---
@@ -491,6 +592,113 @@ The preference is stored in the database and defaults to `imperial` on a fresh i
 | PUT | `/api/integrations/ispindel/settings` | Update integration settings |
 | POST | `/api/integrations/ispindel/simulate` | Send a synthetic reading for development/testing |
 | GET | `/api/integrations/ispindel/status` | HA-friendly status endpoint — returns latest reading from each device |
+| GET | `/api/integrations/ispindel/devices/:deviceId/readings` | Paginated raw readings for a device — query params `limit`, `offset`, `sort` (`asc`/`desc`), `start`, `end`, `brewId` |
+
+---
+
+### Home Assistant
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown |
+
+Response is an array, one entry per device:
+```json
+[
+  {
+    "deviceId": 1,
+    "deviceName": "Fermenter 1",
+    "deviceKey": "ispindel-001",
+    "connectionStatus": "connected",
+    "assignedBrewSessionId": 12,
+    "assignedBrewName": "Pacific IPA",
+    "lastSeenAt": "2024-03-16T10:00:00Z",
+    "latestReading": { "gravity": 1.045, "temperature": 68.5, "battery": 3.9 },
+    "insights": { "attenuationPercent": 42.5, "fermentationStatus": "slowing" },
+    "alerts": []
+  }
+]
+```
+`connectionStatus`: `connected` | `warning` | `offline` | `unknown`. Settings → System → Integrations → Home Assistant generates a ready-to-paste `configuration.yaml` REST sensor block and a Lovelace markdown card for this endpoint, so you rarely need to hand-write the YAML.
+
+---
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/system/stats` | Live host stats: CPU, memory, disk, network, temperature |
+| GET | `/api/system/health-history?hours=` | Historical health samples for trend charts. `hours` defaults to 24, max 336 (14 days) |
+
+Backs the Settings → System → Health panel, which auto-refreshes every 5 seconds.
+
+---
+
+### Backups
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/backup/config` | Get backup configuration (SFTP credentials are masked) and last-run status |
+| PUT | `/api/backup/config` | Update backup configuration |
+| POST | `/api/backup/test` | Test the configured SFTP connection |
+| POST | `/api/backup/run` | Run a backup now — body `{ "target": "sftp" \| "local" }` (default `sftp`) |
+| POST | `/api/backup/restore` | Restore from an uploaded `pg_dump` file (multipart/form-data, field `backup`) — **destructive**, wipes and replays the public schema |
+| GET | `/api/backup/download` | Download a fresh backup |
+| GET | `/api/backup/local-files` | List local backup files |
+| GET | `/api/backup/local-files/:filename/download` | Download a specific local backup file |
+| DELETE | `/api/backup/local-files/:filename` | Delete a local backup file |
+| POST | `/api/backup/local-files/:filename/restore` | Restore from a specific local backup file |
+| GET | `/api/backup/audit` | Coverage report — which database tables are backed up, excluded, or missing a classification, as a `coveragePercent` |
+
+**PUT /api/backup/config** body:
+```json
+{
+  "schedule": "daily",
+  "retentionDays": 14,
+  "backupBeforeUpdate": "local",
+  "localPath": "/opt/fermentos/backups",
+  "sftp": {
+    "host": "backup.example.com",
+    "port": 22,
+    "username": "fermentos",
+    "password": "optional — omit to keep the existing password",
+    "remotePath": "/backups",
+    "prefix": "fermentos"
+  }
+}
+```
+`schedule`: `none` | `daily` | `weekly`. `retentionDays` is clamped to 0–60 (`0` keeps forever). `backupBeforeUpdate` controls whether an in-app update takes a backup first (`none` | `local` | `sftp`).
+
+---
+
+### Admin — Software Update
+
+Bare-metal/systemd installs only (Docker updates by rebuilding the image).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/version` | Current commit hash/branch/message, whether an update is available, and update-lock state |
+| POST | `/api/admin/update` | Start an in-app update (pull, install, migrate, build, restart) |
+| GET | `/api/admin/update-log` | Tail the running update's log |
+| GET | `/api/admin/release-notes` | GitHub release notes, annotated with whether each release is newer than what's currently running |
+| GET | `/api/admin/update-history` | Last 10 deploys, newest first, flagging which one is currently running |
+| POST | `/api/admin/rollback` | Roll back to a prior deploy — body `{ "hash": "<7-40 char git SHA>" }` |
+| POST | `/api/admin/restart-service` | Restart just the app service (~15s) |
+| POST | `/api/admin/reboot` | Reboot the host (~30-90s) |
+| POST | `/api/admin/update-lock/clear` | Force-clear a stuck update/rollback lock |
+| GET | `/api/admin/repair-script` | A copy-pasteable `sudo bash` script that fixes missing sudoers permissions — always exempt from auth |
+| GET | `/api/admin/sudoers-line` | The raw sudoers line the repair script installs — always exempt from auth |
+
+---
+
+### Admin — API Tokens
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/auth/status` | Whether token lockdown is enabled, plus the list of existing tokens (no secret values) |
+| PUT | `/api/admin/auth/status` | Enable/disable lockdown — body `{ "required": boolean }` (requires at least one token to enable) |
+| POST | `/api/admin/auth/tokens` | Create a token — body `{ "name": string, "scope"?: "read" \| "write" }`. The plaintext token is only returned once, in this response |
+| DELETE | `/api/admin/auth/tokens/:id` | Delete a token (auto-disables lockdown if it was the last one) |
 
 ---
 
@@ -509,7 +717,7 @@ The iSpindel is an open-source Wi-Fi hydrometer that sends gravity, temperature,
 
 ### 1. Enable the integration
 
-In FermentOS, go to **Settings → System → Connectivity → iSpindel Integration** and confirm the toggle is on. The panel shows the exact POST URL to use.
+In FermentOS, go to **Settings → System → Integrations → iSpindel Integration** and confirm the toggle is on. The panel shows the exact POST URL to use.
 
 ### 2. Configure your iSpindel
 
@@ -526,21 +734,21 @@ Leave all other fields at their defaults. The iSpindel's **Name** field becomes 
 
 ### 3. First reading
 
-On the next wake cycle the iSpindel will POST to FermentOS. If no device with that `deviceKey` exists yet, one is **auto-created** — you will see it appear in the Connectivity panel immediately after the first reading.
+On the next wake cycle the iSpindel will POST to FermentOS. If no device with that `deviceKey` exists yet, one is **auto-created** — you will see it appear in the Integrations panel immediately after the first reading.
 
 ### 4. Assign to a brew session
 
-In the Connectivity panel (or on the brew session page), select an active brew from the **Assign to brew…** dropdown. From that point on, every incoming reading is also mirrored into the session's fermentation chart and a live telemetry card appears at the top of the brew session page.
+In the Integrations panel (or on the brew session page), select an active brew from the **Assign to brew…** dropdown. From that point on, every incoming reading is also mirrored into the session's fermentation chart and a live telemetry card appears at the top of the brew session page.
 
 ### 5. Optional: secure with a token
 
-Set a **Security Token** in the Connectivity panel. Then open the iSpindel web UI and enter the same value in its **Token** field. FermentOS will reject readings that don't include the matching token.
+Set a **Security Token** in the Integrations panel. Then open the iSpindel web UI and enter the same value in its **Token** field. FermentOS will reject readings that don't include the matching token.
 
 > **Note:** The ingest endpoint (`POST /api/integrations/ispindel`) and the status endpoint (`GET /api/integrations/ispindel/status`) are always exempt from API key lockdown so the iSpindel device can reach them without a bearer token.
 
 ### Simulate a reading (development)
 
-Expand the **Developer: Simulate iSpindel Reading** section in the Connectivity panel and click **Send Reading** — useful for testing before your device arrives or while debugging.
+Expand the **Developer: Simulate iSpindel Reading** section in the Integrations panel and click **Send Reading** — useful for testing before your device arrives or while debugging.
 
 ---
 
@@ -548,9 +756,16 @@ Expand the **Developer: Simulate iSpindel Reading** section in the Connectivity 
 
 ```bash
 pnpm install
+
 pnpm --filter @workspace/api-server run dev   # API on :8080
-pnpm --filter @workspace/fermentos run dev   # Frontend on :23975
+pnpm --filter @workspace/fermentos run dev    # Frontend on :23975
+
+pnpm run typecheck   # tsc across every workspace package (no ESLint in this repo)
+pnpm run test        # vitest, where a package has a test suite
+pnpm run build       # typecheck, then build every workspace package
 ```
+
+Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack (Postgres + both dev servers, live-reloading against a bind-mounted repo) in one command.
 
 ---
 

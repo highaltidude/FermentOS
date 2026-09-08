@@ -211,4 +211,38 @@
     color: hsl(var(--muted-foreground));
     pointer-events: none;
   }
+
+  /* Installed (standalone) PWA safe areas.
+     Standalone launches draw under the status bar and the home indicator, so
+     the fixed mobile header, the fixed bottom nav, and the scroll container
+     between them each need the matching inset. In a normal browser tab the
+     insets resolve to 0 and these behave exactly as the old h-12/pt-12/pb-16
+     did. Each rule declares the plain value first and then the env() version,
+     so a browser without env() support simply keeps the fallback.
+     Requires viewport-fit=cover on the viewport meta (see index.html). */
+  .safe-area-header {
+    height: 3rem;
+    height: calc(3rem + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-main {
+    padding-top: 3rem;
+    padding-bottom: 4rem;
+    padding-top: calc(3rem + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The header and nav are md:hidden, so only this one needs unwinding at the
+     desktop breakpoint where the sidebar takes over. */
+  @media (min-width: 768px) {
+    .safe-area-main {
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+  }
+
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }

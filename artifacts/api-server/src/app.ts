@@ -43,9 +43,31 @@ app.use("/api/uploads/sessions", express.static(uploadsDir));
 // WorkingDirectory in the systemd service is the repo root, so cwd() is correct.
 const staticDir = path.resolve(process.cwd(), "artifacts/fermentos/dist/public");
 if (fs.existsSync(staticDir)) {
-  app.use(express.static(staticDir));
-  // SPA fallback — serve index.html for any non-/api route
+  app.use(
+    express.static(staticDir, {
+      // Vite content-hashes everything under /assets, so a new build always
+      // produces a new filename — those are safe to cache forever. index.html
+      // is NOT hashed and is what points at the hashed bundles, so it must
+      // revalidate every time: caching it would leave the in-app updater
+      // reloading into the old shell (and thus the old bundles) with no way
+      // to recover short of a manual hard-refresh.
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        } else {
+          // Manifest, icons, og image — stable but unhashed, so a rename
+          // needs to be picked up within a day rather than never.
+          res.setHeader("Cache-Control", "public, max-age=86400");
+        }
+      },
+    }),
+  );
+  // SPA fallback — serve index.html for any non-/api route. Same no-cache
+  // reasoning as above: this path serves the shell for every deep link.
   app.get(/^(?!\/api).*$/, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.join(staticDir, "index.html"));
   });
   logger.info({ staticDir }, "Serving frontend static files");

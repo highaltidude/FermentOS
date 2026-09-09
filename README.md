@@ -4,27 +4,32 @@
 
 > Self-hosted homebrewing management for the serious brewer.
 
-FermentOS is a self-hosted web app that runs on a Raspberry Pi or any Linux device on your home network. It manages your recipes, brew sessions, ingredients, and equipment from a single interface. It integrates with iSpindel hydrometers to capture gravity and temperature automatically throughout fermentation. All your data stays on your own hardware — no cloud, no subscription.
+FermentOS keeps your whole brewery in one place — recipes, batches, ingredients,
+and equipment — running entirely on hardware you own. Put it on a Raspberry Pi,
+a mini PC, a NAS, or a spare VM on your home network, then open it from any
+browser or your phone. There is no cloud account, no subscription, and your
+brewing data never leaves the house.
+
+If you use an iSpindel hydrometer, FermentOS reads gravity and temperature from
+it automatically for the whole ferment, charts the progress, and messages your
+phone when a batch needs attention.
 
 **Who is it for**
 
-- Homebrewers who want full control over their data
+- Homebrewers who want to own their data outright
 - Anyone already running Home Assistant or a home server
-- Brewers tired of spreadsheets or cloud apps
+- Brewers who have outgrown a spreadsheet
 
-**Key Features**
+**Highlights**
 
-- Recipe management with ingredients and step-by-step brew instructions
-- Brew session tracking with status lifecycle (Brew Day → Fermenting → Conditioning → Packaged)
-- iSpindel integration for automatic gravity and temperature readings
-- Fermentation insights — attenuation, velocity, and completion detection
-- Home Assistant integration — REST sensor endpoint plus ready-to-paste `configuration.yaml` and Lovelace card YAML
-- Inventory management with optional enforcement before starting a batch
-- System health monitoring — live CPU/memory/disk/network stats with historical trend charts
-- Local backups plus scheduled SFTP export, with a backup-coverage audit
-- In-app updates with rollback — one-click update, GitHub release notes, deploy history, and one-click rollback to a prior deploy
-- Brewing calculators — ABV/attenuation today, more (water chemistry, recipe scaling, batch cost) planned
-- Optional API token lockdown for external clients, with read/write scopes
+- Recipes, brew sessions, ingredients, and equipment in one place
+- Automatic gravity and temperature logging from an iSpindel
+- Alerts to your phone when a ferment goes off the rails
+- Installs to your home screen like an app
+- Home Assistant integration, backups, and one-click updates
+
+**New here?** Start with [Getting started](#getting-started) — it takes you from
+install to a tracked first batch.
 
 ## Screenshots
 
@@ -46,62 +51,46 @@ FermentOS is a self-hosted web app that runs on a Raspberry Pi or any Linux devi
 ![Settings](docs/screenshots/settings.jpg)
 *Settings — manage beer styles, unit system, ingredient enforcement, scheduled SFTP backups, API access, in-app updates, and host reboots*
 
-## Brew session lifecycle
-
-Brew sessions move through four stages in a linear progression:
-
-```
-brew_day  ──▶  fermenting  ──▶  conditioning  ──▶  packaged
-```
-
-All new sessions start at **Brew Day**. The stage bar on the session detail
-page lets you advance (or revert) to any stage with a single click. Every
-status change is recorded in a timestamped history log visible on the session
-page.
-
-`brewDate` records the actual day grain hit the kettle.
-
 ## Features
 
-- **Recipe Manager** — Create and store beer recipes with full ingredient lists, gravity targets, ABV, IBU, and color
-- **Brew Log** — Log brew sessions, track status from grain to glass (brew_day → fermenting → conditioning → packaged)
-- **Response & Stage History** — Every brew session records a timestamped log each time the status changes, always visible on the session page
-- **Tasting & Rating** — Score a finished batch on a four-question scorecard (appearance & aroma, flavor & balance, mouthfeel & carbonation, each 1–5, plus an overall 1–10), tag any off-flavors, record whether you'd brew it again, and attach a photo and tasting notes. Overall scores roll up to an average on the recipe, so each recipe carries the track record of every batch brewed from it
-- **Alerts & Notifications** — FermentOS checks every active brew every 5 minutes and can notify you when something needs attention — temperature out of range, fermentation stalled, sensor offline, or sensor battery low — even with the app closed. Delivery is via [ntfy](https://ntfy.sh) or a generic webhook (which also covers Discord and Slack). Both are **outbound** requests, so this works on a plain-HTTP home network with no certificates, no reverse proxy, and no VPN client on your phone. Temperature alerts wait for the number of consecutive out-of-range readings set by Temperature Alert Threshold, so a single stray reading will not wake you. Configure under Settings → Brewing → Notifications
-- **Fermentation Tracker** — Record temperature, gravity, and pH readings over time with an interactive chart
-- **Ingredients** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. The unit field is a dropdown filtered by your unit system preference
-- **Beer Styles** — Define your own style list (Settings) used as a dropdown when creating recipes
-- **Unit System** — Choose Imperial, Metric, or Both in Settings → Brewing. Controls which units appear in the inventory form; existing items keep their stored units
-- **Dashboard** — At-a-glance view of active fermentations and recent sessions
-- **iSpindel Integration** — Receive live gravity, temperature, battery, and angle readings from iSpindel Wi-Fi hydrometers. Devices auto-register on first POST, readings are mirrored into the fermentation chart, and a live telemetry card appears on the brew session page when a device is assigned
-- **Home Assistant Integration** — A dedicated status endpoint plus a Settings panel that generates a ready-to-paste `configuration.yaml` REST sensor block and a Lovelace markdown card, covering gravity, temperature, connection status, assigned brew, and fermentation insights
-- **Calculators** — An ABV/attenuation calculator (from OG/FG) is available today; Water Chemistry, Recipe Scaling, and Batch Cost calculators are planned
-- **System Health** — Live CPU, memory, disk, and network stats for the host, auto-refreshing every 5 seconds, plus historical trend charts
-- **Backups** — Local backups and scheduled SFTP export, restore from an uploaded file or from local backup history, and a coverage audit that confirms every database table is actually covered (and can block in-app updates below 100% coverage)
-- **In-App Updates & Rollback** — One-click update with live progress, GitHub release notes shown in-app, a deploy history log, and one-click rollback to a previous deploy (bare-metal/systemd installs only — Docker installs update by rebuilding the image)
-- **API Token Security** — Optional bearer-token lockdown for external API clients, with per-token read/write scopes; the browser UI itself always works without a token
-
-## Tech Stack
-
-- **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS 4, routed with [wouter](https://github.com/molefrog/wouter), data fetching via [TanStack Query](https://tanstack.com/query), UI primitives from [Radix UI](https://www.radix-ui.com/), charts via [Recharts](https://recharts.org/)
-- **Backend**: Node.js + Express 5 + TypeScript, scheduled jobs via [node-cron](https://github.com/node-cron/node-cron), SFTP backups via [ssh2-sftp-client](https://github.com/theophilusx/ssh2-sftp-client)
-- **Database**: PostgreSQL
-- **ORM**: Drizzle ORM, validated with Zod (via drizzle-zod)
-- **API contract**: A single [OpenAPI spec](lib/api-spec/openapi.yaml) is the source of truth for the HTTP API — [orval](https://orval.dev/) generates a typed React Query client and Zod request-validation schemas from it, so the frontend and backend can't drift out of sync
-- **Package Manager**: pnpm (monorepo workspace)
+- **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color
+- **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged
+- **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
+- **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
+- **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. See [Get alerts on your phone](#get-alerts-on-your-phone)
+- **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
+- **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
+- **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something
+- **Auto-advance to Conditioning** — Move a batch on automatically once fermentation looks finished, so a forgotten status does not leave it sitting in Fermenting for weeks
+- **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
+- **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
+- **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
+- **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
+- **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
+- **Calculators** — ABV and attenuation from OG and FG today; water chemistry, recipe scaling, and batch cost are planned
+- **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
+- **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
+- **Updates and rollback** — Update from inside the app with a live progress bar, read the release notes in place, and roll back to a previous deploy in one click (bare-metal installs; Docker updates by rebuilding the image)
+- **API tokens** — Optionally lock the API so only clients you approve can reach it, with per-token read or write scopes. The browser UI keeps working either way
 
 ---
 
-## Self-Host Installation
+## Getting started
 
-### Requirements
+Install FermentOS, brew something, get alerts on your phone, and put the app
+on your home screen. Each section stands on its own — skip anything that does
+not apply to you.
+
+### Install FermentOS
+
+#### Requirements
 
 - Any Debian-based 64-bit Linux host (Raspberry Pi OS, Ubuntu, Debian, etc.)
 - Raspberry Pi 3B+ or newer (Pi 4 recommended) works great, but a mini PC, NAS, or VM works just as well
 - At least 8 GB SD card
 - Internet connection
 
-### Quick install
+#### Quick install
 
 Clone the repo and run the installer:
 
@@ -122,7 +111,7 @@ The script will:
 
 When it finishes, it prints the URL to open in your browser (e.g. `http://192.168.1.42:3000`).
 
-### Docker Installation
+#### Docker Installation
 
 Recommended for NAS, mini PC, VM, or anyone already running Docker.
 
@@ -149,17 +138,253 @@ docker compose build --build-arg BUILD_TARGET=linux/arm64
 docker compose up -d
 ```
 
----
+#### Accessing on your local network
 
-### Useful commands after install
+The installer prints your host's IP when it finishes. You can also find it any time with:
 
 ```bash
-sudo systemctl status fermentos         # check service status
-sudo journalctl -u fermentos -f         # tail logs
-sudo systemctl restart fermentos        # restart the app
+hostname -I
 ```
 
-### Updating
+Visit `http://<host-ip>:3000` from any device on the same network. For a stable address, assign your host a static IP in your router's DHCP settings.
+
+---
+
+### Your first brew
+
+Once FermentOS is running, this is the shortest path to a batch you can watch
+ferment. It takes about ten minutes.
+
+**1. Add a beer style**
+
+Go to **Settings → Brewing → Beer Styles** and add the styles you actually
+brew. Recipes pick their style from this list, so adding one or two first saves
+a detour later.
+
+**2. Create a recipe**
+
+**Recipes → New Recipe.** Give it a name, pick the style, and set your batch
+size. Add the grain bill, hops, and yeast, and optionally the mash and boil
+steps.
+
+Set the **fermentation temperature range** while you are here. It is optional,
+but it is what lets FermentOS tell you later that a batch is running hot — see
+step 6.
+
+**3. Stock your ingredients** *(optional)*
+
+**Ingredients** is where malts, hops, yeast, and adjuncts live, with quantities,
+suppliers, and expiry dates. You can skip this entirely and come back to it.
+
+It becomes required only if you turn on **Settings → Brewing → Ingredient
+Enforcement**, which stops you starting a brew day when you are short of
+something and tells you exactly what is missing.
+
+**4. Start a brew session**
+
+**Brew Log → New Session.** Choose your recipe from the dropdown and FermentOS
+fills in the name, batch size, and fermentation temperature range for you.
+
+You do not need a recipe to log a batch — a **name and a brew date are the only
+required fields**, so a spur-of-the-moment brew can be recorded now and tidied
+up later. If you skip the recipe, set the fermentation temperature range on the
+session itself if you want temperature alerts.
+
+The session starts at **Brew Day**.
+
+**5. Attach an iSpindel** *(optional)*
+
+If you have one, drop it in the fermenter and assign it to this session — see
+[Connect an iSpindel](#connect-an-ispindel). From then on every reading it
+sends is logged against this batch automatically.
+
+No iSpindel? Add readings by hand on the session page. Everything below still
+works, just with the readings you enter yourself.
+
+**6. Watch it ferment**
+
+Move the session to **Fermenting** using the stage bar at the top of the page.
+You now get:
+
+- a chart of gravity and temperature over time
+- **fermentation insights** — attenuation so far, how fast it is moving, and whether it looks finished
+- a live telemetry card, if a sensor is assigned
+
+This is also the point where alerts start earning their keep. Set them up once
+and your phone tells you about a stall or a temperature swing without you
+opening anything — see [Get alerts on your phone](#get-alerts-on-your-phone).
+
+**7. Package it and rate it**
+
+When fermentation finishes, advance to **Conditioning**, then **Packaged**.
+(FermentOS can make the Conditioning step for you — see **Settings → Brewing →
+Fermentation Temperature → Auto-advance to Conditioning**.)
+
+On a packaged batch you can fill in the tasting scorecard: appearance and aroma,
+flavor and balance, mouthfeel and carbonation, an overall score out of ten, any
+off-flavors, and whether you would brew it again. Those scores roll up to an
+average on the recipe, so over time each recipe carries the record of every
+batch you have made from it.
+
+---
+
+### Get alerts on your phone
+
+FermentOS checks every active batch every five minutes and can message you when
+something needs attention:
+
+| Alert | Fires when |
+|-------|-----------|
+| Temperature out of range | A reading falls outside the batch's fermentation temperature range |
+| Fermentation stalled | Gravity has not moved for 24 hours |
+| Sensor offline | Your iSpindel has stopped reporting |
+| Sensor battery low | The iSpindel battery drops below 20% |
+
+Both delivery methods are **outbound** — FermentOS makes the request, nothing
+connects in to it. That is what makes this work on an ordinary home network with
+no certificates, no reverse proxy, and no VPN on your phone.
+
+#### Using ntfy (easiest)
+
+[ntfy](https://ntfy.sh) is a free push-notification app. Nothing to sign up for.
+
+1. Install **ntfy** from the App Store or Play Store
+2. Pick a topic name nobody could guess — treat it like a password, because anyone who knows it can read your alerts. Something like `fermentos-a8f3k2q1` rather than `brewing`
+3. In the app, subscribe to that topic
+4. In FermentOS, go to **Settings → Brewing → Notifications**, set **Channel** to **ntfy**, and paste the same topic
+5. Click **Save**, then **Send test**
+
+Your phone should buzz within a second or two.
+
+#### Using a webhook
+
+Set **Channel** to **Webhook** and paste a URL instead. FermentOS sends a JSON
+POST, which works directly with Discord and Slack incoming webhooks, or with
+n8n, Make, Node-RED, and anything else that accepts one. The payload shape is in
+[Webhooks & alert payloads](#webhooks--alert-payloads).
+
+#### Two things worth knowing
+
+**Save before you test.** The test button sends using your *saved* settings, not
+what is currently on screen. If you change the topic and hit Send test straight
+away, you are testing the old one.
+
+**Temperature alerts need a temperature range.** If neither the session nor its
+recipe has a fermentation temperature range set, FermentOS has nothing to
+compare a reading against, and temperature alerts will never fire. The other
+three alerts still work fine. Set the range on the session, or on the recipe so
+future batches inherit it.
+
+You can also tune how jumpy temperature alerts are with **Settings → Brewing →
+Fermentation Temperature → Temperature Alert Threshold**. It is the number of consecutive
+out-of-range readings needed before you get told, so opening the fermenter for a
+minute does not wake you at 3am. **Re-notify at most every** controls how often
+a problem that is still ongoing nags you again.
+
+---
+
+### Install it on your phone
+
+FermentOS can live on your home screen and open full-screen, without a browser
+bar, like a normal app.
+
+**On iPhone or iPad:** open FermentOS in Safari, tap **Share**, then
+**Add to Home Screen**. That is it — it launches standalone, with the right icon.
+
+**On Android:** open FermentOS in Chrome, tap the **⋮** menu, then
+**Add to Home screen**. You get an icon and it opens quickly, though Chrome
+reserves its proper "Install app" prompt for sites served over HTTPS.
+
+**What you do not get yet:** offline access and web push notifications. Both
+require HTTPS, which a plain home-network install does not have. This is why
+phone alerts go through ntfy or a webhook instead — those work over plain HTTP
+today. If you want to put FermentOS behind HTTPS, see issues
+[#144](https://github.com/highaltidude/FermentOS/issues/144),
+[#145](https://github.com/highaltidude/FermentOS/issues/145), and
+[#146](https://github.com/highaltidude/FermentOS/issues/146).
+
+Repeat visits are quick either way: the app's assets are cached by your browser,
+so day-to-day use is not waiting on the Pi.
+
+---
+
+### Connect an iSpindel
+
+The iSpindel is an open-source Wi-Fi hydrometer that sends gravity, temperature, battery, and tilt angle readings over HTTP. FermentOS includes a native ingest endpoint so the iSpindel posts directly to your local server — no cloud account or relay required.
+
+#### 1. Enable the integration
+
+In FermentOS, go to **Settings → System → Integrations → iSpindel Integration** and confirm the toggle is on. The panel shows the exact POST URL to use.
+
+#### 2. Configure your iSpindel
+
+Open the iSpindel's built-in web UI (connect it to your network in hotspot mode first, then visit `http://192.168.4.1`):
+
+| Field | Value |
+|-------|-------|
+| Server Address | your FermentOS host IP (e.g. `192.168.1.100`) |
+| Port | `80` |
+| URL | `/api/integrations/ispindel` |
+| Protocol | HTTP |
+
+Leave all other fields at their defaults. The iSpindel's **Name** field becomes the `deviceKey` used to identify it in FermentOS.
+
+#### 3. First reading
+
+On the next wake cycle the iSpindel will POST to FermentOS. If no device with that `deviceKey` exists yet, one is **auto-created** — you will see it appear in the Integrations panel immediately after the first reading.
+
+#### 4. Assign to a brew session
+
+In the Integrations panel (or on the brew session page), select an active brew from the **Assign to brew…** dropdown. From that point on, every incoming reading is also mirrored into the session's fermentation chart and a live telemetry card appears at the top of the brew session page.
+
+#### 5. Optional: secure with a token
+
+Set a **Security Token** in the Integrations panel. Then open the iSpindel web UI and enter the same value in its **Token** field. FermentOS will reject readings that don't include the matching token.
+
+> **Note:** The ingest endpoint (`POST /api/integrations/ispindel`) and the status endpoint (`GET /api/integrations/ispindel/status`) are always exempt from API key lockdown so the iSpindel device can reach them without a bearer token.
+
+#### Simulate a reading (development)
+
+Expand the **Developer: Simulate iSpindel Reading** section in the Integrations panel and click **Send Reading** — useful for testing before your device arrives or while debugging.
+
+---
+
+### Everyday use
+
+Brew sessions move through four stages, in order:
+
+```
+Brew Day  ──▶  Fermenting  ──▶  Conditioning  ──▶  Packaged
+```
+
+Every new session starts at **Brew Day**. The stage bar at the top of the
+session page moves a batch forward — or back, if you jumped the gun — in one
+click, and every change is written to a timestamped history you can see further
+down the page. The brew date records the day grain actually hit the kettle,
+which is not always the day you got round to logging it.
+
+Day to day, that means:
+
+- **Dashboard** shows what is fermenting now and what you finished recently
+- **Brew Log** is the full history of every batch
+- **Recipes** carries the average score of every batch brewed from it, so your best recipes surface themselves over time
+- **Ingredients** tracks what you have and flags what is about to expire
+
+Only Brew Day, Fermenting, and Conditioning batches are monitored for alerts.
+Once a batch is **Packaged** it is finished, and a stale probe reading will
+never wake you up about it.
+
+---
+
+# Advanced
+
+*Everything from here on is optional. The sections above cover normal use — this
+part is for integrating FermentOS with other systems, running it in anger, or
+building against its API.*
+
+---
+
+## Updating & rollback
 
 The easiest way to update is from the app itself: **Settings → System → App Update → Update now**. It pulls the latest commit, runs migrations, rebuilds, and restarts the services automatically, with a live progress bar. Release notes are shown in-app, and every deploy is recorded in a history log with a one-click rollback if something goes wrong.
 
@@ -182,19 +407,153 @@ BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 sudo systemctl restart fermentos
 ```
 
-### Accessing on your local network
-
-The installer prints your host's IP when it finishes. You can also find it any time with:
+### Useful commands
 
 ```bash
-hostname -I
+sudo systemctl status fermentos         # check service status
+sudo journalctl -u fermentos -f         # tail logs
+sudo systemctl restart fermentos        # restart the app
 ```
-
-Visit `http://<host-ip>:3000` from any device on the same network. For a stable address, assign your host a static IP in your router's DHCP settings.
 
 ---
 
-### Manual installation (optional)
+## Backups & restore
+
+Managed from **Settings → System → Backups**.
+
+FermentOS takes a `pg_dump` of the whole database. You can run one on demand,
+download it, or schedule daily or weekly runs that push to an SFTP server, keep
+a copy on the local disk, or both. Restores work from an uploaded file or from
+any backup still in local history.
+
+Two things worth setting up before you need them:
+
+- **Back up before updating.** `backupBeforeUpdate` takes a snapshot
+  automatically before an in-app update runs, so a bad deploy is recoverable.
+- **Check the coverage audit.** It compares the tables actually in your database
+  against the list FermentOS knows about, and reports a percentage. Anything
+  unclassified shows up as missing coverage, which is the signal that a new
+  table shipped without being accounted for. You can optionally block in-app
+  updates while coverage is below 100%.
+
+Restoring is destructive — it wipes and replays the public schema. The endpoint
+reference is under [Backups](#backups) in the API section.
+
+---
+
+## Home Assistant
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown |
+
+If you already run Home Assistant, you can build notification automations on
+this endpoint instead of using FermentOS's own notifications. Note the
+`alerts` array here currently carries **`device_offline` and `battery_low`
+only** — temperature thresholds are evaluated per brew session and are not
+applied to this device-oriented endpoint, so a temperature automation needs
+to compare `latestReading.temperature` against your own threshold in HA. For
+temperature and stalled-fermentation alerts out of the box, use the built-in
+notifications (Settings → Brewing → Notifications) instead.
+
+Response is an array, one entry per device:
+```json
+[
+  {
+    "deviceId": 1,
+    "deviceName": "Fermenter 1",
+    "deviceKey": "ispindel-001",
+    "connectionStatus": "connected",
+    "assignedBrewSessionId": 12,
+    "assignedBrewName": "Pacific IPA",
+    "lastSeenAt": "2024-03-16T10:00:00Z",
+    "latestReading": { "gravity": 1.045, "temperature": 68.5, "battery": 3.9 },
+    "insights": { "attenuationPercent": 42.5, "fermentationStatus": "slowing" },
+    "alerts": []
+  }
+]
+```
+`connectionStatus`: `connected` | `warning` | `offline` | `unknown`. Settings → System → Integrations → Home Assistant generates a ready-to-paste `configuration.yaml` REST sensor block and a Lovelace markdown card for this endpoint, so you rarely need to hand-write the YAML.
+---
+
+## Webhooks & alert payloads
+
+**GET/PUT `/api/settings/notifications`**
+
+```json
+{
+  "channel": "none",
+  "ntfyServer": "https://ntfy.sh",
+  "ntfyTopic": "",
+  "webhookUrl": "",
+  "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
+  "repeatHours": 6
+}
+```
+
+`channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168.
+
+**POST `/api/settings/notifications/test`** → `{ "ok": boolean, "error": string | null }`
+
+Sends a test notification on the configured channel. Returns `200` with
+`ok: false` when delivery fails — a misconfigured endpoint is an expected
+outcome to display, not a request error.
+
+Webhook payload shape:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Pacific Haze IPA: Temperature out of range",
+  "message": "Temperature 74.2°F is above maximum 70°F",
+  "priority": "high",
+  "triggeredAt": "2026-09-08T03:11:52.235Z",
+  "brewSessionId": 7,
+  "recipeName": "Pacific Haze IPA",
+  "alertType": "temp_out_of_range"
+}
+```
+---
+
+## Security & API tokens
+
+By default no authentication is required — the API is designed for trusted local network use.
+
+You can optionally enable **API token lockdown** under **Settings → Security → API Access**. When enabled, all external clients (scripts, Home Assistant, integrations) must supply a token. Browser requests from the FermentOS UI itself continue to work without a token (same-origin requests are always allowed).
+
+**Generating a token:** Settings → Security → API Access → enter a name → choose a scope → Create Token. Copy the token immediately — it is only shown once.
+
+- **Scope**: tokens are `read` or `write` (default `write`). A `read`-scoped token gets `403` on any `POST`/`PUT`/`PATCH`/`DELETE` request.
+
+**Using a token:**
+```
+Authorization: Bearer <token>
+```
+
+**Always-exempt endpoints** (reachable with no token, even under lockdown):
+- `GET /healthz`
+- `GET /api/admin/repair-script`, `GET /api/admin/sudoers-line` — recovery scripts, must stay reachable from a plain `curl` on the host even if you lock yourself out
+- `GET /api/ha/status` — read-only Home Assistant polling target
+- `POST /api/integrations/ispindel`, `GET /api/integrations/ispindel/status` — the iSpindel device itself can't send a bearer token
+
+Note: `/api/admin/auth/*` (the token-management endpoints themselves) are **not** exempt, even under lockdown — otherwise an external caller could mint itself a token or disable the lock entirely.
+
+**Home Assistant example:**
+```yaml
+sensor:
+  - platform: rest
+    name: "FermentOS Active Brews"
+    resource: http://192.168.1.239:8080/api/ha/status
+    headers:
+      Authorization: "Bearer <token>"
+    value_template: "{{ value_json | length }}"
+    scan_interval: 300
+```
+(See the dedicated **Home Assistant** section above for the full response shape, or generate a ready-to-paste config from Settings → System → Integrations → Home Assistant.)
+
+---
+
+## Manual installation
 
 <details>
 <summary>Click to expand manual step-by-step instructions</summary>
@@ -250,47 +609,37 @@ serve -s artifacts/fermentos/dist/public -l 3000
 
 ---
 
+## Tech stack
+
+- **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS 4, routed with [wouter](https://github.com/molefrog/wouter), data fetching via [TanStack Query](https://tanstack.com/query), UI primitives from [Radix UI](https://www.radix-ui.com/), charts via [Recharts](https://recharts.org/)
+- **Backend**: Node.js + Express 5 + TypeScript, scheduled jobs via [node-cron](https://github.com/node-cron/node-cron), SFTP backups via [ssh2-sftp-client](https://github.com/theophilusx/ssh2-sftp-client)
+- **Database**: PostgreSQL
+- **ORM**: Drizzle ORM, validated with Zod (via drizzle-zod)
+- **API contract**: A single [OpenAPI spec](lib/api-spec/openapi.yaml) is the source of truth for the HTTP API — [orval](https://orval.dev/) generates a typed React Query client and Zod request-validation schemas from it, so the frontend and backend can't drift out of sync
+- **Package Manager**: pnpm (monorepo workspace)
+
+---
+
+## Development
+
+```bash
+pnpm install
+
+pnpm --filter @workspace/api-server run dev   # API on :8080
+pnpm --filter @workspace/fermentos run dev    # Frontend on :23975
+
+pnpm run typecheck   # tsc across every workspace package (no ESLint in this repo)
+pnpm run test        # vitest, where a package has a test suite
+pnpm run build       # typecheck, then build every workspace package
+```
+
+Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack (Postgres + both dev servers, live-reloading against a bind-mounted repo) in one command.
+
+---
+
 ## API Reference
 
 All endpoints are prefixed with `/api`. Replace `<host>` with your host's address (e.g. `http://192.168.1.239:8080`).
-
-### Authentication
-
-By default no authentication is required — the API is designed for trusted local network use.
-
-You can optionally enable **API token lockdown** under **Settings → Security → API Access**. When enabled, all external clients (scripts, Home Assistant, integrations) must supply a token. Browser requests from the FermentOS UI itself continue to work without a token (same-origin requests are always allowed).
-
-**Generating a token:** Settings → Security → API Access → enter a name → choose a scope → Create Token. Copy the token immediately — it is only shown once.
-
-- **Scope**: tokens are `read` or `write` (default `write`). A `read`-scoped token gets `403` on any `POST`/`PUT`/`PATCH`/`DELETE` request.
-
-**Using a token:**
-```
-Authorization: Bearer <token>
-```
-
-**Always-exempt endpoints** (reachable with no token, even under lockdown):
-- `GET /healthz`
-- `GET /api/admin/repair-script`, `GET /api/admin/sudoers-line` — recovery scripts, must stay reachable from a plain `curl` on the host even if you lock yourself out
-- `GET /api/ha/status` — read-only Home Assistant polling target
-- `POST /api/integrations/ispindel`, `GET /api/integrations/ispindel/status` — the iSpindel device itself can't send a bearer token
-
-Note: `/api/admin/auth/*` (the token-management endpoints themselves) are **not** exempt, even under lockdown — otherwise an external caller could mint itself a token or disable the lock entirely.
-
-**Home Assistant example:**
-```yaml
-sensor:
-  - platform: rest
-    name: "FermentOS Active Brews"
-    resource: http://192.168.1.239:8080/api/ha/status
-    headers:
-      Authorization: "Bearer <token>"
-    value_template: "{{ value_json | length }}"
-    scan_interval: 300
-```
-(See the dedicated **Home Assistant** section below for the full response shape, or generate a ready-to-paste config from Settings → System → Integrations → Home Assistant.)
-
----
 
 ### Dashboard
 
@@ -568,46 +917,6 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 
 ---
 
-### Settings — Notifications
-
-**GET/PUT `/api/settings/notifications`**
-
-```json
-{
-  "channel": "none",
-  "ntfyServer": "https://ntfy.sh",
-  "ntfyTopic": "",
-  "webhookUrl": "",
-  "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
-  "repeatHours": 6
-}
-```
-
-`channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168.
-
-**POST `/api/settings/notifications/test`** → `{ "ok": boolean, "error": string | null }`
-
-Sends a test notification on the configured channel. Returns `200` with
-`ok: false` when delivery fails — a misconfigured endpoint is an expected
-outcome to display, not a request error.
-
-Webhook payload shape:
-
-```json
-{
-  "source": "fermentos",
-  "title": "Pacific Haze IPA: Temperature out of range",
-  "message": "Temperature 74.2°F is above maximum 70°F",
-  "priority": "high",
-  "triggeredAt": "2026-09-08T03:11:52.235Z",
-  "brewSessionId": 7,
-  "recipeName": "Pacific Haze IPA",
-  "alertType": "temp_out_of_range"
-}
-```
-
----
-
 ### Sensors
 
 | Method | Endpoint | Description |
@@ -634,42 +943,6 @@ Webhook payload shape:
 | POST | `/api/integrations/ispindel/simulate` | Send a synthetic reading for development/testing |
 | GET | `/api/integrations/ispindel/status` | HA-friendly status endpoint — returns latest reading from each device |
 | GET | `/api/integrations/ispindel/devices/:deviceId/readings` | Paginated raw readings for a device — query params `limit`, `offset`, `sort` (`asc`/`desc`), `start`, `end`, `brewId` |
-
----
-
-### Home Assistant
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown |
-
-If you already run Home Assistant, you can build notification automations on
-this endpoint instead of using FermentOS's own notifications. Note the
-`alerts` array here currently carries **`device_offline` and `battery_low`
-only** — temperature thresholds are evaluated per brew session and are not
-applied to this device-oriented endpoint, so a temperature automation needs
-to compare `latestReading.temperature` against your own threshold in HA. For
-temperature and stalled-fermentation alerts out of the box, use the built-in
-notifications (Settings → Brewing → Notifications) instead.
-
-Response is an array, one entry per device:
-```json
-[
-  {
-    "deviceId": 1,
-    "deviceName": "Fermenter 1",
-    "deviceKey": "ispindel-001",
-    "connectionStatus": "connected",
-    "assignedBrewSessionId": 12,
-    "assignedBrewName": "Pacific IPA",
-    "lastSeenAt": "2024-03-16T10:00:00Z",
-    "latestReading": { "gravity": 1.045, "temperature": 68.5, "battery": 3.9 },
-    "insights": { "attenuationPercent": 42.5, "fermentationStatus": "slowing" },
-    "alerts": []
-  }
-]
-```
-`connectionStatus`: `connected` | `warning` | `offline` | `unknown`. Settings → System → Integrations → Home Assistant generates a ready-to-paste `configuration.yaml` REST sensor block and a Lovelace markdown card for this endpoint, so you rarely need to hand-write the YAML.
 
 ---
 
@@ -758,64 +1031,6 @@ Uploaded session photos are served at:
 ```
 GET /api/uploads/sessions/<filename>
 ```
-
----
-
-## iSpindel Setup
-
-The iSpindel is an open-source Wi-Fi hydrometer that sends gravity, temperature, battery, and tilt angle readings over HTTP. FermentOS includes a native ingest endpoint so the iSpindel posts directly to your local server — no cloud account or relay required.
-
-### 1. Enable the integration
-
-In FermentOS, go to **Settings → System → Integrations → iSpindel Integration** and confirm the toggle is on. The panel shows the exact POST URL to use.
-
-### 2. Configure your iSpindel
-
-Open the iSpindel's built-in web UI (connect it to your network in hotspot mode first, then visit `http://192.168.4.1`):
-
-| Field | Value |
-|-------|-------|
-| Server Address | your FermentOS host IP (e.g. `192.168.1.100`) |
-| Port | `80` |
-| URL | `/api/integrations/ispindel` |
-| Protocol | HTTP |
-
-Leave all other fields at their defaults. The iSpindel's **Name** field becomes the `deviceKey` used to identify it in FermentOS.
-
-### 3. First reading
-
-On the next wake cycle the iSpindel will POST to FermentOS. If no device with that `deviceKey` exists yet, one is **auto-created** — you will see it appear in the Integrations panel immediately after the first reading.
-
-### 4. Assign to a brew session
-
-In the Integrations panel (or on the brew session page), select an active brew from the **Assign to brew…** dropdown. From that point on, every incoming reading is also mirrored into the session's fermentation chart and a live telemetry card appears at the top of the brew session page.
-
-### 5. Optional: secure with a token
-
-Set a **Security Token** in the Integrations panel. Then open the iSpindel web UI and enter the same value in its **Token** field. FermentOS will reject readings that don't include the matching token.
-
-> **Note:** The ingest endpoint (`POST /api/integrations/ispindel`) and the status endpoint (`GET /api/integrations/ispindel/status`) are always exempt from API key lockdown so the iSpindel device can reach them without a bearer token.
-
-### Simulate a reading (development)
-
-Expand the **Developer: Simulate iSpindel Reading** section in the Integrations panel and click **Send Reading** — useful for testing before your device arrives or while debugging.
-
----
-
-## Development
-
-```bash
-pnpm install
-
-pnpm --filter @workspace/api-server run dev   # API on :8080
-pnpm --filter @workspace/fermentos run dev    # Frontend on :23975
-
-pnpm run typecheck   # tsc across every workspace package (no ESLint in this repo)
-pnpm run test        # vitest, where a package has a test suite
-pnpm run build       # typecheck, then build every workspace package
-```
-
-Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack (Postgres + both dev servers, live-reloading against a bind-mounted repo) in one command.
 
 ---
 

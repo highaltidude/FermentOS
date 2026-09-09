@@ -21,6 +21,9 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        # Must match the db service image tag above so pg_dump can dump it.
+        PG_MAJOR: 16
     depends_on:
       db:
         condition: service_healthy

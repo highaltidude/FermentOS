@@ -67,6 +67,7 @@ page.
 - **Brew Log** — Log brew sessions, track status from grain to glass (brew_day → fermenting → conditioning → packaged)
 - **Response & Stage History** — Every brew session records a timestamped log each time the status changes, always visible on the session page
 - **Tasting & Rating** — Score a finished batch on a four-question scorecard (appearance & aroma, flavor & balance, mouthfeel & carbonation, each 1–5, plus an overall 1–10), tag any off-flavors, record whether you'd brew it again, and attach a photo and tasting notes. Overall scores roll up to an average on the recipe, so each recipe carries the track record of every batch brewed from it
+- **Alerts & Notifications** — FermentOS checks every active brew every 5 minutes and can notify you when something needs attention — temperature out of range, fermentation stalled, sensor offline, or sensor battery low — even with the app closed. Delivery is via [ntfy](https://ntfy.sh) or a generic webhook (which also covers Discord and Slack). Both are **outbound** requests, so this works on a plain-HTTP home network with no certificates, no reverse proxy, and no VPN client on your phone. Temperature alerts wait for the number of consecutive out-of-range readings set by Temperature Alert Threshold, so a single stray reading will not wake you. Configure under Settings → Brewing → Notifications
 - **Fermentation Tracker** — Record temperature, gravity, and pH readings over time with an interactive chart
 - **Ingredients** — Track your malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. The unit field is a dropdown filtered by your unit system preference
 - **Beer Styles** — Define your own style list (Settings) used as a dropdown when creating recipes
@@ -567,6 +568,46 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 
 ---
 
+### Settings — Notifications
+
+**GET/PUT `/api/settings/notifications`**
+
+```json
+{
+  "channel": "none",
+  "ntfyServer": "https://ntfy.sh",
+  "ntfyTopic": "",
+  "webhookUrl": "",
+  "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
+  "repeatHours": 6
+}
+```
+
+`channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168.
+
+**POST `/api/settings/notifications/test`** → `{ "ok": boolean, "error": string | null }`
+
+Sends a test notification on the configured channel. Returns `200` with
+`ok: false` when delivery fails — a misconfigured endpoint is an expected
+outcome to display, not a request error.
+
+Webhook payload shape:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Pacific Haze IPA: Temperature out of range",
+  "message": "Temperature 74.2°F is above maximum 70°F",
+  "priority": "high",
+  "triggeredAt": "2026-09-08T03:11:52.235Z",
+  "brewSessionId": 7,
+  "recipeName": "Pacific Haze IPA",
+  "alertType": "temp_out_of_range"
+}
+```
+
+---
+
 ### Sensors
 
 | Method | Endpoint | Description |
@@ -601,6 +642,15 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown |
+
+If you already run Home Assistant, you can build notification automations on
+this endpoint instead of using FermentOS's own notifications. Note the
+`alerts` array here currently carries **`device_offline` and `battery_low`
+only** — temperature thresholds are evaluated per brew session and are not
+applied to this device-oriented endpoint, so a temperature automation needs
+to compare `latestReading.temperature` against your own threshold in HA. For
+temperature and stalled-fermentation alerts out of the box, use the built-in
+notifications (Settings → Brewing → Notifications) instead.
 
 Response is an array, one entry per device:
 ```json

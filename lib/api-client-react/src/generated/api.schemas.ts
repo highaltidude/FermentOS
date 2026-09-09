@@ -476,6 +476,53 @@ export interface TempAlertReadingsResponse {
   count: number;
 }
 
+export type AlertType = (typeof AlertType)[keyof typeof AlertType];
+
+export const AlertType = {
+  temp_out_of_range: "temp_out_of_range",
+  gravity_stalled: "gravity_stalled",
+  device_offline: "device_offline",
+  battery_low: "battery_low",
+} as const;
+
+/**
+ * none disables notifications entirely.
+ */
+export type NotificationChannel =
+  (typeof NotificationChannel)[keyof typeof NotificationChannel];
+
+export const NotificationChannel = {
+  none: "none",
+  ntfy: "ntfy",
+  webhook: "webhook",
+} as const;
+
+/**
+ * Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.
+ */
+export interface NotificationSettings {
+  channel: NotificationChannel;
+  /** Base URL of the ntfy server. Defaults to https://ntfy.sh. */
+  ntfyServer: string;
+  /** ntfy topic to publish to. Treat as a secret — anyone who knows it can read your alerts. */
+  ntfyTopic: string;
+  /** URL to POST a JSON payload to. Also covers Discord and Slack incoming webhooks. */
+  webhookUrl: string;
+  /** Which alert types should notify. */
+  types: AlertType[];
+  /**
+   * Minimum hours between repeat notifications while a condition stays active.
+   * @minimum 1
+   * @maximum 168
+   */
+  repeatHours: number;
+}
+
+export interface NotificationTestResult {
+  ok: boolean;
+  error?: string | null;
+}
+
 export interface TempAlertReadingsBody {
   count: number;
 }

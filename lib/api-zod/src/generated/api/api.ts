@@ -1540,6 +1540,146 @@ export const SetTempAlertReadingsResponse = zod.object({
 });
 
 /**
+ * @summary Get outbound notification settings
+ */
+export const getNotificationSettingsResponseRepeatHoursMax = 168;
+
+export const GetNotificationSettingsResponse = zod
+  .object({
+    channel: zod
+      .enum(["none", "ntfy", "webhook"])
+      .describe("none disables notifications entirely."),
+    ntfyServer: zod
+      .string()
+      .describe("Base URL of the ntfy server. Defaults to https:\/\/ntfy.sh."),
+    ntfyTopic: zod
+      .string()
+      .describe(
+        "ntfy topic to publish to. Treat as a secret — anyone who knows it can read your alerts.",
+      ),
+    webhookUrl: zod
+      .string()
+      .describe(
+        "URL to POST a JSON payload to. Also covers Discord and Slack incoming webhooks.",
+      ),
+    types: zod
+      .array(
+        zod.enum([
+          "temp_out_of_range",
+          "gravity_stalled",
+          "device_offline",
+          "battery_low",
+        ]),
+      )
+      .describe("Which alert types should notify."),
+    repeatHours: zod
+      .number()
+      .min(1)
+      .max(getNotificationSettingsResponseRepeatHoursMax)
+      .describe(
+        "Minimum hours between repeat notifications while a condition stays active.",
+      ),
+  })
+  .describe(
+    "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
+  );
+
+/**
+ * @summary Update outbound notification settings
+ */
+export const setNotificationSettingsBodyRepeatHoursMax = 168;
+
+export const SetNotificationSettingsBody = zod
+  .object({
+    channel: zod
+      .enum(["none", "ntfy", "webhook"])
+      .describe("none disables notifications entirely."),
+    ntfyServer: zod
+      .string()
+      .describe("Base URL of the ntfy server. Defaults to https:\/\/ntfy.sh."),
+    ntfyTopic: zod
+      .string()
+      .describe(
+        "ntfy topic to publish to. Treat as a secret — anyone who knows it can read your alerts.",
+      ),
+    webhookUrl: zod
+      .string()
+      .describe(
+        "URL to POST a JSON payload to. Also covers Discord and Slack incoming webhooks.",
+      ),
+    types: zod
+      .array(
+        zod.enum([
+          "temp_out_of_range",
+          "gravity_stalled",
+          "device_offline",
+          "battery_low",
+        ]),
+      )
+      .describe("Which alert types should notify."),
+    repeatHours: zod
+      .number()
+      .min(1)
+      .max(setNotificationSettingsBodyRepeatHoursMax)
+      .describe(
+        "Minimum hours between repeat notifications while a condition stays active.",
+      ),
+  })
+  .describe(
+    "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
+  );
+
+export const setNotificationSettingsResponseRepeatHoursMax = 168;
+
+export const SetNotificationSettingsResponse = zod
+  .object({
+    channel: zod
+      .enum(["none", "ntfy", "webhook"])
+      .describe("none disables notifications entirely."),
+    ntfyServer: zod
+      .string()
+      .describe("Base URL of the ntfy server. Defaults to https:\/\/ntfy.sh."),
+    ntfyTopic: zod
+      .string()
+      .describe(
+        "ntfy topic to publish to. Treat as a secret — anyone who knows it can read your alerts.",
+      ),
+    webhookUrl: zod
+      .string()
+      .describe(
+        "URL to POST a JSON payload to. Also covers Discord and Slack incoming webhooks.",
+      ),
+    types: zod
+      .array(
+        zod.enum([
+          "temp_out_of_range",
+          "gravity_stalled",
+          "device_offline",
+          "battery_low",
+        ]),
+      )
+      .describe("Which alert types should notify."),
+    repeatHours: zod
+      .number()
+      .min(1)
+      .max(setNotificationSettingsResponseRepeatHoursMax)
+      .describe(
+        "Minimum hours between repeat notifications while a condition stays active.",
+      ),
+  })
+  .describe(
+    "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
+  );
+
+/**
+ * @summary Send a test notification on the configured channel
+ */
+export const SendTestNotificationResponse = zod.object({
+  ok: zod.boolean(),
+  error: zod.string().nullish(),
+});
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({

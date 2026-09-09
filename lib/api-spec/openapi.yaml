@@ -776,6 +776,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/TempAlertReadingsResponse"
 
+  /settings/notifications:
+    get:
+      operationId: getNotificationSettings
+      tags: [settings]
+      summary: Get outbound notification settings
+      responses:
+        "200":
+          description: Current notification settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+    put:
+      operationId: setNotificationSettings
+      tags: [settings]
+      summary: Update outbound notification settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationSettings"
+      responses:
+        "200":
+          description: Updated notification settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+        "400":
+          description: Invalid settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /settings/notifications/test:
+    post:
+      operationId: sendTestNotification
+      tags: [settings]
+      summary: Send a test notification on the configured channel
+      responses:
+        "200":
+          description: Delivery result. ok=false carries the reason in error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTestResult"
+
   /inventory:
     get:
       operationId: listInventory
@@ -2095,6 +2144,54 @@ components:
         count:
           type: integer
       required: [count]
+
+    AlertType:
+      type: string
+      enum: [temp_out_of_range, gravity_stalled, device_offline, battery_low]
+
+    NotificationChannel:
+      type: string
+      description: "none disables notifications entirely."
+      enum: [none, ntfy, webhook]
+
+    NotificationSettings:
+      type: object
+      description: >-
+        Outbound notification config. Both channels are plain outbound POSTs,
+        so they work on a plain-HTTP LAN deployment with no certificates.
+      properties:
+        channel:
+          $ref: "#/components/schemas/NotificationChannel"
+        ntfyServer:
+          type: string
+          description: Base URL of the ntfy server. Defaults to https://ntfy.sh.
+        ntfyTopic:
+          type: string
+          description: ntfy topic to publish to. Treat as a secret — anyone who knows it can read your alerts.
+        webhookUrl:
+          type: string
+          description: URL to POST a JSON payload to. Also covers Discord and Slack incoming webhooks.
+        types:
+          type: array
+          description: Which alert types should notify.
+          items:
+            $ref: "#/components/schemas/AlertType"
+        repeatHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+          description: Minimum hours between repeat notifications while a condition stays active.
+      required: [channel, ntfyServer, ntfyTopic, webhookUrl, types, repeatHours]
+
+    NotificationTestResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+      required: [ok]
 
     TempAlertReadingsBody:
       type: object

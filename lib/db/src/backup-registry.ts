@@ -38,7 +38,9 @@ export type BackedUpTable = (typeof BACKUP_REGISTRY)[number];
  * Leave empty if all DB tables should be backed up (the common case).
  */
 export const EXCLUDED_TABLES: readonly string[] = [
-  // Currently empty: all public schema tables are user data worth preserving.
-  // Example (if using drizzle migrate instead of push):
-  //   "__drizzle_migrations",  // managed by drizzle-kit, not user data
+  // Notification debounce bookkeeping for the scheduled alert monitor. Holds
+  // no user data — every row is derived from sensor readings and brew session
+  // state, and is rebuilt within one monitor tick. Losing it costs at most a
+  // single duplicate notification after a restore.
+  "brew_alert_state",
 ];

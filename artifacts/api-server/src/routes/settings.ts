@@ -8,6 +8,15 @@ import {
 } from "../services/inventoryEnforcement";
 import { getUnitSystem, setUnitSystem, isUnitSystem } from "../services/unitSystem";
 import { getRetentionDays, setRetentionDays } from "../services/readingRetention.js";
+import {
+  getNotifyConfig,
+  setNotifyConfig,
+  sendNotification,
+  ALERT_TYPES,
+  type AlertType,
+  type NotifyChannel,
+} from "../services/notifications.js";
+import { SetNotificationSettingsBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -184,6 +193,44 @@ router.put("/settings/auto-conditioning", async (req, res) => {
     .values({ key: AUTO_CONDITIONING_KEY, value: String(enabled) })
     .onConflictDoUpdate({ target: appConfigTable.key, set: { value: String(enabled), updatedAt: new Date() } });
   return res.json({ enabled });
+});
+
+// ── Outbound notifications ─────────────────────────────────────────────────
+
+router.get("/settings/notifications", async (_req, res) => {
+  return res.json(await getNotifyConfig());
+});
+
+router.put("/settings/notifications", async (req, res) => {
+  const body = SetNotificationSettingsBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "Invalid request body" });
+
+  const d = body.data;
+  // The generated schema already constrains these, but narrow explicitly so
+  // the service receives exactly the union types it declares.
+  const types = (d.types ?? []).filter((t): t is AlertType =>
+    (ALERT_TYPES as readonly string[]).includes(t));
+
+  await setNotifyConfig({
+    channel: d.channel as NotifyChannel,
+    ntfyServer: d.ntfyServer,
+    ntfyTopic: d.ntfyTopic,
+    webhookUrl: d.webhookUrl,
+    types,
+    repeatHours: d.repeatHours,
+  });
+  return res.json(await getNotifyConfig());
+});
+
+// Returns 200 with ok:false rather than an error status — a failed delivery is
+// a normal, expected outcome the UI needs to display, not a request error.
+router.post("/settings/notifications/test", async (_req, res) => {
+  const result = await sendNotification({
+    title: "FermentOS test notification",
+    body: "If you can read this, alerts are configured correctly.",
+    meta: { event: "test" },
+  });
+  return res.json({ ok: result.ok, error: result.error ?? null });
 });
 
 export default router;

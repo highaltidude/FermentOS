@@ -40,10 +40,6 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   originalGravityActual: real("original_gravity_actual"),
   finalGravityActual: real("final_gravity_actual"),
   abvActual: real("abv_actual"),
-  /** @deprecated legacy 1-5 star score, superseded by overallScore. Retained
-   * so drizzle-kit push doesn't try to drop the column before the boot
-   * migration has rescaled every row; remove in a later push-force cleanup. */
-  rating: integer("rating"),
   appearanceAromaScore: integer("appearance_aroma_score"),
   flavorBalanceScore: integer("flavor_balance_score"),
   mouthfeelScore: integer("mouthfeel_score"),

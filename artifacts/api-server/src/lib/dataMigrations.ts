@@ -51,14 +51,32 @@ export async function migrateLegacyStatuses(): Promise<void> {
     );
   }
 
-  // LEAST(..., 10) because the old rating column carried no bounds — a stray
-  // value above 5 would otherwise rescale to an out-of-range score.
-  const rescaled = await db.execute(
-    sql`UPDATE brew_sessions SET overall_score = LEAST(rating * 2, 10), rated_at = COALESCE(rated_at, updated_at) WHERE rating IS NOT NULL AND overall_score IS NULL`,
+  // The legacy `rating` column is dropped here rather than by drizzle-kit.
+  // Plain `push` — what entrypoint.sh, update.sh and install.sh all run —
+  // prompts before a data-loss statement and, with no TTY, takes the default
+  // and aborts, exiting 0 without dropping anything. So the drop has to be
+  // explicit, and it has to come after the rescale: someone upgrading straight
+  // from a pre-1.4.0 release has never run the backfill, and would otherwise
+  // lose their stars without them ever reaching overall_score.
+  //
+  // The whole block can go once every supported install has booted a release
+  // containing it — at that point no database still has the column.
+  const ratingColumn = await db.execute(
+    sql`SELECT 1 FROM information_schema.columns WHERE table_name = 'brew_sessions' AND column_name = 'rating'`,
   );
-  const rescaledCount = (rescaled as { rowCount?: number }).rowCount ?? 0;
-  if (rescaledCount > 0) {
-    logger.info({ rows: rescaledCount }, "Rescaled legacy 1-5 brew_sessions.rating onto 1-10 overall_score");
+  if (((ratingColumn as { rowCount?: number }).rowCount ?? 0) > 0) {
+    // LEAST(..., 10) because the old rating column carried no bounds — a stray
+    // value above 5 would otherwise rescale to an out-of-range score.
+    const rescaled = await db.execute(
+      sql`UPDATE brew_sessions SET overall_score = LEAST(rating * 2, 10), rated_at = COALESCE(rated_at, updated_at) WHERE rating IS NOT NULL AND overall_score IS NULL`,
+    );
+    const rescaledCount = (rescaled as { rowCount?: number }).rowCount ?? 0;
+    if (rescaledCount > 0) {
+      logger.info({ rows: rescaledCount }, "Rescaled legacy 1-5 brew_sessions.rating onto 1-10 overall_score");
+    }
+
+    await db.execute(sql`ALTER TABLE brew_sessions DROP COLUMN IF EXISTS rating`);
+    logger.info("Dropped legacy brew_sessions.rating column");
   }
 
   // ── Lifecycle simplification (v2) ─────────────────────────────────────

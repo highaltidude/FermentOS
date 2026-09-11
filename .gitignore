@@ -54,5 +54,9 @@ attached_assets/
 artifacts/api-server/update-history.json
 .env.backup
 
+# Database dumps. pg_dump output carries api_tokens and app_config (ntfy topic,
+# webhook URL) alongside every brew record, so it must never be committed.
+*.sql
+
 # Claude Code project instructions — local only
 CLAUDE.md

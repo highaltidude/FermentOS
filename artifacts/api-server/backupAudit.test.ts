@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { classifyTables } from "./src/services/backupAudit.js";
+// Imports the pure module directly, NOT services/backupAudit.js: that one
+// imports `@workspace/db` for the pool, which throws at module load when
+// DATABASE_URL is unset — as it is in CI.
+import { classifyTables } from "./src/lib/backupAudit.js";
 
 /**
  * Guards the coverage number that POST /admin/update refuses on. Getting it

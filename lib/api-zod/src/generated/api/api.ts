@@ -1680,6 +1680,29 @@ export const SendTestNotificationResponse = zod.object({
 });
 
 /**
+ * Reports whether every table in the database is classified in backup-registry.ts. Coverage below 100% means a table is unaccounted for, and POST /admin/update refuses to run in that state. Note that excluded tables are still present in the dump file - excluded means "not required to be registered", not "kept out of backups".
+ * @summary Backup coverage audit
+ */
+export const GetBackupAuditResponse = zod.object({
+  totalTables: zod.number(),
+  backedUp: zod.array(zod.string()),
+  excluded: zod
+    .array(zod.string())
+    .describe(
+      "Classified as not requiring registration. Still present in the dump.",
+    ),
+  missing: zod
+    .array(zod.string())
+    .describe(
+      "In the database but in neither BACKUP_REGISTRY nor EXCLUDED_TABLES.",
+    ),
+  orphaned: zod
+    .array(zod.string())
+    .describe("In BACKUP_REGISTRY but no longer in the database."),
+  coveragePercent: zod.number(),
+});
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({

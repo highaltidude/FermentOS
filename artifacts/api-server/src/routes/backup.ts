@@ -6,10 +6,10 @@ import os from "os";
 import cron, { type ScheduledTask } from "node-cron";
 import multer from "multer";
 import SftpClient from "ssh2-sftp-client";
-import { db, pool } from "@workspace/db";
+import { db } from "@workspace/db";
 import { appConfigTable } from "@workspace/db/schema";
-import { BACKUP_REGISTRY, EXCLUDED_TABLES } from "@workspace/db/backup-registry";
 import { eq } from "drizzle-orm";
+import { computeBackupAudit } from "../services/backupAudit";
 import { logger } from "../lib/logger.js";
 import { runRetentionCleanup, pruneSystemHealthSamples } from "../services/readingRetention.js";
 
@@ -62,16 +62,9 @@ export type LocalBackupFile = {
   createdAt: string;
 };
 
-export type BackupAuditResult = {
-  totalTables: number;
-  backedUp: string[];
-  excluded: string[];
-  /** Tables present in the DB but absent from BACKUP_REGISTRY and EXCLUDED_TABLES. */
-  missing: string[];
-  /** Tables in BACKUP_REGISTRY that don't exist in the actual DB (stale entries). */
-  orphaned: string[];
-  coveragePercent: number;
-};
+// Re-exported for existing importers; the definition now lives beside the
+// logic in services/backupAudit.ts, which POST /admin/update also uses.
+export type { BackupAuditResult } from "../services/backupAudit";
 
 const CONFIG_KEY = "backup_config";
 const STATUS_KEY = "backup_status";
@@ -595,27 +588,7 @@ router.post("/backup/local-files/:filename/restore", async (req, res) => {
  */
 router.get("/backup/audit", async (req, res) => {
   try {
-    const result = await pool.query<{ table_name: string }>(
-      `SELECT table_name
-         FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_type = 'BASE TABLE'
-        ORDER BY table_name`,
-    );
-
-    const actualTables = result.rows.map((r) => r.table_name);
-    const registrySet = new Set<string>(BACKUP_REGISTRY);
-    const excludedSet = new Set<string>(EXCLUDED_TABLES);
-
-    const backedUp = actualTables.filter((t) => registrySet.has(t));
-    const excluded = actualTables.filter((t) => excludedSet.has(t));
-    const missing  = actualTables.filter((t) => !registrySet.has(t) && !excludedSet.has(t));
-    const orphaned = [...BACKUP_REGISTRY].filter((t) => !actualTables.includes(t));
-
-    const total = actualTables.length;
-    const coveragePercent = total === 0 ? 100 : Math.round(((total - missing.length) / total) * 100);
-
-    const audit: BackupAuditResult = { totalTables: total, backedUp, excluded, missing, orphaned, coveragePercent };
+    const audit = await computeBackupAudit();
     res.setHeader("Cache-Control", "no-store");
     return res.json(audit);
   } catch (err) {

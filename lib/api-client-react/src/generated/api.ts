@@ -19,6 +19,7 @@ import type {
 import type {
   ActiveBrew,
   AssignDeviceBody,
+  BackupAuditResult,
   BeerStyle,
   BrewSensorTelemetry,
   BrewSession,
@@ -4137,6 +4138,82 @@ export const useSendTestNotification = <
 > => {
   return useMutation(getSendTestNotificationMutationOptions(options));
 };
+
+/**
+ * Reports whether every table in the database is classified in backup-registry.ts. Coverage below 100% means a table is unaccounted for, and POST /admin/update refuses to run in that state. Note that excluded tables are still present in the dump file - excluded means "not required to be registered", not "kept out of backups".
+ * @summary Backup coverage audit
+ */
+export const getGetBackupAuditUrl = () => {
+  return `/api/backup/audit`;
+};
+
+export const getBackupAudit = async (
+  options?: RequestInit,
+): Promise<BackupAuditResult> => {
+  return customFetch<BackupAuditResult>(getGetBackupAuditUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBackupAuditQueryKey = () => {
+  return [`/api/backup/audit`] as const;
+};
+
+export const getGetBackupAuditQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBackupAudit>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBackupAudit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBackupAuditQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBackupAudit>>> = ({
+    signal,
+  }) => getBackupAudit({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBackupAudit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBackupAuditQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBackupAudit>>
+>;
+export type GetBackupAuditQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Backup coverage audit
+ */
+
+export function useGetBackupAudit<
+  TData = Awaited<ReturnType<typeof getBackupAudit>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBackupAudit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBackupAuditQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all inventory items

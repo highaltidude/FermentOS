@@ -26,6 +26,7 @@ import {
   useGetBreweryName,
   useSetBreweryName,
   getGetBreweryNameQueryKey,
+  useGetBackupAudit,
   useGetNotificationSettings,
   useSetNotificationSettings,
   useSendTestNotification,
@@ -60,15 +61,6 @@ type LocalBackupFile = {
   size: number;
   modifiedAt: string;
   createdAt: string;
-};
-
-type BackupAuditResult = {
-  totalTables: number;
-  backedUp: string[];
-  excluded: string[];
-  missing: string[];
-  orphaned: string[];
-  coveragePercent: number;
 };
 
 function ISpindelDeviceDetail({
@@ -869,8 +861,9 @@ function DatabaseBackupPanel() {
   const [localFilesLoading, setLocalFilesLoading] = useState(false);
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
   const [restoringFile, setRestoringFile] = useState<string | null>(null);
-  const [audit, setAudit] = useState<BackupAuditResult | null>(null);
-  const [auditLoading, setAuditLoading] = useState(false);
+  // Generated hook per CLAUDE.md; the Updates panel reads the same query, so
+  // TanStack Query serves both callers from one request.
+  const { data: audit = null, isFetching: auditLoading, refetch: refetchAudit } = useGetBackupAudit();
 
   const loadConfig = useCallback(async () => {
     try {
@@ -911,14 +904,6 @@ function DatabaseBackupPanel() {
     } catch { /* ignore */ } finally { setLocalFilesLoading(false); }
   }, [BASE]);
 
-  const fetchAudit = useCallback(async () => {
-    setAuditLoading(true);
-    try {
-      const res = await fetch(`${BASE}api/backup/audit`);
-      if (res.ok) setAudit(await res.json() as BackupAuditResult);
-    } catch { /* ignore */ } finally { setAuditLoading(false); }
-  }, [BASE]);
-
   const handleDownloadLocalFile = (filename: string) => {
     window.location.href = `${BASE}api/backup/local-files/${encodeURIComponent(filename)}/download`;
   };
@@ -955,7 +940,7 @@ function DatabaseBackupPanel() {
     } finally { setRestoringFile(null); }
   };
 
-  useEffect(() => { loadConfig(); fetchLocalFiles(); fetchAudit(); }, [loadConfig, fetchLocalFiles, fetchAudit]);
+  useEffect(() => { loadConfig(); fetchLocalFiles(); }, [loadConfig, fetchLocalFiles]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1280,7 +1265,7 @@ function DatabaseBackupPanel() {
             <Activity className="w-3.5 h-3.5" />
             Backup Audit
           </div>
-          <Button size="sm" variant="ghost" onClick={fetchAudit} disabled={auditLoading} className="h-7 px-2">
+          <Button size="sm" variant="ghost" onClick={() => void refetchAudit()} disabled={auditLoading} className="h-7 px-2">
             {auditLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </Button>
         </div>
@@ -1328,7 +1313,7 @@ function DatabaseBackupPanel() {
 
             {audit.excluded.length > 0 && (
               <p className="text-[11px] text-muted-foreground">
-                Intentionally excluded: {audit.excluded.join(", ")}
+                Not required in backups (still included in the dump): {audit.excluded.join(", ")}
               </p>
             )}
             {audit.orphaned.length > 0 && (
@@ -1558,7 +1543,12 @@ function SystemUpdatePanel() {
   // summary row so opening "Release notes" doesn't dump every changelog at
   // once. Tracks tags the user has manually expanded.
   const [expandedReleaseTags, setExpandedReleaseTags] = useState<Set<string>>(new Set());
-  const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
+  // Shares the backup panel's query. isError matters as much as the value:
+  // an unreadable audit is not the same as a passing one, and the button must
+  // not imply a safety check that never ran. The server enforces this too.
+  const { data: auditData, isError: auditError, refetch: refetchAuditCoverage } = useGetBackupAudit();
+  const auditCoverage = auditData?.coveragePercent ?? null;
+  const auditBlocksUpdate = auditError || (auditCoverage !== null && auditCoverage < 100);
   const [copiedHash, setCopiedHash] = useState(false);
   const logBoxRef = useRef<HTMLPreElement>(null);
   const startHashRef = useRef<string | null>(null);
@@ -1601,16 +1591,6 @@ function SystemUpdatePanel() {
     } catch { /* ignore */ }
   }, [BASE]);
 
-  const fetchAuditCoverage = useCallback(async () => {
-    try {
-      const res = await fetch(`${BASE}api/backup/audit`);
-      if (res.ok) {
-        const data = await res.json() as BackupAuditResult;
-        setAuditCoverage(data.coveragePercent);
-      }
-    } catch { /* ignore — audit failure shouldn't block the updates panel */ }
-  }, [BASE]);
-
   const fetchReleases = useCallback(async () => {
     try {
       const res = await fetch(`${BASE}api/admin/release-notes`);
@@ -1632,7 +1612,7 @@ function SystemUpdatePanel() {
     } catch { /* ignore — history is non-critical */ }
   }, [BASE]);
 
-  useEffect(() => { fetchVersion(); fetchPreBackup(); fetchHistory(); fetchReleases(); fetchAuditCoverage(); }, [fetchVersion, fetchPreBackup, fetchHistory, fetchReleases, fetchAuditCoverage]);
+  useEffect(() => { fetchVersion(); fetchPreBackup(); fetchHistory(); fetchReleases(); }, [fetchVersion, fetchPreBackup, fetchHistory, fetchReleases]);
   // Auto-expand release notes the first time we learn there's an update
   // available — saves a click for the most useful moment.
   useEffect(() => {
@@ -1999,7 +1979,7 @@ function SystemUpdatePanel() {
             </p>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={() => { fetchVersion(); fetchAuditCoverage(); }} disabled={checking || inProgress} title="Check GitHub for the latest version">
+        <Button size="sm" variant="outline" onClick={() => { fetchVersion(); void refetchAuditCoverage(); }} disabled={checking || inProgress} title="Check GitHub for the latest version">
           {checking ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
           Check for updates
         </Button>
@@ -2209,17 +2189,19 @@ function SystemUpdatePanel() {
         </div>
       )}
 
-      {auditCoverage !== null && auditCoverage < 100 && phase === "idle" && (
+      {auditBlocksUpdate && phase === "idle" && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/8 px-3 py-2 text-xs text-destructive">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span className="flex-1">
-            Backup coverage is <strong>{auditCoverage}%</strong> — update is disabled until all schema tables
-            are in <code className="font-mono">BACKUP_REGISTRY</code> or <code className="font-mono">EXCLUDED_TABLES</code>.
-            Fix this in Settings → Backups → Backup Audit.
+            {auditCoverage === null
+              ? <>Backup coverage could not be checked — update is disabled until the audit can be read.</>
+              : <>Backup coverage is <strong>{auditCoverage}%</strong> — update is disabled until all schema tables
+                are in <code className="font-mono">BACKUP_REGISTRY</code> or <code className="font-mono">EXCLUDED_TABLES</code>.</>}
+            {" "}Fix this in Settings → Backups → Backup Audit.
           </span>
           <button
             type="button"
-            onClick={fetchAuditCoverage}
+            onClick={() => void refetchAuditCoverage()}
             className="shrink-0 flex items-center gap-1 font-medium underline underline-offset-2 hover:opacity-70 transition-opacity"
             title="Re-run backup audit"
           >
@@ -2242,7 +2224,7 @@ function SystemUpdatePanel() {
           )}
           <div className="flex flex-wrap gap-2">
             {version.updateAvailable ? (
-              <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled || (auditCoverage !== null && auditCoverage < 100)}>
+              <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled || auditBlocksUpdate}>
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                 Update now
               </Button>

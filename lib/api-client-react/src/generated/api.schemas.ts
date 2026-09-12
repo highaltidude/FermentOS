@@ -523,6 +523,18 @@ export interface NotificationTestResult {
   error?: string | null;
 }
 
+export interface BackupAuditResult {
+  totalTables: number;
+  backedUp: string[];
+  /** Classified as not requiring registration. Still present in the dump. */
+  excluded: string[];
+  /** In the database but in neither BACKUP_REGISTRY nor EXCLUDED_TABLES. */
+  missing: string[];
+  /** In BACKUP_REGISTRY but no longer in the database. */
+  orphaned: string[];
+  coveragePercent: number;
+}
+
 export interface TempAlertReadingsBody {
   count: number;
 }

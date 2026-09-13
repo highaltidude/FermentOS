@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.5.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.4.0...fermentos-v1.5.0) (2026-09-13)
+
+
+### Features
+
+* **alerts:** notify on brew alerts over ntfy or webhook ([0023661](https://github.com/highaltidude/FermentOS/commit/002366118230d183a8532281e559c65acf24eeae)), closes [#149](https://github.com/highaltidude/FermentOS/issues/149)
+* **alerts:** separate re-notify interval for temperature alerts ([ffa64e3](https://github.com/highaltidude/FermentOS/commit/ffa64e391cf7e48db463d909a7ee8e3462c4c90c))
+* **pwa:** make FermentOS installable to the home screen ([c777c0e](https://github.com/highaltidude/FermentOS/commit/c777c0ed1bce3325149663df29d4e163de67a75d))
+
+
+### Bug Fixes
+
+* **api-server:** 404 missing static assets instead of serving the app shell ([8ddb86a](https://github.com/highaltidude/FermentOS/commit/8ddb86a623f481561ccfad4a7b5f8b5bed2c9ae9)), closes [#147](https://github.com/highaltidude/FermentOS/issues/147)
+* **api-server:** keep the audit classifier importable without a database ([2fd0a9d](https://github.com/highaltidude/FermentOS/commit/2fd0a9db620923b046d885f80509c8eef3d17a54))
+* **backup:** enforce the audit coverage gate on the server ([a86cc20](https://github.com/highaltidude/FermentOS/commit/a86cc20c5a9e30138d7c8bc33d6a6021f5379d57))
+* **db:** drop the legacy brew_sessions.rating column ([3182aea](https://github.com/highaltidude/FermentOS/commit/3182aea604d3410000d7c480babb175907ea9e25)), closes [#148](https://github.com/highaltidude/FermentOS/issues/148)
+* **docker:** install the postgres client major that matches the server ([41c5bf0](https://github.com/highaltidude/FermentOS/commit/41c5bf03701ccab612d022db89cf86ee5b28bf13)), closes [#153](https://github.com/highaltidude/FermentOS/issues/153)
+
 ## [1.4.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.3.0...fermentos-v1.4.0) (2026-08-26)
 
 

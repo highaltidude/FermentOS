@@ -68,7 +68,15 @@ export type { BackupAuditResult } from "../services/backupAudit";
 
 const CONFIG_KEY = "backup_config";
 const STATUS_KEY = "backup_status";
-const DEFAULT_LOCAL_PATH = path.join(os.homedir(), "fermentos-backups");
+// Mirrors the uploads convention in app.ts: cwd is the repo root under systemd
+// and /app in the container, so one expression is correct in both. It must not
+// come from os.homedir() — the image creates the service account with
+// `adduser --system`, which leaves HOME as /nonexistent, so every local backup
+// died with EACCES before a single byte was written (#155).
+const DEFAULT_LOCAL_PATH = path.resolve(process.cwd(), "data/backups");
+
+// The literal marker Debian's `adduser --system` leaves as a home directory.
+const NONEXISTENT_HOME_PREFIX = "/nonexistent";
 
 function defaultConfig(): BackupConfig {
   return { sftp: {}, schedule: "none", localPath: DEFAULT_LOCAL_PATH, retentionDays: 0, backupBeforeUpdate: "none" };
@@ -278,9 +286,46 @@ export function startScheduler(schedule: BackupConfig["schedule"]) {
   logger.info({ schedule, expr }, "Backup scheduler started");
 }
 
+/**
+ * Repairs a stored localPath that was derived from a home directory that does
+ * not exist. Changing DEFAULT_LOCAL_PATH alone would only help fresh installs:
+ * getConfig spreads the defaults *under* the saved row, so an install that ever
+ * saved backup settings has the broken path persisted and would keep using it.
+ *
+ * Scoped to the /nonexistent marker on purpose. A path the user actually chose
+ * is never second-guessed, and after one rewrite this no longer matches.
+ */
+async function repairNonexistentLocalPath(): Promise<void> {
+  const cfg = await getConfig();
+  if (!cfg.localPath?.startsWith(NONEXISTENT_HOME_PREFIX)) return;
+
+  const from = cfg.localPath;
+  await saveConfig({ ...cfg, localPath: DEFAULT_LOCAL_PATH });
+  logger.warn(
+    { from, to: DEFAULT_LOCAL_PATH },
+    "Repaired backup localPath that pointed inside a nonexistent home directory",
+  );
+}
+
+/**
+ * Surfaces an unwritable backup directory at boot rather than at 2am. Only
+ * warns: silently redirecting dumps somewhere other than the configured path
+ * would mean the UI shows one location while backups land in another.
+ */
+function warnIfLocalPathUnwritable(dir: string): void {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+  } catch (e) {
+    logger.warn({ err: e, dir }, "Local backup directory is not writable — local backups will fail");
+  }
+}
+
 export async function initBackupScheduler() {
   try {
+    await repairNonexistentLocalPath();
     const cfg = await getConfig();
+    warnIfLocalPathUnwritable(cfg.localPath || DEFAULT_LOCAL_PATH);
     startScheduler(cfg.schedule);
   } catch (e) {
     logger.error({ e }, "Failed to init backup scheduler");

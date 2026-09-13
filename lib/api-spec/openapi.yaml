@@ -776,6 +776,74 @@ paths:
               schema:
                 $ref: "#/components/schemas/TempAlertReadingsResponse"
 
+  /settings/notifications:
+    get:
+      operationId: getNotificationSettings
+      tags: [settings]
+      summary: Get outbound notification settings
+      responses:
+        "200":
+          description: Current notification settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+    put:
+      operationId: setNotificationSettings
+      tags: [settings]
+      summary: Update outbound notification settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationSettings"
+      responses:
+        "200":
+          description: Updated notification settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+        "400":
+          description: Invalid settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /settings/notifications/test:
+    post:
+      operationId: sendTestNotification
+      tags: [settings]
+      summary: Send a test notification on the configured channel
+      responses:
+        "200":
+          description: Delivery result. ok=false carries the reason in error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTestResult"
+
+  /backup/audit:
+    get:
+      operationId: getBackupAudit
+      tags: [backup]
+      summary: Backup coverage audit
+      description: >-
+        Reports whether every table in the database is classified in
+        backup-registry.ts. Coverage below 100% means a table is unaccounted
+        for, and POST /admin/update refuses to run in that state. Note that
+        excluded tables are still present in the dump file - excluded means
+        "not required to be registered", not "kept out of backups".
+      responses:
+        "200":
+          description: Coverage report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupAuditResult"
+
   /inventory:
     get:
       operationId: listInventory
@@ -2096,6 +2164,86 @@ components:
           type: integer
       required: [count]
 
+    AlertType:
+      type: string
+      enum: [temp_out_of_range, gravity_stalled, device_offline, battery_low]
+
+    NotificationChannel:
+      type: string
+      description: "none disables notifications entirely."
+      enum: [none, ntfy, webhook]
+
+    NotificationSettings:
+      type: object
+      description: >-
+        Outbound notification config. Both channels are plain outbound POSTs,
+        so they work on a plain-HTTP LAN deployment with no certificates.
+      properties:
+        channel:
+          $ref: "#/components/schemas/NotificationChannel"
+        ntfyServer:
+          type: string
+          description: Base URL of the ntfy server. Defaults to https://ntfy.sh.
+        ntfyTopic:
+          type: string
+          description: ntfy topic to publish to. Treat as a secret — anyone who knows it can read your alerts.
+        webhookUrl:
+          type: string
+          description: URL to POST a JSON payload to. Also covers Discord and Slack incoming webhooks.
+        types:
+          type: array
+          description: Which alert types should notify.
+          items:
+            $ref: "#/components/schemas/AlertType"
+        repeatHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+          description: Minimum hours between repeat notifications while a condition stays active.
+        tempRepeatHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+          nullable: true
+          description: >-
+            Overrides repeatHours for temp_out_of_range only. Null inherits it,
+            which is the default. A temperature excursion is actionable straight
+            away, so it often warrants a shorter interval than the rest.
+      required: [channel, ntfyServer, ntfyTopic, webhookUrl, types, repeatHours]
+
+    NotificationTestResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+      required: [ok]
+
+    BackupAuditResult:
+      type: object
+      properties:
+        totalTables:
+          type: integer
+        backedUp:
+          type: array
+          items: { type: string }
+        excluded:
+          type: array
+          description: Classified as not requiring registration. Still present in the dump.
+          items: { type: string }
+        missing:
+          type: array
+          description: In the database but in neither BACKUP_REGISTRY nor EXCLUDED_TABLES.
+          items: { type: string }
+        orphaned:
+          type: array
+          description: In BACKUP_REGISTRY but no longer in the database.
+          items: { type: string }
+        coveragePercent:
+          type: integer
+      required: [totalTables, backedUp, excluded, missing, orphaned, coveragePercent]
     TempAlertReadingsBody:
       type: object
       properties:

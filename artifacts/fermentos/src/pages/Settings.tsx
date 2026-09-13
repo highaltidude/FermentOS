@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearch } from "wouter";
-import { Plus, Trash2, GripVertical, Settings as SettingsIcon, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer, Tag } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings as SettingsIcon, RefreshCw, Clock, Database, Upload, Download, CheckCircle, XCircle, Loader2, Lock, Copy, KeyRound, AlertTriangle, Package, Beer, Server, GitBranch, AlertCircle, FolderOpen, Power, History, Undo2, ChevronDown, ChevronRight, Activity, Wifi, Webhook, Radio, Gauge, Home, Eye, EyeOff, Check, X, ArrowLeft, Pencil, Droplets, Plug, Info, Thermometer, Tag, Bell } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   useListBeerStyles,
@@ -26,11 +26,21 @@ import {
   useGetBreweryName,
   useSetBreweryName,
   getGetBreweryNameQueryKey,
+  useGetBackupAudit,
+  useGetNotificationSettings,
+  useSetNotificationSettings,
+  useSendTestNotification,
+  getGetNotificationSettingsQueryKey,
+  type NotificationSettings,
+  type NotificationChannel,
+  type NotificationTestResult,
+  type AlertType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { SystemHealthPanel } from "@/components/SystemHealthPanel";
@@ -51,15 +61,6 @@ type LocalBackupFile = {
   size: number;
   modifiedAt: string;
   createdAt: string;
-};
-
-type BackupAuditResult = {
-  totalTables: number;
-  backedUp: string[];
-  excluded: string[];
-  missing: string[];
-  orphaned: string[];
-  coveragePercent: number;
 };
 
 function ISpindelDeviceDetail({
@@ -860,8 +861,9 @@ function DatabaseBackupPanel() {
   const [localFilesLoading, setLocalFilesLoading] = useState(false);
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
   const [restoringFile, setRestoringFile] = useState<string | null>(null);
-  const [audit, setAudit] = useState<BackupAuditResult | null>(null);
-  const [auditLoading, setAuditLoading] = useState(false);
+  // Generated hook per CLAUDE.md; the Updates panel reads the same query, so
+  // TanStack Query serves both callers from one request.
+  const { data: audit = null, isFetching: auditLoading, refetch: refetchAudit } = useGetBackupAudit();
 
   const loadConfig = useCallback(async () => {
     try {
@@ -902,14 +904,6 @@ function DatabaseBackupPanel() {
     } catch { /* ignore */ } finally { setLocalFilesLoading(false); }
   }, [BASE]);
 
-  const fetchAudit = useCallback(async () => {
-    setAuditLoading(true);
-    try {
-      const res = await fetch(`${BASE}api/backup/audit`);
-      if (res.ok) setAudit(await res.json() as BackupAuditResult);
-    } catch { /* ignore */ } finally { setAuditLoading(false); }
-  }, [BASE]);
-
   const handleDownloadLocalFile = (filename: string) => {
     window.location.href = `${BASE}api/backup/local-files/${encodeURIComponent(filename)}/download`;
   };
@@ -946,7 +940,7 @@ function DatabaseBackupPanel() {
     } finally { setRestoringFile(null); }
   };
 
-  useEffect(() => { loadConfig(); fetchLocalFiles(); fetchAudit(); }, [loadConfig, fetchLocalFiles, fetchAudit]);
+  useEffect(() => { loadConfig(); fetchLocalFiles(); }, [loadConfig, fetchLocalFiles]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1271,7 +1265,7 @@ function DatabaseBackupPanel() {
             <Activity className="w-3.5 h-3.5" />
             Backup Audit
           </div>
-          <Button size="sm" variant="ghost" onClick={fetchAudit} disabled={auditLoading} className="h-7 px-2">
+          <Button size="sm" variant="ghost" onClick={() => void refetchAudit()} disabled={auditLoading} className="h-7 px-2">
             {auditLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </Button>
         </div>
@@ -1319,7 +1313,7 @@ function DatabaseBackupPanel() {
 
             {audit.excluded.length > 0 && (
               <p className="text-[11px] text-muted-foreground">
-                Intentionally excluded: {audit.excluded.join(", ")}
+                Not required in backups (still included in the dump): {audit.excluded.join(", ")}
               </p>
             )}
             {audit.orphaned.length > 0 && (
@@ -1549,7 +1543,12 @@ function SystemUpdatePanel() {
   // summary row so opening "Release notes" doesn't dump every changelog at
   // once. Tracks tags the user has manually expanded.
   const [expandedReleaseTags, setExpandedReleaseTags] = useState<Set<string>>(new Set());
-  const [auditCoverage, setAuditCoverage] = useState<number | null>(null);
+  // Shares the backup panel's query. isError matters as much as the value:
+  // an unreadable audit is not the same as a passing one, and the button must
+  // not imply a safety check that never ran. The server enforces this too.
+  const { data: auditData, isError: auditError, refetch: refetchAuditCoverage } = useGetBackupAudit();
+  const auditCoverage = auditData?.coveragePercent ?? null;
+  const auditBlocksUpdate = auditError || (auditCoverage !== null && auditCoverage < 100);
   const [copiedHash, setCopiedHash] = useState(false);
   const logBoxRef = useRef<HTMLPreElement>(null);
   const startHashRef = useRef<string | null>(null);
@@ -1592,16 +1591,6 @@ function SystemUpdatePanel() {
     } catch { /* ignore */ }
   }, [BASE]);
 
-  const fetchAuditCoverage = useCallback(async () => {
-    try {
-      const res = await fetch(`${BASE}api/backup/audit`);
-      if (res.ok) {
-        const data = await res.json() as BackupAuditResult;
-        setAuditCoverage(data.coveragePercent);
-      }
-    } catch { /* ignore — audit failure shouldn't block the updates panel */ }
-  }, [BASE]);
-
   const fetchReleases = useCallback(async () => {
     try {
       const res = await fetch(`${BASE}api/admin/release-notes`);
@@ -1623,7 +1612,7 @@ function SystemUpdatePanel() {
     } catch { /* ignore — history is non-critical */ }
   }, [BASE]);
 
-  useEffect(() => { fetchVersion(); fetchPreBackup(); fetchHistory(); fetchReleases(); fetchAuditCoverage(); }, [fetchVersion, fetchPreBackup, fetchHistory, fetchReleases, fetchAuditCoverage]);
+  useEffect(() => { fetchVersion(); fetchPreBackup(); fetchHistory(); fetchReleases(); }, [fetchVersion, fetchPreBackup, fetchHistory, fetchReleases]);
   // Auto-expand release notes the first time we learn there's an update
   // available — saves a click for the most useful moment.
   useEffect(() => {
@@ -1990,7 +1979,7 @@ function SystemUpdatePanel() {
             </p>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={() => { fetchVersion(); fetchAuditCoverage(); }} disabled={checking || inProgress} title="Check GitHub for the latest version">
+        <Button size="sm" variant="outline" onClick={() => { fetchVersion(); void refetchAuditCoverage(); }} disabled={checking || inProgress} title="Check GitHub for the latest version">
           {checking ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
           Check for updates
         </Button>
@@ -2200,17 +2189,19 @@ function SystemUpdatePanel() {
         </div>
       )}
 
-      {auditCoverage !== null && auditCoverage < 100 && phase === "idle" && (
+      {auditBlocksUpdate && phase === "idle" && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/8 px-3 py-2 text-xs text-destructive">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span className="flex-1">
-            Backup coverage is <strong>{auditCoverage}%</strong> — update is disabled until all schema tables
-            are in <code className="font-mono">BACKUP_REGISTRY</code> or <code className="font-mono">EXCLUDED_TABLES</code>.
-            Fix this in Settings → Backups → Backup Audit.
+            {auditCoverage === null
+              ? <>Backup coverage could not be checked — update is disabled until the audit can be read.</>
+              : <>Backup coverage is <strong>{auditCoverage}%</strong> — update is disabled until all schema tables
+                are in <code className="font-mono">BACKUP_REGISTRY</code> or <code className="font-mono">EXCLUDED_TABLES</code>.</>}
+            {" "}Fix this in Settings → Backups → Backup Audit.
           </span>
           <button
             type="button"
-            onClick={fetchAuditCoverage}
+            onClick={() => void refetchAuditCoverage()}
             className="shrink-0 flex items-center gap-1 font-medium underline underline-offset-2 hover:opacity-70 transition-opacity"
             title="Re-run backup audit"
           >
@@ -2233,7 +2224,7 @@ function SystemUpdatePanel() {
           )}
           <div className="flex flex-wrap gap-2">
             {version.updateAvailable ? (
-              <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled || (auditCoverage !== null && auditCoverage < 100)}>
+              <Button size="sm" onClick={handleUpdate} disabled={buttonsDisabled || auditBlocksUpdate}>
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                 Update now
               </Button>
@@ -3215,6 +3206,177 @@ function DefaultReadingsShownPanel() {
   );
 }
 
+const ALERT_TYPE_LABELS: { value: AlertType; label: string; desc: string }[] = [
+  { value: "temp_out_of_range", label: "Temperature out of range", desc: "Reading outside the session's ferment temp range" },
+  { value: "gravity_stalled", label: "Fermentation stalled", desc: "Gravity unchanged for 24+ hours" },
+  { value: "device_offline", label: "Sensor offline", desc: "iSpindel has stopped reporting" },
+  { value: "battery_low", label: "Sensor battery low", desc: "iSpindel battery under 20%" },
+];
+
+const REPEAT_OPTIONS = [1, 3, 6, 12, 24] as const;
+
+// Unlike the neighbouring panels (which predate the endpoint being in the
+// OpenAPI spec and use raw fetch), this uses the generated hooks per CLAUDE.md.
+// The config is a multi-field object, so the typed client genuinely helps here.
+function NotificationsPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data, isLoading } = useGetNotificationSettings();
+  const [draft, setDraft] = useState<NotificationSettings | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    if (data) setDraft(data);
+  }, [data]);
+
+  const saveMutation = useSetNotificationSettings({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetNotificationSettingsQueryKey() });
+        toast({ title: "Notification settings saved" });
+      },
+      onError: (e: unknown) =>
+        toast({ title: "Failed to save", description: e instanceof Error ? e.message : String(e), variant: "destructive" }),
+    },
+  });
+
+  const testMutation = useSendTestNotification({
+    mutation: {
+      onSuccess: (result: NotificationTestResult) => {
+        // 200 with ok:false is the normal "misconfigured" path, not an error.
+        if (result.ok) toast({ title: "Test notification sent", description: "Check your device." });
+        else toast({ title: "Test failed", description: result.error ?? "Unknown error", variant: "destructive" });
+      },
+      onError: (e: unknown) =>
+        toast({ title: "Test failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" }),
+      onSettled: () => setTesting(false),
+    },
+  });
+
+  if (isLoading || !draft) return <Skeleton className="h-40 rounded-md" />;
+
+  const toggleType = (t: AlertType) =>
+    setDraft({ ...draft, types: draft.types.includes(t) ? draft.types.filter((x) => x !== t) : [...draft.types, t] });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">Channel</label>
+        <Select value={draft.channel} onValueChange={(v) => setDraft({ ...draft, channel: v as NotificationChannel })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Off</SelectItem>
+            <SelectItem value="ntfy">ntfy</SelectItem>
+            <SelectItem value="webhook">Webhook</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {draft.channel === "ntfy" && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Server</label>
+            <Input value={draft.ntfyServer} onChange={(e) => setDraft({ ...draft, ntfyServer: e.target.value })} placeholder="https://ntfy.sh" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
+            <Input value={draft.ntfyTopic} onChange={(e) => setDraft({ ...draft, ntfyTopic: e.target.value })} placeholder="fermentos-a8f3k2" />
+          </div>
+          <p className="sm:col-span-2 text-xs text-muted-foreground">
+            Install the ntfy app and subscribe to this topic. Anyone who knows the topic name can read your alerts, so pick something unguessable.
+          </p>
+        </div>
+      )}
+
+      {draft.channel === "webhook" && (
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">Webhook URL</label>
+          <Input value={draft.webhookUrl} onChange={(e) => setDraft({ ...draft, webhookUrl: e.target.value })} placeholder="https://..." />
+          <p className="text-xs text-muted-foreground mt-1">Receives a JSON POST. Works with Discord and Slack incoming webhooks.</p>
+        </div>
+      )}
+
+      {draft.channel !== "none" && (
+        <>
+          <div>
+            <div className="text-xs text-muted-foreground mb-1.5">Notify me about</div>
+            <div className="space-y-1.5">
+              {ALERT_TYPE_LABELS.map((t) => {
+                const on = draft.types.includes(t.value);
+                return (
+                  <div key={t.value}>
+                  <button
+                    type="button"
+                    onClick={() => toggleType(t.value)}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-md border text-left transition-colors ${
+                      on ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/50"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-foreground">{t.label}</div>
+                      <div className="text-xs text-muted-foreground">{t.desc}</div>
+                    </div>
+                    <div className={`h-4 w-4 rounded border-2 shrink-0 flex items-center justify-center ${on ? "border-primary bg-primary" : "border-muted-foreground/30"}`}>
+                      {on && <Check className="w-3 h-3 text-primary-foreground" />}
+                    </div>
+                  </button>
+                  {t.value === "temp_out_of_range" && on && (
+                    <div className="mt-1.5 ml-3 pl-3 border-l border-border max-w-xs">
+                      <label className="text-xs text-muted-foreground mb-1 block">Re-notify about this every</label>
+                      <Select
+                        value={draft.tempRepeatHours == null ? "default" : String(draft.tempRepeatHours)}
+                        onValueChange={(v) => setDraft({ ...draft, tempRepeatHours: v === "default" ? null : Number(v) })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Use default ({draft.repeatHours === 1 ? "1 hour" : `${draft.repeatHours} hours`})</SelectItem>
+                          {REPEAT_OPTIONS.map((h) => (
+                            <SelectItem key={h} value={String(h)}>{h === 1 ? "1 hour" : `${h} hours`}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="max-w-xs">
+            <label className="text-xs text-muted-foreground mb-1 block">Re-notify at most every (default)</label>
+            <Select value={String(draft.repeatHours)} onValueChange={(v) => setDraft({ ...draft, repeatHours: Number(v) })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {REPEAT_OPTIONS.map((h) => (
+                  <SelectItem key={h} value={String(h)}>{h === 1 ? "1 hour" : `${h} hours`}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button size="sm" onClick={() => saveMutation.mutate({ data: draft })} disabled={saveMutation.isPending}>
+          <Check className="w-3.5 h-3.5 mr-1" />Save
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={draft.channel === "none" || testing || saveMutation.isPending}
+          onClick={() => { setTesting(true); testMutation.mutate(); }}
+        >
+          <Bell className="w-3.5 h-3.5 mr-1" />{testing ? "Sending…" : "Send test"}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Save before testing — the test uses the saved settings. Checks run every 5 minutes; only brews with a live sensor are monitored, and packaged batches are never alerted on. Temperature alerts also wait for the number of consecutive out-of-range readings set by Temperature Alert Threshold above.
+      </p>
+    </div>
+  );
+}
+
 function FermentTempPanel() {
   const BASE = import.meta.env.BASE_URL;
   const { toast } = useToast();
@@ -3580,6 +3742,21 @@ export default function Settings() {
               <FermentTempPanel />
             </div>
           </div>
+
+          <div className="bg-card border border-card-border rounded-lg">
+            <div className="px-4 py-3 border-b border-card-border">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Get alerted when a brew needs attention, even with the app closed.
+              </p>
+            </div>
+            <div className="p-4">
+              <NotificationsPanel />
+            </div>
+          </div>
         </div>
       )}
 
@@ -3660,7 +3837,9 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* Webhooks — placeholder */}
+              {/* Webhooks — partially delivered: alert delivery ships in
+                  Brewing → Notifications; generic brew-event callbacks do not
+                  exist yet, so this stays a placeholder for that half only. */}
               <div className="bg-card border border-card-border rounded-lg opacity-60 pointer-events-none select-none">
                 <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -3673,7 +3852,8 @@ export default function Settings() {
                   <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">Planned</span>
                 </div>
                 <div className="px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Fire HTTP callbacks when stage changes, fermentation alerts trigger, or a session completes. Integrate with n8n, Make, Zapier, or your own automation scripts.</p>
+                  <p className="text-xs text-muted-foreground">Fire HTTP callbacks when a stage changes or a session completes. Integrate with n8n, Make, Zapier, or your own automation scripts.</p>
+                  <p className="text-xs text-muted-foreground mt-2">Alert notifications already deliver over webhooks today — configure them under Brewing → Notifications.</p>
                 </div>
               </div>
 

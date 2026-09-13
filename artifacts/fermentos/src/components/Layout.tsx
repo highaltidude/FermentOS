@@ -136,12 +136,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-sidebar border-b border-sidebar-border flex items-center justify-center px-4 h-12">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-sidebar border-b border-sidebar-border flex items-center justify-center px-4 safe-area-header">
         <img src={logoUrl} alt="FermentOS" className="h-9 w-auto object-contain" />
       </div>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto md:overflow-auto pt-12 pb-16 md:pt-0 md:pb-0">
+      <main className="flex-1 overflow-auto md:overflow-auto safe-area-main">
         {children}
       </main>
 

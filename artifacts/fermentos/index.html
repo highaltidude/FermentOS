@@ -2,10 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <!-- viewport-fit=cover is required for env(safe-area-inset-*) to report
+         non-zero values, which the fixed header/bottom nav rely on when the
+         app runs standalone on a notched device. -->
+    <!-- No maximum-scale: capping it blocks pinch-zoom, which is a WCAG
+         failure. iOS has ignored the cap since iOS 10, but Android Chrome
+         honours it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FermentOS</title>
-    <link rel="icon" type="image/png" href="fermentos-logo.png" />
-    <link rel="apple-touch-icon" href="fermentos-logo.png" />
+
+    <!-- Icons are relative so they resolve correctly under a non-root
+         BASE_PATH (vite.config.ts sets `base` from that env var). -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+
+    <!-- Colours the status bar to match the app header (bg-sidebar). -->
+    <meta name="theme-color" content="#1E1A18" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#D5CBBE" media="(prefers-color-scheme: light)" />
+
+    <!-- Older iOS honours these rather than the manifest. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FermentOS" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

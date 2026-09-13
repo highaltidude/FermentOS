@@ -84,7 +84,13 @@ export function ScoreScale({ value, onChange, label, hint, disabled }: ScoreScal
         <label className="text-xs font-medium text-foreground">{label}</label>
         {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
       </div>
-      <div className="flex flex-wrap items-center gap-1 mt-1">
+      {/* A 10-column grid rather than a flex row: at a fixed 32px per button
+          the row needs 356px, which overflows the dialog's usable width on
+          every iPhone below Pro Max (390px viewport - 48px dialog padding =
+          342px) and wrapped to 9 buttons plus a lone orphan. The grid sizes
+          buttons to whatever space there is, so the scale always reads as one
+          continuous row. */}
+      <div className="grid grid-cols-10 gap-1 mt-1">
         {Array.from({ length: 10 }).map((_, i) => {
           const val = i + 1
           const selected = value === val
@@ -97,7 +103,7 @@ export function ScoreScale({ value, onChange, label, hint, disabled }: ScoreScal
               aria-pressed={selected}
               onClick={() => onChange(selected ? null : val)}
               className={cn(
-                "w-8 h-8 rounded-md border text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+                "h-9 w-full rounded-md border text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
                 selected
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground",

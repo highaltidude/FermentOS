@@ -19,6 +19,7 @@ import type {
 import type {
   ActiveBrew,
   AssignDeviceBody,
+  BackupAuditResult,
   BeerStyle,
   BrewSensorTelemetry,
   BrewSession,
@@ -58,6 +59,8 @@ import type {
   ListInventoryParams,
   ListRecipesParams,
   ListSensorReadingsParams,
+  NotificationSettings,
+  NotificationTestResult,
   ReadingRetentionBody,
   ReadingRetentionResponse,
   Recipe,
@@ -3891,6 +3894,326 @@ export const useSetTempAlertReadings = <
 > => {
   return useMutation(getSetTempAlertReadingsMutationOptions(options));
 };
+
+/**
+ * @summary Get outbound notification settings
+ */
+export const getGetNotificationSettingsUrl = () => {
+  return `/api/settings/notifications`;
+};
+
+export const getNotificationSettings = async (
+  options?: RequestInit,
+): Promise<NotificationSettings> => {
+  return customFetch<NotificationSettings>(getGetNotificationSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetNotificationSettingsQueryKey = () => {
+  return [`/api/settings/notifications`] as const;
+};
+
+export const getGetNotificationSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getNotificationSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetNotificationSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getNotificationSettings>>
+  > = ({ signal }) => getNotificationSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetNotificationSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getNotificationSettings>>
+>;
+export type GetNotificationSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get outbound notification settings
+ */
+
+export function useGetNotificationSettings<
+  TData = Awaited<ReturnType<typeof getNotificationSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetNotificationSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update outbound notification settings
+ */
+export const getSetNotificationSettingsUrl = () => {
+  return `/api/settings/notifications`;
+};
+
+export const setNotificationSettings = async (
+  notificationSettings: NotificationSettings,
+  options?: RequestInit,
+): Promise<NotificationSettings> => {
+  return customFetch<NotificationSettings>(getSetNotificationSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(notificationSettings),
+  });
+};
+
+export const getSetNotificationSettingsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setNotificationSettings>>,
+    TError,
+    { data: BodyType<NotificationSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setNotificationSettings>>,
+  TError,
+  { data: BodyType<NotificationSettings> },
+  TContext
+> => {
+  const mutationKey = ["setNotificationSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setNotificationSettings>>,
+    { data: BodyType<NotificationSettings> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setNotificationSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetNotificationSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setNotificationSettings>>
+>;
+export type SetNotificationSettingsMutationBody =
+  BodyType<NotificationSettings>;
+export type SetNotificationSettingsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update outbound notification settings
+ */
+export const useSetNotificationSettings = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setNotificationSettings>>,
+    TError,
+    { data: BodyType<NotificationSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setNotificationSettings>>,
+  TError,
+  { data: BodyType<NotificationSettings> },
+  TContext
+> => {
+  return useMutation(getSetNotificationSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Send a test notification on the configured channel
+ */
+export const getSendTestNotificationUrl = () => {
+  return `/api/settings/notifications/test`;
+};
+
+export const sendTestNotification = async (
+  options?: RequestInit,
+): Promise<NotificationTestResult> => {
+  return customFetch<NotificationTestResult>(getSendTestNotificationUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSendTestNotificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTestNotification>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendTestNotification>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["sendTestNotification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendTestNotification>>,
+    void
+  > = () => {
+    return sendTestNotification(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendTestNotificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendTestNotification>>
+>;
+
+export type SendTestNotificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a test notification on the configured channel
+ */
+export const useSendTestNotification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTestNotification>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendTestNotification>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSendTestNotificationMutationOptions(options));
+};
+
+/**
+ * Reports whether every table in the database is classified in backup-registry.ts. Coverage below 100% means a table is unaccounted for, and POST /admin/update refuses to run in that state. Note that excluded tables are still present in the dump file - excluded means "not required to be registered", not "kept out of backups".
+ * @summary Backup coverage audit
+ */
+export const getGetBackupAuditUrl = () => {
+  return `/api/backup/audit`;
+};
+
+export const getBackupAudit = async (
+  options?: RequestInit,
+): Promise<BackupAuditResult> => {
+  return customFetch<BackupAuditResult>(getGetBackupAuditUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBackupAuditQueryKey = () => {
+  return [`/api/backup/audit`] as const;
+};
+
+export const getGetBackupAuditQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBackupAudit>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBackupAudit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBackupAuditQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBackupAudit>>> = ({
+    signal,
+  }) => getBackupAudit({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBackupAudit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBackupAuditQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBackupAudit>>
+>;
+export type GetBackupAuditQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Backup coverage audit
+ */
+
+export function useGetBackupAudit<
+  TData = Awaited<ReturnType<typeof getBackupAudit>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBackupAudit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBackupAuditQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all inventory items

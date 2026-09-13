@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable } from "@workspace/db";
 import { eq, desc, isNull, and, gte } from "drizzle-orm";
-import { calcConnectionStatus, buildAlerts } from "./sensors";
+import { calcConnectionStatus, buildAlerts } from "../services/brewAlerts";
 import { calcInsights } from "../lib/fermentationInsights";
 
 const router = Router();

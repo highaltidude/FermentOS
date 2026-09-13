@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 
 import path from "path";
 import os from "os";
 import { getConfig as getBackupConfig, runBackup } from "./backup.js";
+import { computeBackupAudit } from "../services/backupAudit.js";
 
 const router = Router();
 
@@ -568,6 +569,27 @@ router.post("/update", async (req, res) => {
     return res.status(409).json({
       error: `An ${earlyLock.kind} is already in progress (started ${Math.floor(earlyLock.ageMs / 1000)}s ago). Wait for it to finish before starting another.`,
       lock: earlyLock,
+    });
+  }
+
+  // Refuse to update while any table is unclassified. An update can migrate or
+  // drop a table nobody has decided is worth backing up, and the restore path
+  // only covers what the registry knows about.
+  //
+  // This has to be enforced here, not just by the disabled button in the UI: a
+  // stale tab, a direct API call, or a failed audit fetch on the client would
+  // all sail straight past that. It also sits above the pre-update backup
+  // deliberately — that runs a full pg_dump, and spending one on an update
+  // we're about to refuse is pure waste.
+  const audit = await computeBackupAudit();
+  if (audit.missing.length > 0) {
+    return res.status(409).json({
+      error:
+        `Backup coverage is ${audit.coveragePercent}% — ${audit.missing.length} ` +
+        `table(s) are not classified: ${audit.missing.join(", ")}. Add them to ` +
+        `BACKUP_REGISTRY or EXCLUDED_TABLES in lib/db/src/backup-registry.ts, ` +
+        `then try again.`,
+      audit,
     });
   }
 

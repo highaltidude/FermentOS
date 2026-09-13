@@ -1381,6 +1381,12 @@ type VersionInfo = {
   date: string | null;
   message: string | null;
   branch: string;
+  /**
+   * Installed release version, read from package.json server-side. Null only if
+   * that read failed. This is the authoritative answer — it is not inferred from
+   * the GitHub release list, which cannot identify the running build on Docker.
+   */
+  version?: string | null;
   updateAvailable: boolean;
   runningHash?: string;
   restartPending?: boolean;
@@ -1929,13 +1935,14 @@ function SystemUpdatePanel() {
   // browser's URL so it works regardless of the homelab's hostname / port.
   const repairCurlCmd = `curl -sSL ${window.location.origin}${BASE}api/admin/repair-script | sudo bash`;
 
-  // The newest release entry that isn't confirmed newer than what's actually
-  // running (releases are newest-first) — i.e. the release version this
-  // build is on. Falls back to the raw commit identity below when no match
-  // is available (offline, rate-limited, or every fetched release genuinely
-  // is newer).
-  const currentRelease = releases.find((r) => !r.isNewerThanCurrent);
-  const currentVersionLabel = currentRelease?.tag.replace(/^fermentos-/, "");
+  // Read from package.json by the api-server, not inferred from the release
+  // list. The old derivation (first release not newer than the running commit)
+  // was always wrong on Docker: isAncestorOfRunning() bails there, so nothing
+  // was ever marked newer and this resolved to whatever was newest upstream —
+  // showing an available version as though it were the installed one. When this
+  // is null we fall through to the commit-only layout, which at least does not
+  // claim to know.
+  const currentVersionLabel = version.version ?? undefined;
 
   return (
     <div className="space-y-4">

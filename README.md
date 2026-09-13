@@ -428,6 +428,10 @@ download it, or schedule daily or weekly runs that push to an SFTP server, keep
 a copy on the local disk, or both. Restores work from an uploaded file or from
 any backup still in local history.
 
+Local backups land in `data/backups` inside the install directory. On Docker that
+is bind-mounted to `./data/backups` on the host, so a dump is still there after a
+rebuild — and still reachable if the container itself will not start.
+
 Two things worth setting up before you need them:
 
 - **Back up before updating.** `backupBeforeUpdate` takes a snapshot
@@ -998,6 +1002,12 @@ Backs the Settings → System → Health panel, which auto-refreshes every 5 sec
 }
 ```
 `schedule`: `none` | `daily` | `weekly`. `retentionDays` is clamped to 0–60 (`0` keeps forever). `backupBeforeUpdate` controls whether an in-app update takes a backup first (`none` | `local` | `sftp`).
+
+`localPath` defaults to `data/backups` under the install directory — `./data/backups`
+on the host for Docker, since that path is bind-mounted so dumps survive a
+container rebuild. Upgrading a bare-metal install? Dumps already in
+`~/fermentos-backups` stay exactly where they are; that location is simply no
+longer the default, so point `localPath` back at it if you want them in one place.
 
 ---
 

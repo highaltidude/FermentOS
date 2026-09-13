@@ -46,6 +46,7 @@ jobs:
           git merge --no-edit origin/main
 
       - name: Anchor beta prerelease to main's version
+        id: anchor
         # config-beta.json uses release-please's "prerelease" versioning
         # strategy: once a manifest version has a prerelease suffix, it only
         # ever increments the trailing -betaN counter and never recomputes
@@ -56,8 +57,13 @@ jobs:
         # manifest to "<main-version>-beta1" so the next beta release reads
         # as a prerelease of the version beta is actually built on. This is
         # release-please's documented way to force the next version: editing
-        # the manifest directly, no matching tag required — the changelog
-        # commit range is still computed from the last tag it actually made.
+        # the manifest directly. A matching release IS required though:
+        # release-please finds its commit-range boundary by looking up the
+        # release whose tag matches the manifest version, so anchoring to a
+        # version that was never released left it unable to find one and it
+        # scanned far further back. That is why past post-promotion beta
+        # releases carried 79-83 changelog entries reaching into already-shipped
+        # work. The publish step below closes that gap.
         run: |
           set -euo pipefail
           MANIFEST=.github/release-please/manifest-beta.json
@@ -72,9 +78,39 @@ jobs:
             mv "$MANIFEST.tmp" "$MANIFEST"
             git add "$MANIFEST"
             git commit -m "chore(beta): anchor prerelease version to v${MAIN_VERSION}"
+            echo "anchored=true" >> "$GITHUB_OUTPUT"
+            echo "version=${MAIN_VERSION}-beta1" >> "$GITHUB_OUTPUT"
           else
+            echo "anchored=false" >> "$GITHUB_OUTPUT"
             echo "Beta ($BETA_VERSION) already anchored at or ahead of main's v$MAIN_VERSION — nothing to do"
           fi
 
       - name: Push beta
         run: git push origin beta
+
+      - name: Publish the anchor as a prerelease
+        # Gives release-please the boundary it looks for. Without a release
+        # matching the manifest version it cannot tell where the new beta cycle
+        # starts, and the next beta changelog reaches back through months of
+        # already-released history.
+        #
+        # Runs after the push so the commit exists on the remote for the tag to
+        # point at. Marked prerelease so it never displaces the stable release.
+        if: steps.anchor.outputs.anchored == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT || github.token }}
+          TAG: fermentos-v${{ steps.anchor.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          # Built with jq rather than inline quoting so the body can't break the JSON.
+          jq -n --arg tag "$TAG" --arg sha "$SHA" \
+            --arg body "Beta rebased onto main's release. Marks the commit-range boundary for subsequent beta releases." \
+            '{tag_name: $tag, target_commitish: $sha, name: $tag, body: $body, prerelease: true}' \
+            | curl -fsS -X POST \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$REPO/releases" \
+                -d @- > /dev/null
+          echo "Published $TAG at $SHA as the beta commit-range boundary"

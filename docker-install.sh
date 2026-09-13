@@ -96,6 +96,12 @@ GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "unknown")
 GIT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
 
+# Create the bind-mounted data directories before compose does. Docker would
+# otherwise create any missing host directory as root, and the container runs as
+# a non-root service user that could not then write to it — which is exactly how
+# local backups came to fail (#155).
+mkdir -p data/uploads data/backups
+
 docker compose build \
   --build-arg GIT_HASH="$GIT_HASH" \
   --build-arg GIT_BRANCH="$GIT_BRANCH" \

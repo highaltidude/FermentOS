@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.0-beta1...fermentos-v1.5.0-beta2) (2026-09-13)
+
+
+### Bug Fixes
+
+* **backup:** write local backups to a path that exists in Docker ([e0310b1](https://github.com/highaltidude/FermentOS/commit/e0310b16b2665d78b9e1fb26d5f427ebb06ccf98)), closes [#155](https://github.com/highaltidude/FermentOS/issues/155)
+* **ci:** publish the beta anchor as a release so changelogs stay scoped ([d95e8f2](https://github.com/highaltidude/FermentOS/commit/d95e8f221fe8192e93f8f361f2db977b495c1cbd))
+* **settings:** report the installed version instead of the newest release ([cba3d50](https://github.com/highaltidude/FermentOS/commit/cba3d5012799014dcedcb99ad6ad91091f689abc))
+
 ## [1.4.0-beta3](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.4.0-beta2...fermentos-v1.4.0-beta3) (2026-09-13)
 
 

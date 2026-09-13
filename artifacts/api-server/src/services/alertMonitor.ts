@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { computeBrewAlerts, tempExcursion, type BrewTelemetry } from "./brewAlerts.js";
 import { getNotifyConfig, sendNotification, type AlertType } from "./notifications.js";
+import { resolveRepeatHours } from "../lib/notifyIntervals.js";
 
 /**
  * Scheduled alert monitor.
@@ -77,7 +78,6 @@ export async function runAlertCheck(): Promise<void> {
   if (config.types.length === 0) return;
 
   const requiredTempReadings = await getRequiredTempReadings();
-  const repeatMs = config.repeatHours * 60 * 60 * 1000;
   const now = new Date();
 
   const sessions = await db
@@ -125,6 +125,10 @@ export async function runAlertCheck(): Promise<void> {
         const seenCount = !prior || resuming ? 1 : prior.seenCount + 1;
         const lastNotifiedAt = resuming ? null : prior?.lastNotifiedAt ?? null;
 
+        // Per alert type: temperature can carry its own interval, the rest use
+        // the global one.
+        const repeatMs =
+          resolveRepeatHours(alert.type, config.repeatHours, config.tempRepeatHours) * 60 * 60 * 1000;
         const dueForRepeat = lastNotifiedAt != null && now.getTime() - new Date(lastNotifiedAt).getTime() >= repeatMs;
         // Temperature has to persist across N readings; the rest are already
         // slow enough to stand on their own (see consecutiveTempExcursions).

@@ -516,6 +516,12 @@ export interface NotificationSettings {
    * @maximum 168
    */
   repeatHours: number;
+  /**
+   * Overrides repeatHours for temp_out_of_range only. Null inherits it, which is the default. A temperature excursion is actionable straight away, so it often warrants a shorter interval than the rest.
+   * @minimum 1
+   * @maximum 168
+   */
+  tempRepeatHours?: number | null;
 }
 
 export interface NotificationTestResult {

@@ -279,7 +279,9 @@ You can also tune how jumpy temperature alerts are with **Settings → Brewing �
 Fermentation Temperature → Temperature Alert Threshold**. It is the number of consecutive
 out-of-range readings needed before you get told, so opening the fermenter for a
 minute does not wake you at 3am. **Re-notify at most every** controls how often
-a problem that is still ongoing nags you again.
+a problem that is still ongoing nags you again. Temperature can have its own,
+shorter interval — it is the one alert you can act on the moment you hear it, so
+an hourly nudge is useful where an hourly battery warning would just be noise.
 
 ---
 
@@ -487,11 +489,16 @@ Response is an array, one entry per device:
   "ntfyTopic": "",
   "webhookUrl": "",
   "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
-  "repeatHours": 6
+  "repeatHours": 6,
+  "tempRepeatHours": null
 }
 ```
 
 `channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168.
+
+`tempRepeatHours` overrides `repeatHours` for `temp_out_of_range` only, and is
+also 1–168. `null` — the default — inherits `repeatHours`, so upgrading never
+changes an interval you already set.
 
 **POST `/api/settings/notifications/test`** → `{ "ok": boolean, "error": string | null }`
 

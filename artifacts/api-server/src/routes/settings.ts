@@ -218,6 +218,8 @@ router.put("/settings/notifications", async (req, res) => {
     webhookUrl: d.webhookUrl,
     types,
     repeatHours: d.repeatHours,
+    // undefined (field omitted) and null both mean "inherit repeatHours".
+    tempRepeatHours: d.tempRepeatHours ?? null,
   });
   return res.json(await getNotifyConfig());
 });

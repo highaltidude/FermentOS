@@ -2200,6 +2200,15 @@ components:
           minimum: 1
           maximum: 168
           description: Minimum hours between repeat notifications while a condition stays active.
+        tempRepeatHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+          nullable: true
+          description: >-
+            Overrides repeatHours for temp_out_of_range only. Null inherits it,
+            which is the default. A temperature excursion is actionable straight
+            away, so it often warrants a shorter interval than the rest.
       required: [channel, ntfyServer, ntfyTopic, webhookUrl, types, repeatHours]
 
     NotificationTestResult:

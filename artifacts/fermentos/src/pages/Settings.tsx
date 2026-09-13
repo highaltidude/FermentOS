@@ -3304,8 +3304,8 @@ function NotificationsPanel() {
               {ALERT_TYPE_LABELS.map((t) => {
                 const on = draft.types.includes(t.value);
                 return (
+                  <div key={t.value}>
                   <button
-                    key={t.value}
                     type="button"
                     onClick={() => toggleType(t.value)}
                     className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-md border text-left transition-colors ${
@@ -3320,13 +3320,31 @@ function NotificationsPanel() {
                       {on && <Check className="w-3 h-3 text-primary-foreground" />}
                     </div>
                   </button>
+                  {t.value === "temp_out_of_range" && on && (
+                    <div className="mt-1.5 ml-3 pl-3 border-l border-border max-w-xs">
+                      <label className="text-xs text-muted-foreground mb-1 block">Re-notify about this every</label>
+                      <Select
+                        value={draft.tempRepeatHours == null ? "default" : String(draft.tempRepeatHours)}
+                        onValueChange={(v) => setDraft({ ...draft, tempRepeatHours: v === "default" ? null : Number(v) })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Use default ({draft.repeatHours === 1 ? "1 hour" : `${draft.repeatHours} hours`})</SelectItem>
+                          {REPEAT_OPTIONS.map((h) => (
+                            <SelectItem key={h} value={String(h)}>{h === 1 ? "1 hour" : `${h} hours`}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  </div>
                 );
               })}
             </div>
           </div>
 
           <div className="max-w-xs">
-            <label className="text-xs text-muted-foreground mb-1 block">Re-notify at most every</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Re-notify at most every (default)</label>
             <Select value={String(draft.repeatHours)} onValueChange={(v) => setDraft({ ...draft, repeatHours: Number(v) })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>

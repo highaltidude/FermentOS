@@ -20,6 +20,7 @@ export const NOTIFY_KEYS = {
   webhookUrl: "notify_webhook_url",
   types: "notify_types",
   repeatHours: "notify_repeat_hours",
+  tempRepeatHours: "notify_temp_repeat_hours",
 } as const;
 
 export const ALERT_TYPES = ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"] as const;
@@ -38,6 +39,11 @@ export type NotifyConfig = {
   webhookUrl: string;
   types: AlertType[];
   repeatHours: number;
+  /**
+   * Overrides repeatHours for temp_out_of_range only. Null inherits it, which is
+   * the default — so an upgrade never changes an existing interval.
+   */
+  tempRepeatHours: number | null;
 };
 
 export async function getNotifyConfig(): Promise<NotifyConfig> {
@@ -57,10 +63,14 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
         (ALERT_TYPES as readonly string[]).includes(t)))
     : DEFAULT_NOTIFY_TYPES;
 
+  const inRange = (n: number) => Number.isFinite(n) && n >= 1 && n <= 168;
+
   const rawRepeat = parseInt(map.get(NOTIFY_KEYS.repeatHours) ?? "", 10);
-  const repeatHours = Number.isFinite(rawRepeat) && rawRepeat >= 1 && rawRepeat <= 168
-    ? rawRepeat
-    : DEFAULT_REPEAT_HOURS;
+  const repeatHours = inRange(rawRepeat) ? rawRepeat : DEFAULT_REPEAT_HOURS;
+
+  // Falls back to null, not a default: absent means "inherit repeatHours".
+  const rawTempRepeat = parseInt(map.get(NOTIFY_KEYS.tempRepeatHours) ?? "", 10);
+  const tempRepeatHours = inRange(rawTempRepeat) ? rawTempRepeat : null;
 
   return {
     channel,
@@ -69,6 +79,7 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
     webhookUrl: map.get(NOTIFY_KEYS.webhookUrl) ?? "",
     types,
     repeatHours,
+    tempRepeatHours,
   };
 }
 
@@ -80,6 +91,8 @@ export async function setNotifyConfig(cfg: NotifyConfig): Promise<void> {
     [NOTIFY_KEYS.webhookUrl, cfg.webhookUrl],
     [NOTIFY_KEYS.types, cfg.types.join(",")],
     [NOTIFY_KEYS.repeatHours, String(cfg.repeatHours)],
+    // Empty string for null so clearing the override round-trips.
+    [NOTIFY_KEYS.tempRepeatHours, cfg.tempRepeatHours == null ? "" : String(cfg.tempRepeatHours)],
   ];
   for (const [key, value] of pairs) {
     await db

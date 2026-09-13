@@ -1544,6 +1544,8 @@ export const SetTempAlertReadingsResponse = zod.object({
  */
 export const getNotificationSettingsResponseRepeatHoursMax = 168;
 
+export const getNotificationSettingsResponseTempRepeatHoursMax = 168;
+
 export const GetNotificationSettingsResponse = zod
   .object({
     channel: zod
@@ -1579,6 +1581,14 @@ export const GetNotificationSettingsResponse = zod
       .describe(
         "Minimum hours between repeat notifications while a condition stays active.",
       ),
+    tempRepeatHours: zod
+      .number()
+      .min(1)
+      .max(getNotificationSettingsResponseTempRepeatHoursMax)
+      .nullish()
+      .describe(
+        "Overrides repeatHours for temp_out_of_range only. Null inherits it, which is the default. A temperature excursion is actionable straight away, so it often warrants a shorter interval than the rest.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -1588,6 +1598,8 @@ export const GetNotificationSettingsResponse = zod
  * @summary Update outbound notification settings
  */
 export const setNotificationSettingsBodyRepeatHoursMax = 168;
+
+export const setNotificationSettingsBodyTempRepeatHoursMax = 168;
 
 export const SetNotificationSettingsBody = zod
   .object({
@@ -1624,12 +1636,22 @@ export const SetNotificationSettingsBody = zod
       .describe(
         "Minimum hours between repeat notifications while a condition stays active.",
       ),
+    tempRepeatHours: zod
+      .number()
+      .min(1)
+      .max(setNotificationSettingsBodyTempRepeatHoursMax)
+      .nullish()
+      .describe(
+        "Overrides repeatHours for temp_out_of_range only. Null inherits it, which is the default. A temperature excursion is actionable straight away, so it often warrants a shorter interval than the rest.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
   );
 
 export const setNotificationSettingsResponseRepeatHoursMax = 168;
+
+export const setNotificationSettingsResponseTempRepeatHoursMax = 168;
 
 export const SetNotificationSettingsResponse = zod
   .object({
@@ -1665,6 +1687,14 @@ export const SetNotificationSettingsResponse = zod
       .max(setNotificationSettingsResponseRepeatHoursMax)
       .describe(
         "Minimum hours between repeat notifications while a condition stays active.",
+      ),
+    tempRepeatHours: zod
+      .number()
+      .min(1)
+      .max(setNotificationSettingsResponseTempRepeatHoursMax)
+      .nullish()
+      .describe(
+        "Overrides repeatHours for temp_out_of_range only. Null inherits it, which is the default. A temperature excursion is actionable straight away, so it often warrants a shorter interval than the rest.",
       ),
   })
   .describe(

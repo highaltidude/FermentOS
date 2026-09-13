@@ -25,6 +25,25 @@ const DOCKER_GIT_META: GitMeta | null = (() => {
 })();
 
 
+/**
+ * The installed release version, from package.json — release-please bumps it as
+ * part of every release, so it is the authoritative answer to "what is running
+ * here". Read once at load; a failure degrades to null rather than throwing.
+ *
+ * This exists because the UI previously inferred the version from the GitHub
+ * release list, which cannot work on Docker: isAncestorOfRunning() returns null
+ * unconditionally there, so every release looked "not newer" and the panel
+ * showed whatever was newest upstream as though it were installed.
+ */
+const APP_VERSION: string | null = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as { version?: string };
+    return pkg.version ?? null;
+  } catch {
+    return null;
+  }
+})();
+
 const REPO_ROOT = path.resolve(process.cwd());
 const UPDATE_LOG = path.join(REPO_ROOT, "update.log");
 const UPDATE_SCRIPT = path.join(REPO_ROOT, "update.sh");
@@ -354,6 +373,7 @@ function getGitInfo() {
       date: null,
       message: null,
       branch,
+      version: APP_VERSION,
       updateAvailable: remoteHash !== null && remoteHash !== hash,
       runningHash: RUNNING_HASH,
       restartPending: false,
@@ -381,6 +401,7 @@ function getGitInfo() {
       date,
       message,
       branch,
+      version: APP_VERSION,
       updateAvailable: remoteHash !== null && remoteHash !== hash,
       runningHash: RUNNING_HASH,
       restartPending: RUNNING_HASH !== "unknown" && hash !== "unknown" && RUNNING_HASH !== hash,
@@ -395,6 +416,8 @@ function getGitInfo() {
       date: null,
       message: null,
       branch: "unknown",
+      // Everything else here is unknown, but the version still is not.
+      version: APP_VERSION,
       updateAvailable: false,
       runningHash: RUNNING_HASH,
       restartPending: false,

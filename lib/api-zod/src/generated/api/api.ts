@@ -46,6 +46,12 @@ export const GetDashboardSummaryResponse = zod.object({
           "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
         ),
       packagedDate: zod.string().date().nullish(),
+      packagingMethod: zod
+        .enum(["keg", "bottle"])
+        .nullish()
+        .describe(
+          "How a finished batch was packaged. Null until the batch is packaged.",
+        ),
       batchSizeGallons: zod.number(),
       originalGravityActual: zod.number().nullish(),
       finalGravityActual: zod.number().nullish(),
@@ -781,6 +787,12 @@ export const ListBrewSessionsResponseItem = zod.object({
       "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
     ),
   packagedDate: zod.string().date().nullish(),
+  packagingMethod: zod
+    .enum(["keg", "bottle"])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
   batchSizeGallons: zod.number(),
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
@@ -872,6 +884,12 @@ export const CreateBrewSessionBody = zod.object({
   brewDate: zod.string().date(),
   plannedDate: zod.string().date().nullish(),
   packagedDate: zod.string().date().nullish(),
+  packagingMethod: zod
+    .enum(["keg", "bottle"])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
   batchSizeGallons: zod.number(),
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
@@ -921,6 +939,12 @@ export const GetBrewSessionResponse = zod
         "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
       ),
     packagedDate: zod.string().date().nullish(),
+    packagingMethod: zod
+      .enum(["keg", "bottle"])
+      .nullish()
+      .describe(
+        "How a finished batch was packaged. Null until the batch is packaged.",
+      ),
     batchSizeGallons: zod.number(),
     originalGravityActual: zod.number().nullish(),
     finalGravityActual: zod.number().nullish(),
@@ -1047,6 +1071,12 @@ export const UpdateBrewSessionBody = zod.object({
   brewDate: zod.string().date().optional(),
   plannedDate: zod.string().date().nullish(),
   packagedDate: zod.string().date().nullish(),
+  packagingMethod: zod
+    .enum(["keg", "bottle"])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
   batchSizeGallons: zod.number().optional(),
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
@@ -1095,6 +1125,12 @@ export const UpdateBrewSessionResponse = zod.object({
       "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
     ),
   packagedDate: zod.string().date().nullish(),
+  packagingMethod: zod
+    .enum(["keg", "bottle"])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
   batchSizeGallons: zod.number(),
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),
@@ -1268,6 +1304,12 @@ export const UpsertBrewRatingResponse = zod.object({
       "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
     ),
   packagedDate: zod.string().date().nullish(),
+  packagingMethod: zod
+    .enum(["keg", "bottle"])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
   batchSizeGallons: zod.number(),
   originalGravityActual: zod.number().nullish(),
   finalGravityActual: zod.number().nullish(),

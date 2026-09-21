@@ -26,6 +26,7 @@ import { ScoreBadge, ScoreReadout, OFF_FLAVOR_LABELS, BREW_AGAIN_LABELS } from "
 import { useToast } from "@/hooks/use-toast";
 import { fetchFermentTempUnit } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { RateBatchWizard } from "@/components/RateBatchWizard";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -44,6 +45,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUSES = ["brew_day", "fermenting", "conditioning", "packaged"];
 const STATUS_ORDER = ["brew_day", "fermenting", "conditioning", "packaged"];
+
+const PACKAGING_METHODS = ["keg", "bottle"];
+const PACKAGING_LABELS: Record<string, string> = {
+  keg: "Keg",
+  bottle: "Bottle",
+};
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: string; onStatusChange: (s: string) => void; isPending?: boolean }) {
   const idx = STATUS_ORDER.indexOf(status);
@@ -116,6 +123,7 @@ export default function BrewSessionDetail() {
   const [showReadingForm, setShowReadingForm] = useState(false);
   const [readingForm, setReadingForm] = useState({ readingAt: toDatetimeLocalValue(new Date()), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
   const [editForm, setEditForm] = useState<any>({});
+  const [packagingPrompt, setPackagingPrompt] = useState<string | null>(null);
   const [ratingWizardOpen, setRatingWizardOpen] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
@@ -203,12 +211,15 @@ export default function BrewSessionDetail() {
 
   const quickStatusMutation = useUpdateBrewSession({
     mutation: {
-      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); toast({ title: `Status → ${STATUS_LABELS[data.status] ?? data.status}` }); },
+      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); setPackagingPrompt(null); toast({ title: `Status → ${STATUS_LABELS[data.status] ?? data.status}` }); },
     },
   });
 
-  const handleStatusClick = (newStatus: string) => {
-    if (!session || newStatus === session.status) return;
+  // Advancing to Packaged asks how the batch was packaged first; every other
+  // transition is immediate. Passing packagingMethod through on those keeps an
+  // already-recorded method intact when the stage is corrected afterwards.
+  const applyStatus = (newStatus: string, packagingMethod?: string | null) => {
+    if (!session) return;
     quickStatusMutation.mutate({
       id,
       data: {
@@ -220,8 +231,18 @@ export default function BrewSessionDetail() {
         finalGravityActual: session.finalGravityActual ?? undefined,
         abvActual: session.abvActual ?? undefined,
         notes: session.notes ?? undefined,
+        packagingMethod: (packagingMethod ?? session.packagingMethod ?? undefined) as any,
       },
     });
+  };
+
+  const handleStatusClick = (newStatus: string) => {
+    if (!session || newStatus === session.status) return;
+    if (newStatus === "packaged") {
+      setPackagingPrompt(session.packagingMethod ?? "keg");
+      return;
+    }
+    applyStatus(newStatus);
   };
 
   const deleteMutation = useDeleteBrewSession({
@@ -391,6 +412,7 @@ export default function BrewSessionDetail() {
       fermentTempMax: (session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "",
       fermentTempIdeal: (session as any).fermentTempIdeal != null ? String((session as any).fermentTempIdeal) : "",
       autoAdvanceToConditioning: (session as any).autoAdvanceToConditioning ?? null,
+      packagingMethod: session.packagingMethod ?? null,
     });
     setEditing(true);
   };
@@ -411,6 +433,7 @@ export default function BrewSessionDetail() {
         fermentTempMax: editForm.fermentTempMax ? Number(editForm.fermentTempMax) : null,
         fermentTempIdeal: editForm.fermentTempIdeal ? Number(editForm.fermentTempIdeal) : null,
         autoAdvanceToConditioning: editForm.autoAdvanceToConditioning,
+        packagingMethod: editForm.packagingMethod,
       } as any,
     });
   };
@@ -484,6 +507,7 @@ export default function BrewSessionDetail() {
                 )}
               </div>
               <div><div className="text-xs text-muted-foreground">Batch Size</div><div className="text-sm font-medium">{session.batchSizeGallons} gal</div></div>
+              {session.packagingMethod && <div><div className="text-xs text-muted-foreground">Packaged In</div><div className="text-sm font-medium">{PACKAGING_LABELS[session.packagingMethod] ?? session.packagingMethod}</div></div>}
               {session.originalGravityActual && <div><div className="text-xs text-muted-foreground">OG (actual)</div><div className="text-sm font-medium">{session.originalGravityActual.toFixed(3)}</div></div>}
               {session.finalGravityActual && <div><div className="text-xs text-muted-foreground">FG (actual)</div><div className="text-sm font-medium">{session.finalGravityActual.toFixed(3)}</div></div>}
               {session.abvActual && <div><div className="text-xs text-muted-foreground">ABV (actual)</div><div className="text-sm font-medium">{session.abvActual.toFixed(1)}%</div></div>}
@@ -498,6 +522,18 @@ export default function BrewSessionDetail() {
                 <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Packaged In</label>
+                <Select
+                  value={editForm.packagingMethod ?? "none"}
+                  onValueChange={(v) => setEditForm({ ...editForm, packagingMethod: v === "none" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not set</SelectItem>
+                    {PACKAGING_METHODS.map((m) => <SelectItem key={m} value={m}>{PACKAGING_LABELS[m] ?? m}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
               <div><label className="text-xs text-muted-foreground mb-1 block">Brew Date</label><Input type="date" value={editForm.brewDate} onChange={(e) => setEditForm({ ...editForm, brewDate: e.target.value })} /></div>
@@ -1412,6 +1448,36 @@ export default function BrewSessionDetail() {
       )}
 
       <RateBatchWizard session={session} open={ratingWizardOpen} onOpenChange={setRatingWizardOpen} />
+
+      <Dialog open={packagingPrompt !== null} onOpenChange={(open) => { if (!open) setPackagingPrompt(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>How did you package this batch?</DialogTitle>
+            <DialogDescription>Recorded on the batch so you know how it was stored and served.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            {PACKAGING_METHODS.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setPackagingPrompt(m)}
+                className={`rounded-lg border px-4 py-6 text-sm font-medium transition-colors ${packagingPrompt === m ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
+              >
+                {PACKAGING_LABELS[m] ?? m}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPackagingPrompt(null)}>Cancel</Button>
+            <Button
+              onClick={() => applyStatus("packaged", packagingPrompt)}
+              disabled={quickStatusMutation.isPending}
+            >
+              <Check className="w-3.5 h-3.5 mr-1" />Mark Packaged
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1215,7 +1215,7 @@ function DatabaseBackupPanel() {
             No .sql files found in local backup directory.
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
             {localFiles.map((f) => (
               <div key={f.name} className="flex items-center gap-2 text-xs rounded-md border border-border px-3 py-2 bg-muted/20">
                 <div className="flex-1 min-w-0">

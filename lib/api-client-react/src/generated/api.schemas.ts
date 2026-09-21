@@ -40,6 +40,18 @@ export const OffFlavor = {
   light_struck: "light_struck",
 } as const;
 
+/**
+ * How a finished batch was packaged. Null until the batch is packaged.
+ */
+export type PackagingMethod =
+  | (typeof PackagingMethod)[keyof typeof PackagingMethod]
+  | null;
+
+export const PackagingMethod = {
+  keg: "keg",
+  bottle: "bottle",
+} as const;
+
 export type BrewAgain = (typeof BrewAgain)[keyof typeof BrewAgain] | null;
 
 export const BrewAgain = {
@@ -256,6 +268,7 @@ export interface BrewSession {
   /** Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date. */
   plannedDate?: string | null;
   packagedDate?: string | null;
+  packagingMethod?: PackagingMethod | null;
   batchSizeGallons: number;
   originalGravityActual?: number | null;
   finalGravityActual?: number | null;
@@ -339,6 +352,7 @@ export interface CreateBrewSessionBody {
   brewDate: string;
   plannedDate?: string | null;
   packagedDate?: string | null;
+  packagingMethod?: PackagingMethod | null;
   batchSizeGallons: number;
   originalGravityActual?: number | null;
   finalGravityActual?: number | null;
@@ -359,6 +373,7 @@ export interface UpdateBrewSessionBody {
   brewDate?: string;
   plannedDate?: string | null;
   packagedDate?: string | null;
+  packagingMethod?: PackagingMethod | null;
   batchSizeGallons?: number;
   originalGravityActual?: number | null;
   finalGravityActual?: number | null;

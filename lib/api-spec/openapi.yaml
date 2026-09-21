@@ -1371,6 +1371,12 @@ components:
       description: Common homebrew off-flavor. "None" is an empty offFlavors array rather than a member here.
       enum: [diacetyl, acetaldehyde, dms, phenolic, oxidized, astringent, sour, solvent, sulfur, light_struck]
 
+    PackagingMethod:
+      type: string
+      nullable: true
+      description: How a finished batch was packaged. Null until the batch is packaged.
+      enum: [keg, bottle]
+
     BrewAgain:
       type: string
       nullable: true
@@ -1788,6 +1794,8 @@ components:
           type: string
           format: date
           nullable: true
+        packagingMethod:
+          $ref: "#/components/schemas/PackagingMethod"
         batchSizeGallons:
           type: number
         originalGravityActual:
@@ -1918,6 +1926,8 @@ components:
           type: string
           format: date
           nullable: true
+        packagingMethod:
+          $ref: "#/components/schemas/PackagingMethod"
         batchSizeGallons:
           type: number
         originalGravityActual:
@@ -1967,6 +1977,8 @@ components:
           type: string
           format: date
           nullable: true
+        packagingMethod:
+          $ref: "#/components/schemas/PackagingMethod"
         batchSizeGallons:
           type: number
         originalGravityActual:

@@ -79,6 +79,14 @@ export async function migrateLegacyStatuses(): Promise<void> {
     logger.info("Dropped legacy brew_sessions.rating column");
   }
 
+  // ── Packaging method (v5) ─────────────────────────────────────────────
+  // Same self-healing rationale as above. Nullable with no default: null
+  // means "not packaged yet, or packaged before this was tracked", which is
+  // exactly right for every existing row.
+  await db.execute(
+    sql`ALTER TABLE brew_sessions ADD COLUMN IF NOT EXISTS packaging_method text`,
+  );
+
   // ── Lifecycle simplification (v2) ─────────────────────────────────────
   // Old stages: planned → scheduled → brewing → fermenting → conditioning
   //             → packaged → complete

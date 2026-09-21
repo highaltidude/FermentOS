@@ -9,6 +9,10 @@ import { recipesTable } from "./recipes";
 // new values.
 export const brewStatusEnum = ["brew_day", "fermenting", "conditioning", "packaged"] as const;
 
+// How a finished batch was packaged. Null until the batch is packaged — and
+// still null for batches packaged before this was tracked.
+export const packagingMethodEnum = ["keg", "bottle"] as const;
+
 // Tasting scorecard. Filled in once a batch is packaged: three 1-5 sensory
 // sub-scores plus a 1-10 overall, with off-flavours and brew-again intent
 // recorded alongside but deliberately not scored.
@@ -36,6 +40,7 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   brewDate: date("brew_date").notNull(),
   plannedDate: date("planned_date"),
   packagedDate: date("packaged_date"),
+  packagingMethod: text("packaging_method", { enum: packagingMethodEnum }),
   batchSizeGallons: real("batch_size_gallons").notNull(),
   originalGravityActual: real("original_gravity_actual"),
   finalGravityActual: real("final_gravity_actual"),

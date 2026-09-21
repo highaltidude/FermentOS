@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
+
+
+### Features
+
+* **brew-log:** record whether a batch was kegged or bottled ([6176975](https://github.com/highaltidude/FermentOS/commit/61769754dc736a5ef7818369313d985c6fafe008))
+
+
+### Bug Fixes
+
+* **settings:** cap the local backups list at five rows ([0410c5b](https://github.com/highaltidude/FermentOS/commit/0410c5b852528857422930b620dfaa1511220943))
+
 ## [1.5.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.0-beta1...fermentos-v1.5.0-beta2) (2026-09-13)
 
 

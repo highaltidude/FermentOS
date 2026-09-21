@@ -17,6 +17,12 @@ const STATUS_LABELS: Record<string, string> = {
   packaged: "Packaged",
 };
 
+const PACKAGING_METHODS = ["keg", "bottle"];
+const PACKAGING_LABELS: Record<string, string> = {
+  keg: "Keg",
+  bottle: "Bottle",
+};
+
 export default function NewBrewSession() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -26,6 +32,7 @@ export default function NewBrewSession() {
     recipeName: "", status: "brew_day", brewDate: new Date().toISOString().split("T")[0],
     batchSizeGallons: "5.5", originalGravityActual: "", finalGravityActual: "", notes: "",
     fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
+    packagingMethod: "keg",
   });
   const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
 
@@ -95,6 +102,7 @@ export default function NewBrewSession() {
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
         fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : undefined,
+        packagingMethod: form.status === "packaged" ? (form.packagingMethod as any) : undefined,
       },
     });
   };
@@ -137,6 +145,15 @@ export default function NewBrewSession() {
               <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          {form.status === "packaged" && (
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Packaged In</label>
+              <Select value={form.packagingMethod} onValueChange={(v) => setForm({ ...form, packagingMethod: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{PACKAGING_METHODS.map((m) => <SelectItem key={m} value={m}>{PACKAGING_LABELS[m] ?? m}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Batch Size (gal)</label>
             <Input type="number" step="0.1" value={form.batchSizeGallons} onChange={(e) => setForm({ ...form, batchSizeGallons: e.target.value })} />

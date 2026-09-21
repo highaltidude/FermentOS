@@ -54,7 +54,7 @@ install to a tracked first batch.
 ## Features
 
 - **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color
-- **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged
+- **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
 - **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
 - **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. See [Get alerts on your phone](#get-alerts-on-your-phone)
@@ -219,6 +219,10 @@ opening anything — see [Get alerts on your phone](#get-alerts-on-your-phone).
 When fermentation finishes, advance to **Conditioning**, then **Packaged**.
 (FermentOS can make the Conditioning step for you — see **Settings → Brewing →
 Fermentation Temperature → Auto-advance to Conditioning**.)
+
+Marking a batch Packaged asks whether it went into a keg or into bottles, and
+the answer is shown on the batch afterwards. You can change it any time from
+**Edit → Packaged In**.
 
 On a packaged batch you can fill in the tasting scorecard: appearance and aroma,
 flavor and balance, mouthfeel and carbonation, an overall score out of ten, any
@@ -770,6 +774,7 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
   "brewDate": "2024-03-15",
   "plannedDate": null,
   "packagedDate": null,
+  "packagingMethod": null,
   "batchSizeGallons": 5.5,
   "originalGravityActual": 1.064,
   "finalGravityActual": null,
@@ -780,7 +785,9 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
   "notes": "Optional"
 }
 ```
-`status`: `brew_day` | `fermenting` | `conditioning` | `packaged`
+`status`: `brew_day` | `fermenting` | `conditioning` | `packaged`.
+`packagingMethod`: `keg` | `bottle` — null until the batch is packaged, and
+optional on create.
 
 **POST /api/brew-sessions/:id/readings** body:
 ```json

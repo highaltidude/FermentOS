@@ -20,6 +20,11 @@ const STATUS_LABELS: Record<string, string> = {
   packaged: "Packaged",
 };
 
+const PACKAGING_LABELS: Record<string, string> = {
+  keg: "Keg",
+  bottle: "Bottle",
+};
+
 const STATUS_ORDER = ["brew_day", "fermenting", "conditioning", "packaged"];
 
 function formatDate(d: string) {
@@ -86,6 +91,7 @@ export default function BrewSessions() {
                     {session.originalGravityActual && <span>OG: {session.originalGravityActual.toFixed(3)}</span>}
                     {session.finalGravityActual && <span>FG: {session.finalGravityActual.toFixed(3)}</span>}
                     {session.abvActual && <span>{session.abvActual.toFixed(1)}% ABV</span>}
+                    {session.packagingMethod && <span>{PACKAGING_LABELS[session.packagingMethod] ?? session.packagingMethod}</span>}
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />

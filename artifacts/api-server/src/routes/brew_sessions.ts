@@ -15,7 +15,11 @@ import {
   UpsertBrewRatingParams,
   UpsertBrewRatingBody,
   DeleteBrewRatingParams,
+  ControlBoilParams,
+  ControlBoilBody,
 } from "@workspace/api-zod";
+import { boilPhase } from "../lib/boilTimer";
+import { scheduleBoilAlerts, clearBoilAlerts } from "../services/boilScheduler";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -211,6 +215,7 @@ router.delete("/brew-sessions/:id", async (req, res) => {
   if (!params.success) return res.status(400).json({ error: "Invalid id" });
 
   await db.delete(brewSessionsTable).where(eq(brewSessionsTable.id, params.data.id));
+  clearBoilAlerts(params.data.id);
   return res.status(204).send();
 });
 
@@ -321,6 +326,88 @@ router.delete("/brew-sessions/:id/photo", async (req, res) => {
 
   await db.update(brewSessionsTable).set({ photoPath: null, updatedAt: new Date() }).where(eq(brewSessionsTable.id, id));
   return res.status(204).send();
+});
+
+// Boil timer. Its own sub-resource for the same reason as the scorecard below:
+// the detail page re-sends the whole session on every save, which would stomp
+// on a running timer. Every change reschedules the server-side addition alerts.
+router.post("/brew-sessions/:id/boil", async (req, res) => {
+  const params = ControlBoilParams.safeParse({ id: Number(req.params.id) });
+  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+
+  const body = ControlBoilBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "Invalid request body" });
+
+  const [existing] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, params.data.id));
+  if (!existing) return res.status(404).json({ error: "Brew session not found" });
+
+  const { action, boilMinutes, doneAdditionIds } = body.data;
+  const phase = boilPhase(existing);
+  const now = new Date();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const update: any = { updatedAt: now };
+
+  switch (action) {
+    case "start":
+      if (boilMinutes == null) return res.status(400).json({ error: "boilMinutes is required to start" });
+      Object.assign(update, {
+        boilMinutes,
+        boilStartedAt: now,
+        boilPausedAt: null,
+        boilPausedMs: 0,
+        boilEndedAt: null,
+        boilDoneAdditionIds: doneAdditionIds ?? [],
+      });
+      break;
+    case "pause":
+      if (phase !== "running") return res.status(400).json({ error: "Boil is not running" });
+      update.boilPausedAt = now;
+      break;
+    case "resume":
+      if (phase !== "paused") return res.status(400).json({ error: "Boil is not paused" });
+      update.boilPausedMs = (existing.boilPausedMs ?? 0) + (now.getTime() - existing.boilPausedAt!.getTime());
+      update.boilPausedAt = null;
+      break;
+    case "finish":
+      if (phase !== "running" && phase !== "paused") return res.status(400).json({ error: "Boil is not in progress" });
+      // Fold an open pause in so elapsed time stays correct after the fact.
+      if (existing.boilPausedAt) {
+        update.boilPausedMs = (existing.boilPausedMs ?? 0) + (now.getTime() - existing.boilPausedAt.getTime());
+        update.boilPausedAt = null;
+      }
+      update.boilEndedAt = now;
+      break;
+    case "reset":
+      Object.assign(update, {
+        boilMinutes: null,
+        boilStartedAt: null,
+        boilPausedAt: null,
+        boilPausedMs: null,
+        boilEndedAt: null,
+        boilDoneAdditionIds: null,
+      });
+      break;
+    case "checklist":
+      break;
+  }
+
+  if (action !== "start" && action !== "reset") {
+    // Lengthening or shortening a boil already under way.
+    if (boilMinutes != null) {
+      if (phase === "idle") return res.status(400).json({ error: "Boil has not started" });
+      update.boilMinutes = boilMinutes;
+    }
+    if (doneAdditionIds !== undefined) update.boilDoneAdditionIds = doneAdditionIds;
+  }
+
+  const [session] = await db.update(brewSessionsTable).set(update).where(eq(brewSessionsTable.id, params.data.id)).returning();
+
+  // A failure to schedule must not fail the request — the timer itself is
+  // saved and the page still counts down and beeps.
+  await scheduleBoilAlerts(params.data.id).catch((err) =>
+    req.log.error({ err, brewSessionId: params.data.id }, "Failed to schedule boil alerts"));
+
+  return res.json(session);
 });
 
 // The tasting scorecard lives on its own sub-resource rather than in

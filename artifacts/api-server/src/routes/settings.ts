@@ -220,6 +220,8 @@ router.put("/settings/notifications", async (req, res) => {
     repeatHours: d.repeatHours,
     // undefined (field omitted) and null both mean "inherit repeatHours".
     tempRepeatHours: d.tempRepeatHours ?? null,
+    // Optional in the body; an older client that omits it leaves it as is.
+    boilAlerts: d.boilAlerts ?? (await getNotifyConfig()).boilAlerts,
   });
   return res.json(await getNotifyConfig());
 });

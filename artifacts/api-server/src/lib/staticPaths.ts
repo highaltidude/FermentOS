@@ -13,10 +13,10 @@
  *
  * The dot rule is safe because no route in the frontend router
  * (artifacts/fermentos/src/App.tsx) contains one — they are /, /recipes,
- * /recipes/new, /recipes/:id, /brew-sessions/:id, /ingredients, /equipment,
- * /calculators and /settings, and every :id is numeric. A future route with a
- * dot in it would be swallowed as a missing asset, so add it here if that ever
- * changes.
+ * /recipes/new, /recipes/:id, /brew-sessions/:id, /brew-sessions/:id/boil, /boil,
+ * /ingredients, /equipment, /calculators and /settings, and every :id is numeric.
+ * A future route with a dot in it would be swallowed as a missing asset, so
+ * add it here if that ever changes.
  */
 export function isStaticAssetPath(pathname: string): boolean {
   if (pathname.startsWith("/assets/")) return true;

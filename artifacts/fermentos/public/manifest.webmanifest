@@ -27,5 +27,20 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Boil",
+      "short_name": "Boil",
+      "description": "Open the boil timer for today's brew",
+      "url": "boil",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Brew Log",
+      "short_name": "Brew Log",
+      "url": "brew-sessions",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }

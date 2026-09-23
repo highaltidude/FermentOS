@@ -495,6 +495,42 @@ paths:
         "204":
           description: Scorecard cleared
 
+  /brew-sessions/{id}/boil:
+    post:
+      operationId: controlBoil
+      tags: [brew-sessions]
+      summary: Start, pause, resume, finish or reset the boil timer, or save its checklist
+      description: >-
+        The timer lives on the server so every device shows the same countdown
+        and hop-addition notifications fire even when no page is open.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoilControlBody"
+      responses:
+        "200":
+          description: Updated brew session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewSession"
+        "400":
+          description: Invalid action for the current timer state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Brew session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /brew-sessions/{id}/readings:
     get:
       operationId: listFermentationReadings
@@ -1865,6 +1901,33 @@ components:
         photoPath:
           type: string
           nullable: true
+        boilMinutes:
+          type: integer
+          nullable: true
+          description: Planned boil length. Null until a boil is started.
+        boilStartedAt:
+          type: string
+          format: date-time
+          nullable: true
+        boilPausedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set while the boil timer is paused.
+        boilPausedMs:
+          type: integer
+          nullable: true
+          description: Milliseconds spent paused before the current pause, if any.
+        boilEndedAt:
+          type: string
+          format: date-time
+          nullable: true
+        boilDoneAdditionIds:
+          type: array
+          nullable: true
+          description: Recipe ingredient ids ticked off during the boil.
+          items:
+            type: integer
         createdAt:
           type: string
           format: date-time
@@ -2012,6 +2075,31 @@ components:
         tastingNotes:
           type: string
           nullable: true
+
+    BoilAction:
+      type: string
+      description: >-
+        start begins (or restarts) the countdown, pause/resume hold it, finish
+        records flameout, reset clears the timer entirely, and checklist only
+        saves doneAdditionIds.
+      enum: [start, pause, resume, finish, reset, checklist]
+
+    BoilControlBody:
+      type: object
+      properties:
+        action:
+          $ref: "#/components/schemas/BoilAction"
+        boilMinutes:
+          type: integer
+          minimum: 1
+          maximum: 600
+          description: Required for start.
+        doneAdditionIds:
+          type: array
+          description: Replaces the checklist. Accepted with any action.
+          items:
+            type: integer
+      required: [action]
 
     UpsertBrewRatingBody:
       type: object
@@ -2221,6 +2309,13 @@ components:
             Overrides repeatHours for temp_out_of_range only. Null inherits it,
             which is the default. A temperature excursion is actionable straight
             away, so it often warrants a shorter interval than the rest.
+        boilAlerts:
+          type: boolean
+          description: >-
+            Notify at each hop addition and at flameout while a boil timer is
+            running. Kept out of types because it is a one-shot schedule, not a
+            monitored condition, and so an existing saved types list does not
+            leave it switched off on upgrade. Defaults to true.
       required: [channel, ntfyServer, ntfyTopic, webhookUrl, types, repeatHours]
 
     NotificationTestResult:

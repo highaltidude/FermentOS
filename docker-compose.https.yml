@@ -1,5 +1,6 @@
 # Optional HTTPS overlay — puts Caddy with a local CA in front of the app.
 # Enable it by adding to .env:
+#   COMPOSE_PATH_SEPARATOR=:
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
 #   FERMENTOS_IP=192.168.1.50
 #   FERMENTOS_NAMES=fermentos.local   (optional)

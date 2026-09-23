@@ -397,6 +397,7 @@ so — set `HTTP_PORT` / `HTTPS_PORT` to use others.
 the FermentOS folder, then run `docker compose up -d`:
 
 ```bash
+COMPOSE_PATH_SEPARATOR=:          # lets the next line work on Windows too
 COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
 FERMENTOS_IP=192.168.1.50        # this machine's LAN IP
 FERMENTOS_NAMES=fermentos.local  # optional extra names, space-separated

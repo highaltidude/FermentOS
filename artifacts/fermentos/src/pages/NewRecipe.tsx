@@ -53,6 +53,10 @@ function StyleSelect({ value, onChange }: { value: string; onChange: (v: string)
 const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
 const INGREDIENT_USES = ["mash", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"];
 const STEP_PHASES = ["mash", "boil", "fermentation", "conditioning", "packaging", "other"];
+// Uses whose timing the boil timer schedules alerts from.
+const TIMED_USES = ["boil", "whirlpool"];
+const timingPlaceholder = (use: string) =>
+  use === "whirlpool" ? "Whirlpool min (optional)" : "Min left in boil (60, 15, 0…)";
 
 interface PendingIngredient {
   name: string;
@@ -60,6 +64,8 @@ interface PendingIngredient {
   amount: string;
   unit: string;
   use: string;
+  /** Minutes left in the boil when it goes in. Only used for boil and whirlpool. */
+  timingMinutes: string;
   notes: string;
 }
 
@@ -69,7 +75,7 @@ interface PendingStep {
   durationMinutes: string;
 }
 
-const emptyIngredient = (): PendingIngredient => ({ name: "", type: "malt", amount: "", unit: "lbs", use: "", notes: "" });
+const emptyIngredient = (): PendingIngredient => ({ name: "", type: "malt", amount: "", unit: "lbs", use: "", timingMinutes: "", notes: "" });
 const emptyStep = (): PendingStep => ({ body: "", phase: "", durationMinutes: "" });
 
 export default function NewRecipe() {
@@ -157,6 +163,7 @@ export default function NewRecipe() {
             amount: Number(ing.amount),
             unit: ing.unit,
             use: (ing.use || undefined) as any,
+            timingMinutes: TIMED_USES.includes(ing.use) && ing.timingMinutes !== "" ? Number(ing.timingMinutes) : undefined,
             notes: ing.notes || undefined,
           },
         });
@@ -306,6 +313,13 @@ export default function NewRecipe() {
                   <SelectContent>{INGREDIENT_USES.map((u) => <SelectItem key={u} value={u}>{u.replace("_", " ")}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              {TIMED_USES.includes(ing.use) && (
+                <Input
+                  className="text-sm" type="number" min="0" step="1" inputMode="numeric"
+                  placeholder={timingPlaceholder(ing.use)}
+                  value={ing.timingMinutes} onChange={(e) => updateIngredient(i, "timingMinutes", e.target.value)}
+                />
+              )}
               <Input className="text-sm" placeholder="Notes (optional)" value={ing.notes} onChange={(e) => updateIngredient(i, "notes", e.target.value)} />
             </div>
           ))}

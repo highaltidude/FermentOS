@@ -55,6 +55,7 @@ install to a tracked first batch.
 
 - **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
+- **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
 - **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
 - **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. See [Get alerts on your phone](#get-alerts-on-your-phone)
@@ -169,7 +170,16 @@ steps.
 
 Set the **fermentation temperature range** while you are here. It is optional,
 but it is what lets FermentOS tell you later that a batch is running hot — see
-step 6.
+step 7.
+
+For the boil timer, set each boil hop's **Use** to **Boil**. A field appears for
+the **minutes left in the boil** when it goes in: 60 for bittering, 15 for
+flavor, 0 for flameout. Set whirlpool hops to **Whirlpool**; they are called at
+flameout. On a recipe you have already saved, click **+ time** (or the
+existing **@ 15 min**) next to a boil or whirlpool ingredient to set or change it.
+An addition with no time goes in at the start of the boil. A boil step with a
+duration sets the boil length; without one, FermentOS uses your longest boil
+addition, or 60 minutes.
 
 **3. Stock your ingredients** *(optional)*
 
@@ -192,7 +202,24 @@ session itself if you want temperature alerts.
 
 The session starts at **Brew Day**.
 
-**5. Attach an iSpindel** *(optional)*
+**5. Run the boil**
+
+On a Brew Day session, tap **Start Boil** — on the session page, on the
+Dashboard, or from the Boil icon described in
+[Install it on your phone](#install-it-on-your-phone). Check the boil length,
+then **Start boil**. You get:
+
+- a large countdown that keeps running if you close the app, lock the phone, or reload — and shows the same time on every device
+- **Add now** and **Next** cards, and a checklist of every boil and whirlpool addition to tick off as they go in
+- a beep, vibration (Android), and on-screen message at each addition and at flameout while the page is open
+- a message to your phone at each addition and at flameout even when it is locked, if you have set up [alerts](#get-alerts-on-your-phone)
+
+**Pause** holds the clock (a boil-over, a stuck valve), and **Finish** ends the
+boil; then record your OG on the session. Keeping the screen awake needs
+FermentOS on HTTPS, so on a plain home-network install your phone may lock
+during the boil. The timer and the alerts carry on regardless.
+
+**6. Attach an iSpindel** *(optional)*
 
 If you have one, drop it in the fermenter and assign it to this session — see
 [Connect an iSpindel](#connect-an-ispindel). From then on every reading it
@@ -201,7 +228,7 @@ sends is logged against this batch automatically.
 No iSpindel? Add readings by hand on the session page. Everything below still
 works, just with the readings you enter yourself.
 
-**6. Watch it ferment**
+**7. Watch it ferment**
 
 Move the session to **Fermenting** using the stage bar at the top of the page.
 You now get:
@@ -214,7 +241,7 @@ This is also the point where alerts start earning their keep. Set them up once
 and your phone tells you about a stall or a temperature swing without you
 opening anything — see [Get alerts on your phone](#get-alerts-on-your-phone).
 
-**7. Package it and rate it**
+**8. Package it and rate it**
 
 When fermentation finishes, advance to **Conditioning**, then **Packaged**.
 (FermentOS can make the Conditioning step for you — see **Settings → Brewing →
@@ -243,6 +270,11 @@ something needs attention:
 | Fermentation stalled | Gravity has not moved for 24 hours |
 | Sensor offline | Your iSpindel has stopped reporting |
 | Sensor battery low | The iSpindel battery drops below 20% |
+| Boil additions | A boil timer is running and a hop addition, or flameout, is due |
+
+Boil additions are the exception to the five-minute check: each one is sent at
+the moment it is due, and anything you have already ticked off on the checklist
+is skipped. They have their own **Boil additions** checkbox, on by default.
 
 Both delivery methods are **outbound** — FermentOS makes the request, nothing
 connects in to it. That is what makes this work on an ordinary home network with
@@ -300,6 +332,14 @@ bar, like a normal app.
 **On Android:** open FermentOS in Chrome, tap the **⋮** menu, then
 **Add to Home screen**. You get an icon and it opens quickly, though Chrome
 reserves its proper "Install app" prompt for sites served over HTTPS.
+
+**Jump straight to the boil timer:** open `http://<host-ip>:<port>/boil` and
+add *that* page to your home screen as well, named something like "Boil". It
+opens the timer for the batch on Brew Day, or lets you pick if there is more than
+one. If FermentOS is served over HTTPS and installed as an app, you also get a
+**Start Boil** shortcut by long-pressing the app icon (Android) or right-clicking
+it (desktop Chrome and Edge). iPhone does not support app-icon shortcuts, so use
+the separate Boil icon there.
 
 **What you do not get yet:** offline access and web push notifications. Both
 require HTTPS, which a plain home-network install does not have. This is why
@@ -371,7 +411,7 @@ which is not always the day you got round to logging it.
 
 Day to day, that means:
 
-- **Dashboard** shows what is fermenting now and what you finished recently
+- **Dashboard** shows what is fermenting now and what you finished recently, plus a live boil countdown on brew day
 - **Brew Log** is the full history of every batch
 - **Recipes** carries the average score of every batch brewed from it, so your best recipes surface themselves over time
 - **Ingredients** tracks what you have and flags what is about to expire
@@ -498,11 +538,17 @@ Response is an array, one entry per device:
   "webhookUrl": "",
   "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
   "repeatHours": 6,
-  "tempRepeatHours": null
+  "tempRepeatHours": null,
+  "boilAlerts": true
 }
 ```
 
-`channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168.
+`channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168. An empty
+`types` array turns every monitored alert off.
+
+`boilAlerts` turns boil-addition and flameout messages on or off. It is separate
+from `types` because it is a one-off schedule rather than a monitored condition.
+It defaults to `true`, and leaving it out of a `PUT` keeps the current value.
 
 `tempRepeatHours` overrides `repeatHours` for `temp_out_of_range` only, and is
 also 1–168. `null` — the default — inherits `repeatHours`, so upgrading never
@@ -526,6 +572,28 @@ Webhook payload shape:
   "brewSessionId": 7,
   "recipeName": "Pacific Haze IPA",
   "alertType": "temp_out_of_range"
+}
+```
+
+Boil alerts use the same envelope. Instead of `alertType` they carry `event`
+(`boil_addition` or `boil_flameout`), the minutes left in the boil, and the
+additions that are due:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Pacific Haze IPA: 15 min addition",
+  "message": "Add 1 oz Cascade, 0.5 oz Citra",
+  "priority": "high",
+  "triggeredAt": "2026-09-22T19:45:00.000Z",
+  "brewSessionId": 7,
+  "recipeName": "Pacific Haze IPA",
+  "event": "boil_addition",
+  "minutesRemaining": 15,
+  "additions": [
+    { "id": 12, "name": "Cascade", "amount": 1, "unit": "oz" },
+    { "id": 13, "name": "Citra", "amount": 0.5, "unit": "oz" }
+  ]
 }
 ```
 ---
@@ -764,6 +832,7 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 | DELETE | `/api/brew-sessions/:id/photo` | Remove the session photo |
 | PUT | `/api/brew-sessions/:id/rating` | Save the tasting scorecard |
 | DELETE | `/api/brew-sessions/:id/rating` | Clear the tasting scorecard |
+| POST | `/api/brew-sessions/:id/boil` | Start, pause, resume, finish, or reset the boil timer, or save its checklist |
 
 **POST /api/brew-sessions** body:
 ```json
@@ -821,6 +890,26 @@ detected. Saving stamps `ratedAt`, which is what marks a batch as rated.
 
 **DELETE /api/brew-sessions/:id/rating** clears the scorecard. Tasting notes
 are kept.
+
+**POST /api/brew-sessions/:id/boil** body:
+```json
+{ "action": "start", "boilMinutes": 60, "doneAdditionIds": [] }
+```
+`action`: `start` | `pause` | `resume` | `finish` | `reset` | `checklist`.
+`boilMinutes` (1–600) is required for `start`; sent with `pause`, `resume`,
+`finish`, or `checklist` it changes the length of a boil already under way.
+`doneAdditionIds` replaces the checklist of recipe ingredient ids that have gone
+in, and is accepted with any action. An action that does not fit the timer's
+state — resuming a boil that is not paused, say — is rejected with a 400.
+Returns the updated brew session.
+
+The timer is stored as timestamps on the brew session (`boilMinutes`,
+`boilStartedAt`, `boilPausedAt`, `boilPausedMs`, `boilEndedAt`,
+`boilDoneAdditionIds`, all `null` until a boil is started), which
+`GET /api/brew-sessions/:id` returns. Time remaining is `boilMinutes` minus the
+time since `boilStartedAt`, less `boilPausedMs` and any pause in progress. Every
+change reschedules the boil-addition alerts, and they are rebuilt from these
+fields when the server restarts.
 
 ---
 

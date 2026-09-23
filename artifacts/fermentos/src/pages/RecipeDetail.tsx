@@ -78,6 +78,10 @@ const INGREDIENT_TYPE_COLORS: Record<string, string> = {
 
 const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
 const INGREDIENT_USES = ["mash", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"];
+// Uses whose timing the boil timer schedules alerts from.
+const TIMED_USES = ["boil", "whirlpool"];
+const timingPlaceholder = (use: string) =>
+  use === "whirlpool" ? "Whirlpool min (optional)" : "Min left in boil (60, 15, 0…)";
 const STEP_PHASES = ["mash", "boil", "fermentation", "conditioning", "packaging", "other"];
 
 const STEP_PHASE_COLORS: Record<string, string> = {
@@ -395,6 +399,7 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
   const [amount, setAmount] = useState("");
   const [unit, setUnit] = useState("lbs");
   const [use, setUse] = useState("");
+  const [timingMinutes, setTimingMinutes] = useState("");
   const [notes, setNotes] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -417,7 +422,11 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
     if (!name || !amount) return;
     addMutation.mutate({
       id: recipeId,
-      data: { name, type: type as any, amount: Number(amount), unit, use: (use || undefined) as any, notes: notes || undefined },
+      data: {
+        name, type: type as any, amount: Number(amount), unit, use: (use || undefined) as any,
+        timingMinutes: TIMED_USES.includes(use) && timingMinutes !== "" ? Number(timingMinutes) : undefined,
+        notes: notes || undefined,
+      },
     });
   };
 
@@ -449,6 +458,13 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
           </SelectContent>
         </Select>
       </div>
+      {TIMED_USES.includes(use) && (
+        <Input
+          type="number" min="0" step="1" inputMode="numeric" className="text-sm"
+          placeholder={timingPlaceholder(use)}
+          value={timingMinutes} onChange={(e) => setTimingMinutes(e.target.value)}
+        />
+      )}
       <Input placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="text-sm" />
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="ghost" size="sm" onClick={onDone}><X className="w-3.5 h-3.5" /></Button>
@@ -457,6 +473,63 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * "@ 15 min" on a boil or whirlpool ingredient, editable in place. Ingredients
+ * have no edit form, and without a time the boil timer can only put an addition
+ * at the start of the boil, so this is how an existing recipe gets its schedule.
+ */
+function IngredientTiming({ recipeId, ingredientId, use, timingMinutes }: {
+  recipeId: number; ingredientId: number; use: string; timingMinutes: number | null | undefined;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const update = useUpdateRecipeIngredient({
+    mutation: {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(recipeId) }); setEditing(false); },
+      onError: (err: unknown) =>
+        toast({ title: "Failed to save time", description: String(err instanceof Error ? err.message : err), variant: "destructive" }),
+    },
+  });
+
+  const save = () => {
+    const next = value.trim() === "" ? null : Math.max(0, Math.round(Number(value)));
+    if (next !== null && !Number.isFinite(next)) return;
+    if (next === (timingMinutes ?? null)) { setEditing(false); return; }
+    update.mutate({ id: ingredientId, data: { timingMinutes: next } });
+  };
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1 ml-1">
+        <input
+          type="number" min="0" step="1" inputMode="numeric" autoFocus
+          aria-label={use === "whirlpool" ? "Whirlpool minutes" : "Minutes left in boil"}
+          className="w-16 text-sm border border-border rounded px-1.5 py-0.5 bg-background text-foreground"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+          onBlur={save}
+          disabled={update.isPending}
+        />
+        <span className="text-muted-foreground text-xs">min</span>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => { setValue(timingMinutes != null ? String(timingMinutes) : ""); setEditing(true); }}
+      className={`ml-1 hover:underline ${timingMinutes != null ? "text-muted-foreground" : "text-primary text-xs"}`}
+      title={use === "whirlpool" ? "Set whirlpool time" : "Set minutes left in the boil when this goes in"}
+    >
+      {timingMinutes != null ? `@ ${timingMinutes} min` : "+ time"}
+    </button>
   );
 }
 
@@ -810,7 +883,11 @@ export default function RecipeDetail() {
                         <span className="font-medium">{ing.name}</span>
                         <span className="text-muted-foreground ml-2">{ing.amount} {ing.unit}</span>
                         {ing.use && <span className="text-muted-foreground ml-1">• {ing.use.replace("_", " ")}</span>}
-                        {ing.timingMinutes != null && <span className="text-muted-foreground ml-1">@ {ing.timingMinutes} min</span>}
+                        {ing.use && TIMED_USES.includes(ing.use) ? (
+                          <IngredientTiming recipeId={id} ingredientId={ing.id} use={ing.use} timingMinutes={ing.timingMinutes} />
+                        ) : (
+                          ing.timingMinutes != null && <span className="text-muted-foreground ml-1">@ {ing.timingMinutes} min</span>
+                        )}
                       </div>
                       <button
                         onClick={() => deleteIngredientMutation.mutate({ id: ing.id })}

@@ -130,6 +130,27 @@ export const GetDashboardSummaryResponse = zod.object({
         ),
       tastingNotes: zod.string().nullish(),
       photoPath: zod.string().nullish(),
+      boilMinutes: zod
+        .number()
+        .nullish()
+        .describe("Planned boil length. Null until a boil is started."),
+      boilStartedAt: zod.string().datetime({}).nullish(),
+      boilPausedAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe("Set while the boil timer is paused."),
+      boilPausedMs: zod
+        .number()
+        .nullish()
+        .describe(
+          "Milliseconds spent paused before the current pause, if any.",
+        ),
+      boilEndedAt: zod.string().datetime({}).nullish(),
+      boilDoneAdditionIds: zod
+        .array(zod.number())
+        .nullish()
+        .describe("Recipe ingredient ids ticked off during the boil."),
       createdAt: zod.string().datetime({}),
       updatedAt: zod.string().datetime({}),
     }),
@@ -869,6 +890,25 @@ export const ListBrewSessionsResponseItem = zod.object({
     ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
+  boilMinutes: zod
+    .number()
+    .nullish()
+    .describe("Planned boil length. Null until a boil is started."),
+  boilStartedAt: zod.string().datetime({}).nullish(),
+  boilPausedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe("Set while the boil timer is paused."),
+  boilPausedMs: zod
+    .number()
+    .nullish()
+    .describe("Milliseconds spent paused before the current pause, if any."),
+  boilEndedAt: zod.string().datetime({}).nullish(),
+  boilDoneAdditionIds: zod
+    .array(zod.number())
+    .nullish()
+    .describe("Recipe ingredient ids ticked off during the boil."),
   createdAt: zod.string().datetime({}),
   updatedAt: zod.string().datetime({}),
 });
@@ -1021,6 +1061,25 @@ export const GetBrewSessionResponse = zod
       ),
     tastingNotes: zod.string().nullish(),
     photoPath: zod.string().nullish(),
+    boilMinutes: zod
+      .number()
+      .nullish()
+      .describe("Planned boil length. Null until a boil is started."),
+    boilStartedAt: zod.string().datetime({}).nullish(),
+    boilPausedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe("Set while the boil timer is paused."),
+    boilPausedMs: zod
+      .number()
+      .nullish()
+      .describe("Milliseconds spent paused before the current pause, if any."),
+    boilEndedAt: zod.string().datetime({}).nullish(),
+    boilDoneAdditionIds: zod
+      .array(zod.number())
+      .nullish()
+      .describe("Recipe ingredient ids ticked off during the boil."),
     createdAt: zod.string().datetime({}),
     updatedAt: zod.string().datetime({}),
   })
@@ -1207,6 +1266,25 @@ export const UpdateBrewSessionResponse = zod.object({
     ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
+  boilMinutes: zod
+    .number()
+    .nullish()
+    .describe("Planned boil length. Null until a boil is started."),
+  boilStartedAt: zod.string().datetime({}).nullish(),
+  boilPausedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe("Set while the boil timer is paused."),
+  boilPausedMs: zod
+    .number()
+    .nullish()
+    .describe("Milliseconds spent paused before the current pause, if any."),
+  boilEndedAt: zod.string().datetime({}).nullish(),
+  boilDoneAdditionIds: zod
+    .array(zod.number())
+    .nullish()
+    .describe("Recipe ingredient ids ticked off during the boil."),
   createdAt: zod.string().datetime({}),
   updatedAt: zod.string().datetime({}),
 });
@@ -1386,6 +1464,25 @@ export const UpsertBrewRatingResponse = zod.object({
     ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
+  boilMinutes: zod
+    .number()
+    .nullish()
+    .describe("Planned boil length. Null until a boil is started."),
+  boilStartedAt: zod.string().datetime({}).nullish(),
+  boilPausedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe("Set while the boil timer is paused."),
+  boilPausedMs: zod
+    .number()
+    .nullish()
+    .describe("Milliseconds spent paused before the current pause, if any."),
+  boilEndedAt: zod.string().datetime({}).nullish(),
+  boilDoneAdditionIds: zod
+    .array(zod.number())
+    .nullish()
+    .describe("Recipe ingredient ids ticked off during the boil."),
   createdAt: zod.string().datetime({}),
   updatedAt: zod.string().datetime({}),
 });
@@ -1395,6 +1492,161 @@ export const UpsertBrewRatingResponse = zod.object({
  */
 export const DeleteBrewRatingParams = zod.object({
   id: zod.coerce.number(),
+});
+
+/**
+ * The timer lives on the server so every device shows the same countdown and hop-addition notifications fire even when no page is open.
+ * @summary Start, pause, resume, finish or reset the boil timer, or save its checklist
+ */
+export const ControlBoilParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const controlBoilBodyBoilMinutesMax = 600;
+
+export const ControlBoilBody = zod.object({
+  action: zod
+    .enum(["start", "pause", "resume", "finish", "reset", "checklist"])
+    .describe(
+      "start begins (or restarts) the countdown, pause\/resume hold it, finish records flameout, reset clears the timer entirely, and checklist only saves doneAdditionIds.",
+    ),
+  boilMinutes: zod
+    .number()
+    .min(1)
+    .max(controlBoilBodyBoilMinutesMax)
+    .optional()
+    .describe("Required for start."),
+  doneAdditionIds: zod
+    .array(zod.number())
+    .optional()
+    .describe("Replaces the checklist. Accepted with any action."),
+});
+
+export const controlBoilResponseAppearanceAromaScoreMax = 5;
+
+export const controlBoilResponseFlavorBalanceScoreMax = 5;
+
+export const controlBoilResponseMouthfeelScoreMax = 5;
+
+export const controlBoilResponseOverallScoreMax = 10;
+
+export const ControlBoilResponse = zod.object({
+  id: zod.number(),
+  recipeId: zod.number().nullish(),
+  recipeName: zod.string(),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
+  brewDate: zod.string().date(),
+  plannedDate: zod
+    .string()
+    .date()
+    .nullish()
+    .describe(
+      "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
+    ),
+  packagedDate: zod.string().date().nullish(),
+  packagingMethod: zod
+    .enum(["keg", "bottle"])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
+  batchSizeGallons: zod.number(),
+  originalGravityActual: zod.number().nullish(),
+  finalGravityActual: zod.number().nullish(),
+  abvActual: zod.number().nullish(),
+  appearanceAromaScore: zod
+    .number()
+    .min(1)
+    .max(controlBoilResponseAppearanceAromaScoreMax)
+    .nullish(),
+  flavorBalanceScore: zod
+    .number()
+    .min(1)
+    .max(controlBoilResponseFlavorBalanceScoreMax)
+    .nullish(),
+  mouthfeelScore: zod
+    .number()
+    .min(1)
+    .max(controlBoilResponseMouthfeelScoreMax)
+    .nullish(),
+  overallScore: zod
+    .number()
+    .min(1)
+    .max(controlBoilResponseOverallScoreMax)
+    .nullish()
+    .describe(
+      "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+    ),
+  offFlavors: zod
+    .array(
+      zod
+        .enum([
+          "diacetyl",
+          "acetaldehyde",
+          "dms",
+          "phenolic",
+          "oxidized",
+          "astringent",
+          "sour",
+          "solvent",
+          "sulfur",
+          "light_struck",
+        ])
+        .describe(
+          'Common homebrew off-flavor. \"None\" is an empty offFlavors array rather than a member here.',
+        ),
+    )
+    .nullish(),
+  brewAgain: zod.enum(["as_is", "with_tweaks", "no"]).nullish(),
+  ratedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe(
+      'Set whenever the scorecard is saved. Distinguishes \"never rated\" from a partially filled card.',
+    ),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  autoAdvanceToConditioning: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "null = use global setting, true = always auto-advance, false = always manual",
+    ),
+  tastingNotes: zod.string().nullish(),
+  photoPath: zod.string().nullish(),
+  boilMinutes: zod
+    .number()
+    .nullish()
+    .describe("Planned boil length. Null until a boil is started."),
+  boilStartedAt: zod.string().datetime({}).nullish(),
+  boilPausedAt: zod
+    .string()
+    .datetime({})
+    .nullish()
+    .describe("Set while the boil timer is paused."),
+  boilPausedMs: zod
+    .number()
+    .nullish()
+    .describe("Milliseconds spent paused before the current pause, if any."),
+  boilEndedAt: zod.string().datetime({}).nullish(),
+  boilDoneAdditionIds: zod
+    .array(zod.number())
+    .nullish()
+    .describe("Recipe ingredient ids ticked off during the boil."),
+  createdAt: zod.string().datetime({}),
+  updatedAt: zod.string().datetime({}),
 });
 
 /**
@@ -1631,6 +1883,12 @@ export const GetNotificationSettingsResponse = zod
       .describe(
         "Overrides repeatHours for temp_out_of_range only. Null inherits it, which is the default. A temperature excursion is actionable straight away, so it often warrants a shorter interval than the rest.",
       ),
+    boilAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -1686,6 +1944,12 @@ export const SetNotificationSettingsBody = zod
       .describe(
         "Overrides repeatHours for temp_out_of_range only. Null inherits it, which is the default. A temperature excursion is actionable straight away, so it often warrants a shorter interval than the rest.",
       ),
+    boilAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -1737,6 +2001,12 @@ export const SetNotificationSettingsResponse = zod
       .nullish()
       .describe(
         "Overrides repeatHours for temp_out_of_range only. Null inherits it, which is the default. A temperature excursion is actionable straight away, so it often warrants a shorter interval than the rest.",
+      ),
+    boilAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
       ),
   })
   .describe(

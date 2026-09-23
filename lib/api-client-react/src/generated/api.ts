@@ -21,6 +21,7 @@ import type {
   AssignDeviceBody,
   BackupAuditResult,
   BeerStyle,
+  BoilControlBody,
   BrewSensorTelemetry,
   BrewSession,
   BrewSessionWithReadings,
@@ -2326,6 +2327,94 @@ export const useDeleteBrewRating = <
   TContext
 > => {
   return useMutation(getDeleteBrewRatingMutationOptions(options));
+};
+
+/**
+ * The timer lives on the server so every device shows the same countdown and hop-addition notifications fire even when no page is open.
+ * @summary Start, pause, resume, finish or reset the boil timer, or save its checklist
+ */
+export const getControlBoilUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/boil`;
+};
+
+export const controlBoil = async (
+  id: number,
+  boilControlBody: BoilControlBody,
+  options?: RequestInit,
+): Promise<BrewSession> => {
+  return customFetch<BrewSession>(getControlBoilUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(boilControlBody),
+  });
+};
+
+export const getControlBoilMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof controlBoil>>,
+    TError,
+    { id: number; data: BodyType<BoilControlBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof controlBoil>>,
+  TError,
+  { id: number; data: BodyType<BoilControlBody> },
+  TContext
+> => {
+  const mutationKey = ["controlBoil"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof controlBoil>>,
+    { id: number; data: BodyType<BoilControlBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return controlBoil(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ControlBoilMutationResult = NonNullable<
+  Awaited<ReturnType<typeof controlBoil>>
+>;
+export type ControlBoilMutationBody = BodyType<BoilControlBody>;
+export type ControlBoilMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Start, pause, resume, finish or reset the boil timer, or save its checklist
+ */
+export const useControlBoil = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof controlBoil>>,
+    TError,
+    { id: number; data: BodyType<BoilControlBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof controlBoil>>,
+  TError,
+  { id: number; data: BodyType<BoilControlBody> },
+  TContext
+> => {
+  return useMutation(getControlBoilMutationOptions(options));
 };
 
 /**

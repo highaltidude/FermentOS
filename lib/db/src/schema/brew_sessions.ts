@@ -61,6 +61,18 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   autoAdvanceToConditioning: boolean("auto_advance_to_conditioning"),
   tastingNotes: text("tasting_notes"),
   photoPath: text("photo_path"),
+  // Boil timer. Stored as timestamps rather than a remaining count so every
+  // device, and the server-side addition alerts, derive the same countdown:
+  // remaining = boilMinutes - (now|pausedAt - startedAt - pausedMs).
+  // All null until a boil is started.
+  boilMinutes: integer("boil_minutes"),
+  boilStartedAt: timestamp("boil_started_at", { withTimezone: true }),
+  boilPausedAt: timestamp("boil_paused_at", { withTimezone: true }),
+  boilPausedMs: integer("boil_paused_ms"),
+  boilEndedAt: timestamp("boil_ended_at", { withTimezone: true }),
+  // recipe_ingredients ids ticked off during the boil. Not a foreign key: the
+  // recipe can be edited after brew day and the checklist is only a record.
+  boilDoneAdditionIds: integer("boil_done_addition_ids").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

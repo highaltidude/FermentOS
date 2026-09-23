@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, ChevronDown, ChevronRight, Activity, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, ChevronDown, ChevronRight, Activity, Wifi, WifiOff, Flame } from "lucide-react";
 import {
   useGetBrewSession,
   useUpdateBrewSession,
@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge, ScoreReadout, OFF_FLAVOR_LABELS, BREW_AGAIN_LABELS } from "@/components/ui/score-picker";
 import { useToast } from "@/hooks/use-toast";
 import { fetchFermentTempUnit } from "@/lib/utils";
+import { boilPhase } from "@/lib/boil";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { RateBatchWizard } from "@/components/RateBatchWizard";
@@ -596,6 +597,36 @@ export default function BrewSessionDetail() {
           </Button>
         </div>
       )}
+
+      {session.status === "brew_day" && (() => {
+        const boil = boilPhase(session);
+        return (
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+            <Flame className="w-4 h-4 text-orange-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                {boil === "idle" && "Boil timer"}
+                {boil === "running" && "Boil in progress"}
+                {boil === "paused" && "Boil paused"}
+                {boil === "ended" && "Boil complete"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {boil === "ended"
+                  ? "Reopen the timer to review the addition checklist"
+                  : "Countdown with alerts at each hop addition and flameout"}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant={boil === "idle" || boil === "ended" ? "outline" : "default"}
+              className="shrink-0"
+              onClick={() => navigate(`/brew-sessions/${id}/boil`)}
+            >
+              {boil === "idle" ? "Start Boil" : boil === "ended" ? "View" : "Open Timer"}
+            </Button>
+          </div>
+        );
+      })()}
 
       {session.status === "brew_day" && session.originalGravityActual == null && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">

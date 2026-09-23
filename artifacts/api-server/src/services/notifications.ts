@@ -21,6 +21,7 @@ export const NOTIFY_KEYS = {
   types: "notify_types",
   repeatHours: "notify_repeat_hours",
   tempRepeatHours: "notify_temp_repeat_hours",
+  boilAlerts: "notify_boil",
 } as const;
 
 export const ALERT_TYPES = ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"] as const;
@@ -44,6 +45,13 @@ export type NotifyConfig = {
    * the default — so an upgrade never changes an existing interval.
    */
   tempRepeatHours: number | null;
+  /**
+   * Hop-addition and flameout alerts from a running boil timer. Not an
+   * AlertType: those are monitored conditions with repeat intervals, this is a
+   * one-shot schedule. Keeping it separate also means a types list saved
+   * before boil alerts existed does not leave them switched off.
+   */
+  boilAlerts: boolean;
 };
 
 export async function getNotifyConfig(): Promise<NotifyConfig> {
@@ -80,6 +88,8 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
     types,
     repeatHours,
     tempRepeatHours,
+    // On unless explicitly switched off, so an existing install gets them.
+    boilAlerts: map.get(NOTIFY_KEYS.boilAlerts) !== "false",
   };
 }
 
@@ -93,6 +103,7 @@ export async function setNotifyConfig(cfg: NotifyConfig): Promise<void> {
     [NOTIFY_KEYS.repeatHours, String(cfg.repeatHours)],
     // Empty string for null so clearing the override round-trips.
     [NOTIFY_KEYS.tempRepeatHours, cfg.tempRepeatHours == null ? "" : String(cfg.tempRepeatHours)],
+    [NOTIFY_KEYS.boilAlerts, String(cfg.boilAlerts)],
   ];
   for (const [key, value] of pairs) {
     await db

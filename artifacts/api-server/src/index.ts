@@ -4,6 +4,7 @@ import { initBackupScheduler } from "./routes/backup";
 import { migrateLegacyStatuses } from "./lib/dataMigrations";
 import { startSystemHealthSampler } from "./services/systemHealthSampler";
 import { startAlertMonitor } from "./services/alertMonitor";
+import { resumeBoilAlerts } from "./services/boilScheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -30,4 +31,5 @@ app.listen(port, (err) => {
   migrateLegacyStatuses().catch((e) => logger.error({ e }, "Legacy status migration failed"));
   startSystemHealthSampler();
   startAlertMonitor();
+  resumeBoilAlerts().catch((e) => logger.error({ e }, "Boil timer resume failed"));
 });

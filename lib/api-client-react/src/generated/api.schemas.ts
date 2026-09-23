@@ -309,6 +309,16 @@ export interface BrewSession {
   autoAdvanceToConditioning?: boolean | null;
   tastingNotes?: string | null;
   photoPath?: string | null;
+  /** Planned boil length. Null until a boil is started. */
+  boilMinutes?: number | null;
+  boilStartedAt?: string | null;
+  /** Set while the boil timer is paused. */
+  boilPausedAt?: string | null;
+  /** Milliseconds spent paused before the current pause, if any. */
+  boilPausedMs?: number | null;
+  boilEndedAt?: string | null;
+  /** Recipe ingredient ids ticked off during the boil. */
+  boilDoneAdditionIds?: number[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -388,6 +398,32 @@ export interface UpdateBrewSessionBody {
   /** null = use global setting, true = always auto-advance, false = always manual */
   autoAdvanceToConditioning?: boolean | null;
   tastingNotes?: string | null;
+}
+
+/**
+ * start begins (or restarts) the countdown, pause/resume hold it, finish records flameout, reset clears the timer entirely, and checklist only saves doneAdditionIds.
+ */
+export type BoilAction = (typeof BoilAction)[keyof typeof BoilAction];
+
+export const BoilAction = {
+  start: "start",
+  pause: "pause",
+  resume: "resume",
+  finish: "finish",
+  reset: "reset",
+  checklist: "checklist",
+} as const;
+
+export interface BoilControlBody {
+  action: BoilAction;
+  /**
+   * Required for start.
+   * @minimum 1
+   * @maximum 600
+   */
+  boilMinutes?: number;
+  /** Replaces the checklist. Accepted with any action. */
+  doneAdditionIds?: number[];
 }
 
 /**
@@ -537,6 +573,8 @@ export interface NotificationSettings {
    * @maximum 168
    */
   tempRepeatHours?: number | null;
+  /** Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true. */
+  boilAlerts?: boolean;
 }
 
 export interface NotificationTestResult {

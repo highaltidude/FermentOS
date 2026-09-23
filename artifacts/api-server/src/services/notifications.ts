@@ -1,6 +1,7 @@
 import { db, appConfigTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { parseNotifyTypes } from "../lib/notifyTypes";
 
 /**
  * Outbound notification delivery.
@@ -65,11 +66,7 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
   const channel: NotifyChannel =
     rawChannel === "ntfy" || rawChannel === "webhook" ? rawChannel : "none";
 
-  const rawTypes = map.get(NOTIFY_KEYS.types);
-  const types = rawTypes
-    ? (rawTypes.split(",").map((t) => t.trim()).filter((t): t is AlertType =>
-        (ALERT_TYPES as readonly string[]).includes(t)))
-    : DEFAULT_NOTIFY_TYPES;
+  const types = parseNotifyTypes(map.get(NOTIFY_KEYS.types), ALERT_TYPES, DEFAULT_NOTIFY_TYPES);
 
   const inRange = (n: number) => Number.isFinite(n) && n >= 1 && n <= 168;
 

@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, fermentationReadingsTable, recipesTable, appConfigTable } from "@workspace/db";
-import { eq, desc, isNull, isNotNull, and, gte, lte } from "drizzle-orm";
-import { computeBrewAlerts, calcConnectionStatus, buildAlerts } from "../services/brewAlerts";
+import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
+import { computeBrewAlerts } from "../services/brewAlerts";
+import { buildDeviceSnapshot, closeActiveAssignment } from "../services/sensorDevices";
 
 const router = Router();
 
@@ -14,49 +15,7 @@ async function buildDeviceStatus(deviceId: number) {
     .where(eq(sensorDevicesTable.id, deviceId));
 
   if (!device) return null;
-
-  const [latestReading] = await db
-    .select()
-    .from(sensorReadingsTable)
-    .where(eq(sensorReadingsTable.deviceId, deviceId))
-    .orderBy(desc(sensorReadingsTable.receivedAt))
-    .limit(1);
-
-  // Find the active (unassigned) brew assignment
-  const [activeAssignment] = await db
-    .select({ id: sensorDeviceBrewAssignmentsTable.id, brewSessionId: sensorDeviceBrewAssignmentsTable.brewSessionId })
-    .from(sensorDeviceBrewAssignmentsTable)
-    .where(
-      and(
-        eq(sensorDeviceBrewAssignmentsTable.deviceId, deviceId),
-        isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
-      ),
-    )
-    .limit(1);
-
-  let assignedBrewName: string | null = null;
-  if (activeAssignment) {
-    const [session] = await db
-      .select({ recipeName: brewSessionsTable.recipeName })
-      .from(brewSessionsTable)
-      .where(eq(brewSessionsTable.id, activeAssignment.brewSessionId));
-    assignedBrewName = session?.recipeName ?? null;
-  }
-
-  // Connection status based on reportedInterval (seconds) or a 30-minute default
-  const connectionStatus = calcConnectionStatus(device.lastSeenAt, latestReading?.reportedInterval ?? null);
-
-  // Alerts
-  const alerts = buildAlerts(device, latestReading ?? null, connectionStatus);
-
-  return {
-    device,
-    latestReading: latestReading ?? null,
-    assignedBrewSessionId: activeAssignment?.brewSessionId ?? null,
-    assignedBrewName,
-    connectionStatus,
-    alerts,
-  };
+  return buildDeviceSnapshot(device);
 }
 
 
@@ -125,15 +84,7 @@ router.post("/sensors/devices/:id/assign", async (req, res) => {
   if (!brewSessionId) return res.status(400).json({ error: "brewSessionId required" });
 
   // Close any existing active assignment for this device
-  await db
-    .update(sensorDeviceBrewAssignmentsTable)
-    .set({ unassignedAt: new Date() })
-    .where(
-      and(
-        eq(sensorDeviceBrewAssignmentsTable.deviceId, id),
-        isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
-      ),
-    );
+  await closeActiveAssignment(id);
 
   // Create new assignment
   await db.insert(sensorDeviceBrewAssignmentsTable).values({ deviceId: id, brewSessionId });
@@ -148,15 +99,7 @@ router.delete("/sensors/devices/:id/assign", async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: "Invalid id" });
 
-  await db
-    .update(sensorDeviceBrewAssignmentsTable)
-    .set({ unassignedAt: new Date() })
-    .where(
-      and(
-        eq(sensorDeviceBrewAssignmentsTable.deviceId, id),
-        isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
-      ),
-    );
+  await closeActiveAssignment(id);
 
   const status = await buildDeviceStatus(id);
   if (!status) return res.status(404).json({ error: "Not found" });

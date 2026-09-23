@@ -1,62 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Plus, X } from "lucide-react";
-import { useCreateRecipe, useAddRecipeIngredient, useAddRecipeStep, useDeleteRecipe, useListBeerStyles, useListInventory, getGetRecipeQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCreateRecipe, useAddRecipeIngredient, useAddRecipeStep, useDeleteRecipe, useListInventory, type IngredientType, type IngredientUse, type StepPhase } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
-import { fetchFermentTempUnit } from "@/lib/utils";
-
-function StyleSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { data: styles } = useListBeerStyles();
-  const [useCustom, setUseCustom] = useState(false);
-
-  if (!styles || styles.length === 0) {
-    return (
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g., American IPA (add styles in Settings)"
-      />
-    );
-  }
-
-  const knownNames = styles.map((s) => s.name);
-  const valueInList = knownNames.includes(value);
-
-  if (useCustom || (!valueInList && value)) {
-    return (
-      <div className="flex gap-2">
-        <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Type a style" className="flex-1" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => { setUseCustom(false); onChange(""); }}>
-          <X className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <Select value={value} onValueChange={(v) => { if (v === "__custom__") { setUseCustom(true); onChange(""); } else onChange(v); }}>
-      <SelectTrigger><SelectValue placeholder="Select a style…" /></SelectTrigger>
-      <SelectContent>
-        {styles.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-        <SelectItem value="__custom__">Other (type manually)…</SelectItem>
-      </SelectContent>
-    </Select>
-  );
-}
-
-const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
-const INGREDIENT_USES = ["mash", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"];
-const STEP_PHASES = ["mash", "boil", "fermentation", "conditioning", "packaging", "other"];
-// Uses whose timing the boil timer schedules alerts from.
-const TIMED_USES = ["boil", "whirlpool"];
-const timingPlaceholder = (use: string) =>
-  use === "whirlpool" ? "Whirlpool min (optional)" : "Min left in boil (60, 15, 0…)";
+import { StyleSelect } from "@/components/StyleSelect";
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
+import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlaceholder } from "@/lib/ingredients";
 
 interface PendingIngredient {
   name: string;
@@ -81,7 +35,6 @@ const emptyStep = (): PendingStep => ({ body: "", phase: "", durationMinutes: ""
 export default function NewRecipe() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const qc = useQueryClient();
 
   const [form, setForm] = useState({
     name: "", style: "", batchSizeGallons: "5.5", originalGravity: "", finalGravity: "", abv: "", ibu: "",
@@ -89,9 +42,7 @@ export default function NewRecipe() {
     daysPlanned: "", daysBrewing: "", daysFermenting: "", daysConditioning: "", daysPackaged: "",
     fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
   });
-  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
-
-  useEffect(() => { fetchFermentTempUnit().then(setTempUnit); }, []);
+  const tempUnit = useFermentTempUnit();
 
   const [ingredients, setIngredients] = useState<PendingIngredient[]>([emptyIngredient()]);
   const [steps, setSteps] = useState<PendingStep[]>([emptyStep()]);
@@ -159,10 +110,10 @@ export default function NewRecipe() {
           id: recipe.id,
           data: {
             name: ing.name,
-            type: ing.type as any,
+            type: ing.type as IngredientType,
             amount: Number(ing.amount),
             unit: ing.unit,
-            use: (ing.use || undefined) as any,
+            use: (ing.use || undefined) as IngredientUse | undefined,
             timingMinutes: TIMED_USES.includes(ing.use) && ing.timingMinutes !== "" ? Number(ing.timingMinutes) : undefined,
             notes: ing.notes || undefined,
           },
@@ -174,7 +125,7 @@ export default function NewRecipe() {
           id: recipe.id,
           data: {
             body: step.body.trim(),
-            phase: (step.phase || undefined) as any,
+            phase: (step.phase || undefined) as StepPhase | undefined,
             durationMinutes: step.durationMinutes ? Number(step.durationMinutes) : undefined,
             position: i + 1,
           },
@@ -215,7 +166,7 @@ export default function NewRecipe() {
             <div className="col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Recipe Name *</label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Pacific IPA" /></div>
             <div className="col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Style *</label>
-              <StyleSelect value={form.style} onChange={(v) => setForm({ ...form, style: v })} /></div>
+              <StyleSelect value={form.style} onChange={(v) => setForm({ ...form, style: v })} fallbackPlaceholder="e.g., American IPA (add styles in Settings)" /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Batch Size (gal) *</label>
               <Input type="number" step="0.1" value={form.batchSizeGallons} onChange={(e) => setForm({ ...form, batchSizeGallons: e.target.value })} /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Color (SRM)</label>

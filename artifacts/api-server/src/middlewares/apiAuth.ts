@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { eq } from "drizzle-orm";
-import { db, appConfigTable, apiTokensTable } from "@workspace/db";
+import { db, apiTokensTable } from "@workspace/db";
+import { getConfigValue, setConfigValue } from "../services/appConfig";
 
 const AUTH_REQUIRED_KEY = "api_auth_required";
 
@@ -38,11 +39,7 @@ const CACHE_TTL_MS = 5_000;
 export async function isAuthRequired(): Promise<boolean> {
   const now = Date.now();
   if (cachedRequired !== null && now < cacheExpiresAt) return cachedRequired;
-  const [row] = await db
-    .select()
-    .from(appConfigTable)
-    .where(eq(appConfigTable.key, AUTH_REQUIRED_KEY));
-  cachedRequired = row?.value === "true";
+  cachedRequired = (await getConfigValue(AUTH_REQUIRED_KEY)) === "true";
   cacheExpiresAt = now + CACHE_TTL_MS;
   return cachedRequired;
 }
@@ -53,13 +50,7 @@ export function invalidateAuthCache(): void {
 }
 
 export async function setAuthRequired(value: boolean): Promise<void> {
-  await db
-    .insert(appConfigTable)
-    .values({ key: AUTH_REQUIRED_KEY, value: value ? "true" : "false" })
-    .onConflictDoUpdate({
-      target: appConfigTable.key,
-      set: { value: value ? "true" : "false", updatedAt: new Date() },
-    });
+  await setConfigValue(AUTH_REQUIRED_KEY, value ? "true" : "false");
   invalidateAuthCache();
 }
 

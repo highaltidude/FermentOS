@@ -3,14 +3,11 @@ import { execSync, spawn } from "child_process";
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "fs";
 import path from "path";
 import os from "os";
-import { getConfig as getBackupConfig, runBackup } from "./backup.js";
+import { getConfig as getBackupConfig, runBackup } from "../services/backup.js";
 import { computeBackupAudit } from "../services/backupAudit.js";
+import { IS_DOCKER } from "../lib/runtime.js";
 
 const router = Router();
-
-// Detect Docker at startup — /.dockerenv is always present inside containers.
-// Used to skip systemd-specific checks and wire up a process-exit restart.
-const IS_DOCKER = existsSync("/.dockerenv");
 
 // Git metadata baked into the image at build time (Docker only). The container
 // has no .git directory at runtime, so we read this file instead of spawning git.
@@ -59,10 +56,19 @@ const LOCK_STALE_MS = 15 * 60 * 1000;
 // The unix user the api-server is running as. Embedded in the sudoers-repair
 // script so a copy-paste fix is targeted at the right account.
 const SERVICE_USER = os.userInfo().username;
+// NOPASSWD entry that lets the service user restart the unit, reload systemd
+// and reboot the host. Served raw by /sudoers-line and embedded in the script
+// from /repair-script.
+const SUDOERS_LINE = `${SERVICE_USER} ALL=(root) NOPASSWD: /bin/systemctl restart fermentos, /usr/bin/systemctl restart fermentos, /bin/systemctl daemon-reload, /usr/bin/systemctl daemon-reload, /bin/systemctl reboot, /usr/bin/systemctl reboot, /sbin/reboot, /usr/sbin/reboot`;
 // Cap on retained deploy history. 10 is plenty for a "oh no, undo that
 // release" workflow without letting the file grow unbounded over years of
 // auto-updates. Oldest entries are evicted FIFO.
 const HISTORY_MAX_ENTRIES = 10;
+
+/** Run a git command in the repo and return its trimmed stdout. Throws on failure. */
+function git(args: string): string {
+  return execSync(`git ${args}`, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+}
 
 type HistoryEntry = {
   hash: string;
@@ -110,9 +116,9 @@ function recordCurrentDeployIfNew() {
   let commitDate: string | null = null;
   let branch: string | null = null;
   try {
-    message = execSync(`git log -1 --format=%s ${RUNNING_HASH}`, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
-    commitDate = execSync(`git log -1 --format=%ci ${RUNNING_HASH}`, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
-    branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+    message = git(`log -1 --format=%s ${RUNNING_HASH}`);
+    commitDate = git(`log -1 --format=%ci ${RUNNING_HASH}`);
+    branch = git("rev-parse --abbrev-ref HEAD");
   } catch {
     // Best-effort metadata — the hash + deployedAt are the only required fields.
   }
@@ -140,7 +146,7 @@ function recordCurrentDeployIfNew() {
 const RUNNING_HASH = (() => {
   if (IS_DOCKER) return DOCKER_GIT_META?.hash ?? "unknown";
   try {
-    return execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+    return git("rev-parse --short HEAD");
   } catch {
     return "unknown";
   }
@@ -221,6 +227,14 @@ let remoteHashCache: { hash: string | null; fetchedAt: number } = { hash: null, 
 let remoteHashInFlight: Promise<void> | null = null;
 const REMOTE_HASH_TTL_MS = 5 * 60 * 1000;
 
+// Record a finished refresh attempt. A fetched hash replaces the cached one;
+// without one, only the attempt time moves, so a failed network call keeps
+// the last good value and still doesn't busy-retry.
+function settleRemoteHash(hash: string | null) {
+  remoteHashCache = hash ? { hash, fetchedAt: Date.now() } : { ...remoteHashCache, fetchedAt: Date.now() };
+  remoteHashInFlight = null;
+}
+
 // In Docker, use the GitHub REST API (no .git directory available at runtime).
 // Parses the baked-in remote URL to extract owner/repo, then calls the commits
 // API with Accept: application/vnd.github.sha to get just the commit SHA.
@@ -229,10 +243,10 @@ async function refreshRemoteHashDockerAsync(): Promise<void> {
   const branch = DOCKER_GIT_META?.branch ?? "main";
   const match = remote.match(/github\.com[:/]([^/]+\/[^/.]+)/);
   if (!match) {
-    remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
-    remoteHashInFlight = null;
+    settleRemoteHash(null);
     return;
   }
+  let sha: string | null = null;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
@@ -241,17 +255,11 @@ async function refreshRemoteHashDockerAsync(): Promise<void> {
       { headers: { Accept: "application/vnd.github.sha" }, signal: controller.signal },
     );
     clearTimeout(timer);
-    if (res.ok) {
-      const sha = (await res.text()).trim().slice(0, 7);
-      if (sha) remoteHashCache = { hash: sha, fetchedAt: Date.now() };
-      else remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
-    } else {
-      remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
-    }
+    if (res.ok) sha = (await res.text()).trim().slice(0, 7);
   } catch {
-    remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
+    // Network failure — keep the last good hash.
   }
-  remoteHashInFlight = null;
+  settleRemoteHash(sha);
 }
 
 function refreshRemoteHashAsync(): Promise<void> {
@@ -271,23 +279,14 @@ function refreshRemoteHashAsync(): Promise<void> {
     proc.stdout?.on("data", (b: Buffer) => { out += b.toString(); });
     proc.on("exit", (code) => {
       clearTimeout(timer);
-      if (code === 0) {
-        const h = out.trim().split(/\s+/)[0]?.slice(0, 7) ?? null;
-        // Only overwrite cache on a successful fetch — keep the last good
-        // value if today's network call fails.
-        if (h) remoteHashCache = { hash: h, fetchedAt: Date.now() };
-        else remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
-      } else {
-        // Record the attempt time so we don't busy-retry, but keep last hash.
-        remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
-      }
-      remoteHashInFlight = null;
+      // Only overwrite cache on a successful fetch — keep the last good
+      // value if today's network call fails.
+      settleRemoteHash(code === 0 ? out.trim().split(/\s+/)[0]?.slice(0, 7) ?? null : null);
       resolve();
     });
     proc.on("error", () => {
       clearTimeout(timer);
-      remoteHashCache = { ...remoteHashCache, fetchedAt: Date.now() };
-      remoteHashInFlight = null;
+      settleRemoteHash(null);
       resolve();
     });
   });
@@ -355,11 +354,50 @@ function clearLock() {
   }
 }
 
-function getLockState(): (LockInfo & { ageMs: number; stale: boolean }) | null {
+type LockState = LockInfo & { ageMs: number; stale: boolean };
+
+function getLockState(): LockState | null {
   const l = readLock();
   if (!l) return null;
   const ageMs = Date.now() - new Date(l.startedAt).getTime();
   return { ...l, ageMs, stale: ageMs > LOCK_STALE_MS };
+}
+
+// 409 body for "an update or rollback already holds the lock".
+function lockBusyBody(lock: LockState) {
+  return {
+    error: `An ${lock.kind} is already in progress (started ${Math.floor(lock.ageMs / 1000)}s ago). Wait for it to finish before starting another.`,
+    lock,
+  };
+}
+
+// Assembles the /version payload. The fields that never vary between the
+// Docker, bare-metal and git-failure cases are filled in here — including the
+// version, which stays known even when everything git-derived is not.
+function gitInfo(fields: {
+  hash: string;
+  date: string | null;
+  message: string | null;
+  branch: string;
+  updateAvailable: boolean;
+  restartPending: boolean;
+  sudoOk: boolean | null;
+  isDocker: boolean;
+}) {
+  return {
+    hash: fields.hash,
+    date: fields.date,
+    message: fields.message,
+    branch: fields.branch,
+    version: APP_VERSION,
+    updateAvailable: fields.updateAvailable,
+    runningHash: RUNNING_HASH,
+    restartPending: fields.restartPending,
+    startedAt: PROCESS_STARTED_AT,
+    sudoOk: fields.sudoOk,
+    isDocker: fields.isDocker,
+    lock: getLockState(),
+  };
 }
 
 function getGitInfo() {
@@ -368,64 +406,51 @@ function getGitInfo() {
     const hash = DOCKER_GIT_META?.hash ?? "unknown";
     const branch = DOCKER_GIT_META?.branch ?? "unknown";
     const remoteHash = getRemoteHashCached();
-    return {
+    return gitInfo({
       hash,
       date: null,
       message: null,
       branch,
-      version: APP_VERSION,
       updateAvailable: remoteHash !== null && remoteHash !== hash,
-      runningHash: RUNNING_HASH,
       restartPending: false,
-      startedAt: PROCESS_STARTED_AT,
       sudoOk: null,
       isDocker: true,
-      lock: getLockState(),
-    };
+    });
   }
 
   try {
-    const hash = execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
-    const date = execSync("git log -1 --format=%ci", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
-    const message = execSync("git log -1 --format=%s", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+    const hash = git("rev-parse --short HEAD");
+    const date = git("log -1 --format=%ci");
+    const message = git("log -1 --format=%s");
     // `symbolic-ref` returns the branch ref or fails on detached HEAD (post-
     // rollback state). `rev-parse --abbrev-ref HEAD` would silently return
     // the misleading string "HEAD" in that case.
     let branch = "(detached)";
     try {
-      branch = execSync("git symbolic-ref --short -q HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim() || "(detached)";
+      branch = git("symbolic-ref --short -q HEAD") || "(detached)";
     } catch { /* detached HEAD */ }
     const remoteHash = getRemoteHashCached();
-    return {
+    return gitInfo({
       hash,
       date,
       message,
       branch,
-      version: APP_VERSION,
       updateAvailable: remoteHash !== null && remoteHash !== hash,
-      runningHash: RUNNING_HASH,
       restartPending: RUNNING_HASH !== "unknown" && hash !== "unknown" && RUNNING_HASH !== hash,
-      startedAt: PROCESS_STARTED_AT,
       sudoOk: getSudoOkCached(),
       isDocker: IS_DOCKER,
-      lock: getLockState(),
-    };
+    });
   } catch {
-    return {
+    return gitInfo({
       hash: "unknown",
       date: null,
       message: null,
       branch: "unknown",
-      // Everything else here is unknown, but the version still is not.
-      version: APP_VERSION,
       updateAvailable: false,
-      runningHash: RUNNING_HASH,
       restartPending: false,
-      startedAt: PROCESS_STARTED_AT,
       sudoOk: getSudoOkCached(),
       isDocker: IS_DOCKER,
-      lock: getLockState(),
-    };
+    });
   }
 }
 
@@ -471,7 +496,6 @@ router.get("/repair-script", (_req, res) => {
     );
     return;
   }
-  const sudoersLine = `${SERVICE_USER} ALL=(root) NOPASSWD: /bin/systemctl restart fermentos, /usr/bin/systemctl restart fermentos, /bin/systemctl daemon-reload, /usr/bin/systemctl daemon-reload, /bin/systemctl reboot, /usr/bin/systemctl reboot, /sbin/reboot, /usr/sbin/reboot`;
   const script = `#!/usr/bin/env bash
 set -euo pipefail
 
@@ -490,7 +514,7 @@ cat > "$TMP" <<'SUDOERS'
 # FermentOS — installed by /api/admin/repair-script. Allows the service user
 # to restart the fermentos unit, reload systemd, and reboot the host from
 # the in-app admin UI without a password prompt.
-${sudoersLine}
+${SUDOERS_LINE}
 SUDOERS
 chmod 0440 "$TMP"
 if ! visudo -cf "$TMP" >/dev/null; then
@@ -513,9 +537,7 @@ echo "    Reload the Settings page in your browser — the 'Repair install' card
 // Returns the raw sudoers line for users who'd rather copy-paste the line
 // into `sudo visudo -f /etc/sudoers.d/fermentos` themselves.
 router.get("/sudoers-line", (_req, res) => {
-  res.type("text/plain").send(
-    `${SERVICE_USER} ALL=(root) NOPASSWD: /bin/systemctl restart fermentos, /usr/bin/systemctl restart fermentos, /bin/systemctl daemon-reload, /usr/bin/systemctl daemon-reload, /bin/systemctl reboot, /usr/bin/systemctl reboot, /sbin/reboot, /usr/sbin/reboot`,
-  );
+  res.type("text/plain").send(SUDOERS_LINE);
 });
 
 // POST /api/admin/restart-service
@@ -589,10 +611,7 @@ router.post("/update", async (req, res) => {
   // case a slow backup overlaps with another caller's lock.
   const earlyLock = getLockState();
   if (earlyLock && !earlyLock.stale) {
-    return res.status(409).json({
-      error: `An ${earlyLock.kind} is already in progress (started ${Math.floor(earlyLock.ageMs / 1000)}s ago). Wait for it to finish before starting another.`,
-      lock: earlyLock,
-    });
+    return res.status(409).json(lockBusyBody(earlyLock));
   }
 
   // Refuse to update while any table is unclassified. An update can migrate or
@@ -643,10 +662,7 @@ router.post("/update", async (req, res) => {
   // can force-clear it from the UI.
   const existingLock = getLockState();
   if (existingLock && !existingLock.stale) {
-    return res.status(409).json({
-      error: `An ${existingLock.kind} is already in progress (started ${Math.floor(existingLock.ageMs / 1000)}s ago). Wait for it to finish before starting another.`,
-      lock: existingLock,
-    });
+    return res.status(409).json(lockBusyBody(existingLock));
   }
 
   // Reset file permission changes and any other local modifications so
@@ -869,10 +885,7 @@ router.post("/rollback", (req, res) => {
   // Same single-flight check as /update.
   const existingLock = getLockState();
   if (existingLock && !existingLock.stale) {
-    res.status(409).json({
-      error: `An ${existingLock.kind} is already in progress (started ${Math.floor(existingLock.ageMs / 1000)}s ago). Wait for it to finish before starting another.`,
-      lock: existingLock,
-    });
+    res.status(409).json(lockBusyBody(existingLock));
     return;
   }
 

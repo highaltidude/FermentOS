@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation, Link } from "wouter";
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Loader2 } from "lucide-react";
 import {
   useGetRecipe,
   useUpdateRecipe,
@@ -12,10 +12,12 @@ import {
   useUpdateRecipeStep,
   useDeleteRecipeStep,
   useReorderRecipeSteps,
-  useListBeerStyles,
   useListInventory,
   useCreateBrewSession,
   getGetRecipeQueryKey,
+  type IngredientType,
+  type IngredientUse,
+  type StepPhase,
 } from "@workspace/api-client-react";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,64 +27,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { fetchFermentTempUnit } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/utils";
+import { formatDate } from "@/lib/format";
+import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlaceholder, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { ScoreBadge } from "@/components/ui/score-picker";
-
-function StyleSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { data: styles } = useListBeerStyles();
-  const [useCustom, setUseCustom] = useState(false);
-
-  if (!styles || styles.length === 0) {
-    return <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="e.g., American IPA" />;
-  }
-
-  const knownNames = styles.map((s) => s.name);
-  const valueInList = knownNames.includes(value);
-
-  if (useCustom || (!valueInList && value)) {
-    return (
-      <div className="flex gap-2">
-        <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Type a style" className="flex-1" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => { setUseCustom(false); onChange(""); }}>
-          <X className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <Select value={value} onValueChange={(v) => { if (v === "__custom__") { setUseCustom(true); onChange(""); } else onChange(v); }}>
-      <SelectTrigger><SelectValue placeholder="Select a style…" /></SelectTrigger>
-      <SelectContent>
-        {styles.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-        <SelectItem value="__custom__">Other (type manually)…</SelectItem>
-      </SelectContent>
-    </Select>
-  );
-}
-
-// Brew dates are plain YYYY-MM-DD; parse as local so they don't shift a day.
-function formatBrewDate(d: string) {
-  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, day ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-const INGREDIENT_TYPE_COLORS: Record<string, string> = {
-  malt: "bg-amber-100 text-amber-800 border-amber-200",
-  hop: "bg-green-100 text-green-800 border-green-200",
-  yeast: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  adjunct: "bg-orange-100 text-orange-800 border-orange-200",
-  water_agent: "bg-blue-100 text-blue-800 border-blue-200",
-  other: "bg-gray-100 text-gray-700 border-gray-200",
-};
-
-const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
-const INGREDIENT_USES = ["mash", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"];
-// Uses whose timing the boil timer schedules alerts from.
-const TIMED_USES = ["boil", "whirlpool"];
-const timingPlaceholder = (use: string) =>
-  use === "whirlpool" ? "Whirlpool min (optional)" : "Min left in boil (60, 15, 0…)";
-const STEP_PHASES = ["mash", "boil", "fermentation", "conditioning", "packaging", "other"];
+import { StyleSelect } from "@/components/StyleSelect";
 
 const STEP_PHASE_COLORS: Record<string, string> = {
   mash: "bg-amber-100 text-amber-800 border-amber-200",
@@ -107,7 +57,7 @@ function AddStepForm({ recipeId, nextPosition, onDone }: { recipeId: number; nex
         toast({ title: "Step added" });
       },
       onError: (err: unknown) => {
-        toast({ title: "Failed to add step", description: String(err instanceof Error ? err.message : err), variant: "destructive" });
+        toast({ title: "Failed to add step", description: getErrorMessage(err), variant: "destructive" });
       },
     },
   });
@@ -119,7 +69,7 @@ function AddStepForm({ recipeId, nextPosition, onDone }: { recipeId: number; nex
       id: recipeId,
       data: {
         body: body.trim(),
-        phase: (phase || undefined) as any,
+        phase: (phase || undefined) as StepPhase | undefined,
         durationMinutes: durationMinutes ? Number(durationMinutes) : undefined,
         position: nextPosition,
       },
@@ -200,7 +150,7 @@ function StepRow({
         setEditing(false);
       },
       onError: (err: unknown) => {
-        toast({ title: "Failed to update step", description: String(err instanceof Error ? err.message : err), variant: "destructive" });
+        toast({ title: "Failed to update step", description: getErrorMessage(err), variant: "destructive" });
       },
     },
   });
@@ -209,7 +159,7 @@ function StepRow({
     mutation: {
       onSuccess: () => qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(recipeId) }),
       onError: (err: unknown) => {
-        toast({ title: "Failed to delete step", description: String(err instanceof Error ? err.message : err), variant: "destructive" });
+        toast({ title: "Failed to delete step", description: getErrorMessage(err), variant: "destructive" });
       },
     },
   });
@@ -246,7 +196,7 @@ function StepRow({
                 id: step.id,
                 data: {
                   body: body.trim(),
-                  phase: (phase || null) as any,
+                  phase: (phase || null) as StepPhase | null,
                   durationMinutes: durationMinutes ? Number(durationMinutes) : null,
                 },
               })}
@@ -332,7 +282,7 @@ function StepList({ recipeId, steps }: { recipeId: number; steps: StepLike[] }) 
       onError: (err: unknown) => {
         // Roll back local order to whatever the server most recently returned.
         setOrder(steps);
-        toast({ title: "Failed to reorder steps", description: String(err instanceof Error ? err.message : err), variant: "destructive" });
+        toast({ title: "Failed to reorder steps", description: getErrorMessage(err), variant: "destructive" });
       },
     },
   });
@@ -412,7 +362,7 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
         toast({ title: "Ingredient added" });
       },
       onError: (err: unknown) => {
-        toast({ title: "Failed to add ingredient", description: String(err instanceof Error ? err.message : err), variant: "destructive" });
+        toast({ title: "Failed to add ingredient", description: getErrorMessage(err), variant: "destructive" });
       },
     },
   });
@@ -423,7 +373,7 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
     addMutation.mutate({
       id: recipeId,
       data: {
-        name, type: type as any, amount: Number(amount), unit, use: (use || undefined) as any,
+        name, type: type as IngredientType, amount: Number(amount), unit, use: (use || undefined) as IngredientUse | undefined,
         timingMinutes: TIMED_USES.includes(use) && timingMinutes !== "" ? Number(timingMinutes) : undefined,
         notes: notes || undefined,
       },
@@ -492,7 +442,7 @@ function IngredientTiming({ recipeId, ingredientId, use, timingMinutes }: {
     mutation: {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(recipeId) }); setEditing(false); },
       onError: (err: unknown) =>
-        toast({ title: "Failed to save time", description: String(err instanceof Error ? err.message : err), variant: "destructive" }),
+        toast({ title: "Failed to save time", description: getErrorMessage(err), variant: "destructive" }),
     },
   });
 
@@ -544,23 +494,21 @@ export default function RecipeDetail() {
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [showAddStep, setShowAddStep] = useState(false);
   const [startingBrew, setStartingBrew] = useState(false);
-  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
-
-  useEffect(() => { fetchFermentTempUnit().then(setTempUnit); }, []);
+  const tempUnit = useFermentTempUnit();
 
   const { data: recipe, isLoading } = useGetRecipe(id, { query: { enabled: !!id, queryKey: getGetRecipeQueryKey(id) } });
 
   const updateMutation = useUpdateRecipe({
     mutation: {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(id) }); setEditing(false); toast({ title: "Recipe updated" }); },
-      onError: (err: unknown) => { toast({ title: "Failed to update recipe", description: String(err instanceof Error ? err.message : err), variant: "destructive" }); },
+      onError: (err: unknown) => { toast({ title: "Failed to update recipe", description: getErrorMessage(err), variant: "destructive" }); },
     },
   });
 
   const createSessionMutation = useCreateBrewSession({
     mutation: {
       onSuccess: (session) => { navigate(`/brew-sessions/${session.id}`); toast({ title: "Brew session started!" }); },
-      onError: (err: unknown) => { toast({ title: "Failed to start session", description: String(err instanceof Error ? err.message : err), variant: "destructive" }); setStartingBrew(false); },
+      onError: (err: unknown) => { toast({ title: "Failed to start session", description: getErrorMessage(err), variant: "destructive" }); setStartingBrew(false); },
     },
   });
 
@@ -583,14 +531,14 @@ export default function RecipeDetail() {
   const deleteMutation = useDeleteRecipe({
     mutation: {
       onSuccess: () => { navigate("/recipes"); toast({ title: "Recipe deleted" }); },
-      onError: (err: unknown) => { toast({ title: "Failed to delete recipe", description: String(err instanceof Error ? err.message : err), variant: "destructive" }); },
+      onError: (err: unknown) => { toast({ title: "Failed to delete recipe", description: getErrorMessage(err), variant: "destructive" }); },
     },
   });
 
   const deleteIngredientMutation = useDeleteRecipeIngredient({
     mutation: {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(id) }); },
-      onError: (err: unknown) => { toast({ title: "Failed to delete ingredient", description: String(err instanceof Error ? err.message : err), variant: "destructive" }); },
+      onError: (err: unknown) => { toast({ title: "Failed to delete ingredient", description: getErrorMessage(err), variant: "destructive" }); },
     },
   });
 
@@ -622,9 +570,9 @@ export default function RecipeDetail() {
         daysFermenting: recipe.daysFermenting != null ? String(recipe.daysFermenting) : "",
         daysConditioning: recipe.daysConditioning != null ? String(recipe.daysConditioning) : "",
         daysPackaged: recipe.daysPackaged != null ? String(recipe.daysPackaged) : "",
-        fermentTempMin: (recipe as any).fermentTempMin != null ? String((recipe as any).fermentTempMin) : "",
-        fermentTempMax: (recipe as any).fermentTempMax != null ? String((recipe as any).fermentTempMax) : "",
-        fermentTempIdeal: (recipe as any).fermentTempIdeal != null ? String((recipe as any).fermentTempIdeal) : "",
+        fermentTempMin: recipe.fermentTempMin != null ? String(recipe.fermentTempMin) : "",
+        fermentTempMax: recipe.fermentTempMax != null ? String(recipe.fermentTempMax) : "",
+        fermentTempIdeal: recipe.fermentTempIdeal != null ? String(recipe.fermentTempIdeal) : "",
       });
     }
     setEditing(true);
@@ -654,7 +602,7 @@ export default function RecipeDetail() {
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : null,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : null,
         fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : null,
-      } as any,
+      },
     });
   };
 
@@ -762,13 +710,13 @@ export default function RecipeDetail() {
                 </div>
               </div>
             )}
-            {((recipe as any).fermentTempMin != null || (recipe as any).fermentTempIdeal != null || (recipe as any).fermentTempMax != null) && (
+            {(recipe.fermentTempMin != null || recipe.fermentTempIdeal != null || recipe.fermentTempMax != null) && (
               <div className="border-t border-border pt-3 mt-3">
                 <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
                 <div className="flex items-center gap-3 text-sm">
-                  {(recipe as any).fermentTempMin != null && <span className="text-muted-foreground">Min: <span className="text-foreground font-medium">{(recipe as any).fermentTempMin}°{tempUnit}</span></span>}
-                  {(recipe as any).fermentTempIdeal != null && <span className="text-primary font-semibold">Ideal: {(recipe as any).fermentTempIdeal}°{tempUnit}</span>}
-                  {(recipe as any).fermentTempMax != null && <span className="text-muted-foreground">Max: <span className="text-foreground font-medium">{(recipe as any).fermentTempMax}°{tempUnit}</span></span>}
+                  {recipe.fermentTempMin != null && <span className="text-muted-foreground">Min: <span className="text-foreground font-medium">{recipe.fermentTempMin}°{tempUnit}</span></span>}
+                  {recipe.fermentTempIdeal != null && <span className="text-primary font-semibold">Ideal: {recipe.fermentTempIdeal}°{tempUnit}</span>}
+                  {recipe.fermentTempMax != null && <span className="text-muted-foreground">Max: <span className="text-foreground font-medium">{recipe.fermentTempMax}°{tempUnit}</span></span>}
                 </div>
               </div>
             )}
@@ -777,7 +725,7 @@ export default function RecipeDetail() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-muted-foreground mb-1 block">Name</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div><label className="text-xs text-muted-foreground mb-1 block">Style</label><StyleSelect value={form.style} onChange={(v) => setForm({ ...form, style: v })} /></div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Style</label><StyleSelect value={form.style} onChange={(v) => setForm({ ...form, style: v })} fallbackPlaceholder="e.g., American IPA" /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">Batch Size (gal)</label><Input type="number" step="0.1" value={form.batchSizeGallons} onChange={(e) => setForm({ ...form, batchSizeGallons: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">Original Gravity</label><Input type="number" step="0.001" value={form.originalGravity} onChange={(e) => setForm({ ...form, originalGravity: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">Final Gravity</label><Input type="number" step="0.001" value={form.finalGravity} onChange={(e) => setForm({ ...form, finalGravity: e.target.value })} /></div>
@@ -930,7 +878,7 @@ export default function RecipeDetail() {
                   <Beer className="w-4 h-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground truncate">{batch.recipeName}</div>
-                    <div className="text-xs text-muted-foreground">{formatBrewDate(batch.brewDate)}</div>
+                    <div className="text-xs text-muted-foreground">{formatDate(batch.brewDate)}</div>
                   </div>
                   <ScoreBadge value={batch.overallScore} />
                 </div>

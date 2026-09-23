@@ -5,12 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export async function fetchFermentTempUnit(): Promise<"F" | "C"> {
-  try {
-    const r = await fetch("/api/settings/ferment-temp-unit");
-    const d = await r.json();
-    return d.unit === "C" ? "C" : "F";
-  } catch {
-    return "F";
-  }
+/** A thrown value as display text: the message of an Error, else the value itself. */
+export function getErrorMessage(err: unknown): string {
+  return String(err instanceof Error ? err.message : err)
 }

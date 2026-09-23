@@ -1,37 +1,35 @@
+import cron from "node-cron";
 import { eq, lt, and, isNull, or, inArray } from "drizzle-orm";
 import {
   db,
-  appConfigTable,
   sensorReadingsTable,
   fermentationReadingsTable,
   brewSessionsTable,
   systemHealthSamplesTable,
 } from "@workspace/db";
 import { logger } from "../lib/logger.js";
+import { getConfigValue, setConfigValue } from "./appConfig.js";
 
 // Fixed retention window for system health history samples, independent of
 // the user-configurable reading_retention_days setting above.
 const SYSTEM_HEALTH_RETENTION_DAYS = 14;
 
-export const CONFIG_KEY = "reading_retention_days";
+const CONFIG_KEY = "reading_retention_days";
 
 export async function getRetentionDays(): Promise<number | null> {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, CONFIG_KEY));
-  if (!row?.value) return null;
-  const days = parseInt(row.value, 10);
+  const value = await getConfigValue(CONFIG_KEY);
+  if (!value) return null;
+  const days = parseInt(value, 10);
   if (!Number.isFinite(days) || days <= 0) return null;
   return days;
 }
 
 export async function setRetentionDays(days: number | null): Promise<void> {
   const value = days == null || days <= 0 ? "0" : String(days);
-  await db
-    .insert(appConfigTable)
-    .values({ key: CONFIG_KEY, value })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value, updatedAt: new Date() } });
+  await setConfigValue(CONFIG_KEY, value);
 }
 
-export async function runRetentionCleanup(): Promise<{ deletedFermentation: number; deletedSensor: number }> {
+async function runRetentionCleanup(): Promise<{ deletedFermentation: number; deletedSensor: number }> {
   const days = await getRetentionDays();
   if (!days) return { deletedFermentation: 0, deletedSensor: 0 };
 
@@ -78,7 +76,7 @@ export async function runRetentionCleanup(): Promise<{ deletedFermentation: numb
   return { deletedFermentation, deletedSensor };
 }
 
-export async function pruneSystemHealthSamples(): Promise<{ deleted: number }> {
+async function pruneSystemHealthSamples(): Promise<{ deleted: number }> {
   const cutoff = new Date(Date.now() - SYSTEM_HEALTH_RETENTION_DAYS * 86_400_000);
   const result = await db
     .delete(systemHealthSamplesTable)
@@ -87,4 +85,16 @@ export async function pruneSystemHealthSamples(): Promise<{ deleted: number }> {
 
   logger.info({ cutoff, deleted: result.length }, "System health sample retention cleanup complete");
   return { deleted: result.length };
+}
+
+/** Nightly 3am cleanup of old readings and system health samples. */
+export function startRetentionCleanup(): void {
+  cron.schedule("0 3 * * *", () => {
+    runRetentionCleanup()
+      .then((result) => logger.info(result, "Nightly reading retention cleanup"))
+      .catch((e) => logger.error({ e }, "Reading retention cleanup error"));
+    pruneSystemHealthSamples()
+      .then((result) => logger.info(result, "Nightly system health sample cleanup"))
+      .catch((e) => logger.error({ e }, "System health sample cleanup error"));
+  });
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ArrowLeft, Plus, Trash2, Check, X, Thermometer, Droplets, History, Camera, ImageOff, NotebookPen, Star, ChevronDown, ChevronRight, Activity, Wifi, WifiOff, Flame } from "lucide-react";
 import {
@@ -15,6 +15,10 @@ import {
   getListSensorDevicesQueryKey,
   useAssignSensorDevice,
   useGetDefaultReadingsShown,
+  useGetTempAlertReadings,
+  getGetTempAlertReadingsQueryKey,
+  type BrewStatus,
+  type PackagingMethod,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -24,40 +28,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge, ScoreReadout, OFF_FLAVOR_LABELS, BREW_AGAIN_LABELS } from "@/components/ui/score-picker";
 import { useToast } from "@/hooks/use-toast";
-import { fetchFermentTempUnit } from "@/lib/utils";
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { boilPhase } from "@/lib/boil";
+import { BREW_STATUSES, STATUS_LABELS, PACKAGING_METHODS, PACKAGING_LABELS } from "@/lib/brewStatus";
+import { formatDate, formatDateTime, formatDateTimeShort } from "@/lib/format";
+import { estimateAbv, tempRangeToF } from "@/lib/brewMath";
+import { connectionDotClass, connectionTextClass, batteryClass, formatSensorTemp } from "@/lib/sensorStatus";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { RateBatchWizard } from "@/components/RateBatchWizard";
+import { BrewStatusBadge } from "@/components/BrewStatusBadge";
 
-const STATUS_COLORS: Record<string, string> = {
-  brew_day: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/40",
-  fermenting: "bg-green-100 text-green-800 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800/40",
-  conditioning: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/40",
-  packaged: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/40",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  brew_day: "Brew Day",
-  fermenting: "Fermenting",
-  conditioning: "Conditioning",
-  packaged: "Packaged",
-};
-
-const STATUSES = ["brew_day", "fermenting", "conditioning", "packaged"];
-const STATUS_ORDER = ["brew_day", "fermenting", "conditioning", "packaged"];
-
-const PACKAGING_METHODS = ["keg", "bottle"];
-const PACKAGING_LABELS: Record<string, string> = {
-  keg: "Keg",
-  bottle: "Bottle",
-};
-
-function StatusProgress({ status, onStatusChange, isPending }: { status: string; onStatusChange: (s: string) => void; isPending?: boolean }) {
-  const idx = STATUS_ORDER.indexOf(status);
+function StatusProgress({ status, onStatusChange, isPending }: { status: BrewStatus; onStatusChange: (s: BrewStatus) => void; isPending?: boolean }) {
+  const idx = BREW_STATUSES.indexOf(status);
   return (
     <div className="flex items-center gap-1 text-xs">
-      {STATUS_ORDER.map((s, i) => (
+      {BREW_STATUSES.map((s, i) => (
         <div key={s} className="flex items-center gap-1">
           <button
             disabled={isPending || s === status}
@@ -67,22 +54,11 @@ function StatusProgress({ status, onStatusChange, isPending }: { status: string;
             <div className={`w-2 h-2 rounded-full transition-colors ${i <= idx ? "bg-primary" : "bg-muted-foreground/30"} ${s !== status && !isPending ? "group-hover:bg-primary/60" : ""}`} />
             <span className={`${i <= idx ? "text-foreground font-medium" : "text-muted-foreground"} ${s !== status && !isPending ? "group-hover:text-foreground" : ""}`}>{STATUS_LABELS[s] ?? s}</span>
           </button>
-          {i < STATUS_ORDER.length - 1 && <div className={`w-4 h-px ${i < idx ? "bg-primary" : "bg-muted-foreground/30"}`} />}
+          {i < BREW_STATUSES.length - 1 && <div className={`w-4 h-px ${i < idx ? "bg-primary" : "bg-muted-foreground/30"}`} />}
         </div>
       ))}
     </div>
   );
-}
-
-// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
-// Only used for calendar date fields (brewDate, plannedDate, packagedDate).
-function parseLocalDate(d: string): Date {
-  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, day ?? 1);
-}
-
-function formatDate(d: string) {
-  return parseLocalDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 // datetime-local has no timezone, so we intentionally format local time for input
@@ -99,15 +75,6 @@ function fromDatetimeLocalValue(value: string): string {
   return new Date(value).toISOString();
 }
 
-// readingAt is a full ISO timestamp — display in local time with date and time.
-function formatReadingTime(d: string | Date) {
-  return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
-function estimateAbv(og: number, fg: number): number {
-  return (og - fg) * 131.25;
-}
-
 export default function BrewSessionDetail() {
   const [, params] = useRoute("/brew-sessions/:id");
   const [, navigate] = useLocation();
@@ -116,15 +83,18 @@ export default function BrewSessionDetail() {
   const qc = useQueryClient();
 
   const [editing, setEditing] = useState(false);
-  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
-  const [tempAlertThreshold, setTempAlertThreshold] = useState(2);
+  const tempUnit = useFermentTempUnit();
+  const { data: tempAlertReadings } = useGetTempAlertReadings({
+    query: { staleTime: 0, queryKey: getGetTempAlertReadingsQueryKey() },
+  });
+  const tempAlertThreshold = tempAlertReadings?.count ?? 2;
   const tempAlertCount = useRef(0);
   const [globalAutoConditioning, setGlobalAutoConditioning] = useState(false);
   const autoAdvancedRef = useRef(false);
   const [showReadingForm, setShowReadingForm] = useState(false);
   const [readingForm, setReadingForm] = useState({ readingAt: toDatetimeLocalValue(new Date()), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
   const [editForm, setEditForm] = useState<any>({});
-  const [packagingPrompt, setPackagingPrompt] = useState<string | null>(null);
+  const [packagingPrompt, setPackagingPrompt] = useState<PackagingMethod>(null);
   const [ratingWizardOpen, setRatingWizardOpen] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
@@ -164,8 +134,8 @@ export default function BrewSessionDetail() {
     query: { queryKey: getListSensorDevicesQueryKey() },
   });
 
-  const unassignedDevice = (sensorDevices as any[] | undefined)?.find(
-    (d: any) => d.device.enabled && !d.assignedBrewSessionId,
+  const unassignedDevice = sensorDevices?.find(
+    (d) => d.device.enabled && !d.assignedBrewSessionId,
   ) ?? null;
 
   const assignMutation = useAssignSensorDevice({
@@ -219,25 +189,25 @@ export default function BrewSessionDetail() {
   // Advancing to Packaged asks how the batch was packaged first; every other
   // transition is immediate. Passing packagingMethod through on those keeps an
   // already-recorded method intact when the stage is corrected afterwards.
-  const applyStatus = (newStatus: string, packagingMethod?: string | null) => {
+  const applyStatus = (newStatus: BrewStatus, packagingMethod?: PackagingMethod) => {
     if (!session) return;
     quickStatusMutation.mutate({
       id,
       data: {
         recipeName: session.recipeName,
-        status: newStatus as any,
+        status: newStatus,
         brewDate: session.brewDate,
         batchSizeGallons: session.batchSizeGallons,
         originalGravityActual: session.originalGravityActual ?? undefined,
         finalGravityActual: session.finalGravityActual ?? undefined,
         abvActual: session.abvActual ?? undefined,
         notes: session.notes ?? undefined,
-        packagingMethod: (packagingMethod ?? session.packagingMethod ?? undefined) as any,
+        packagingMethod: packagingMethod ?? session.packagingMethod ?? undefined,
       },
     });
   };
 
-  const handleStatusClick = (newStatus: string) => {
+  const handleStatusClick = (newStatus: BrewStatus) => {
     if (!session || newStatus === session.status) return;
     if (newStatus === "packaged") {
       setPackagingPrompt(session.packagingMethod ?? "keg");
@@ -274,27 +244,21 @@ export default function BrewSessionDetail() {
     },
   });
 
+  // auto-conditioning isn't in the OpenAPI spec, so there's no generated hook for it.
   useEffect(() => {
-    Promise.all([
-      fetchFermentTempUnit(),
-      fetch(`${import.meta.env.BASE_URL}api/settings/temp-alert-readings`).then((r) => r.json() as Promise<{ count: number }>),
-      fetch(`${import.meta.env.BASE_URL}api/settings/auto-conditioning`).then((r) => r.json() as Promise<{ enabled: boolean }>),
-    ])
-      .then(([unit, countData, autoData]) => {
-        setTempUnit(unit);
-        setTempAlertThreshold(countData.count ?? 2);
-        setGlobalAutoConditioning(autoData.enabled ?? false);
-      })
+    fetch(`${import.meta.env.BASE_URL}api/settings/auto-conditioning`)
+      .then((r) => r.json() as Promise<{ enabled: boolean }>)
+      .then((autoData) => setGlobalAutoConditioning(autoData.enabled ?? false))
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    const alerts: { type: string }[] = (telemetry as any)?.alerts ?? [];
+    const alerts = telemetry?.alerts ?? [];
     const hasOutOfRange = (telemetry as any)?.isDeviceActive && alerts.some((a) => a.type === "temp_out_of_range");
     if (hasOutOfRange) {
       tempAlertCount.current += 1;
       if (tempAlertCount.current >= tempAlertThreshold) {
-        const outAlert = alerts.find((a) => a.type === "temp_out_of_range") as any;
+        const outAlert = alerts.find((a) => a.type === "temp_out_of_range");
         toast({ title: "Fermentation temp out of range", description: outAlert?.message ?? "Temperature is outside the configured range", variant: "destructive" });
         tempAlertCount.current = 0;
       }
@@ -304,11 +268,11 @@ export default function BrewSessionDetail() {
   }, [telemetry, tempAlertThreshold, toast]);
 
   useEffect(() => {
-    const perBrew = (session as any)?.autoAdvanceToConditioning;
+    const perBrew = session?.autoAdvanceToConditioning;
     const effectiveAutoAdvance = perBrew !== null && perBrew !== undefined ? perBrew : globalAutoConditioning;
     if (!effectiveAutoAdvance) return;
     if (session?.status !== "fermenting") { autoAdvancedRef.current = false; return; }
-    if ((telemetry as any)?.insights?.fermentationStatus !== "possibly_complete") return;
+    if (telemetry?.insights?.fermentationStatus !== "possibly_complete") return;
     if (autoAdvancedRef.current || quickStatusMutation.isPending) return;
     autoAdvancedRef.current = true;
     handleStatusClick("conditioning");
@@ -332,7 +296,7 @@ export default function BrewSessionDetail() {
       id,
       data: {
         recipeName: session.recipeName,
-        status: session.status as any,
+        status: session.status,
         brewDate: session.brewDate,
         batchSizeGallons: session.batchSizeGallons,
         originalGravityActual: og,
@@ -379,7 +343,7 @@ export default function BrewSessionDetail() {
       qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
       toast({ title: "Photo uploaded" });
     } catch (err) {
-      toast({ title: "Photo upload failed", description: String(err instanceof Error ? err.message : err), variant: "destructive" });
+      toast({ title: "Photo upload failed", description: getErrorMessage(err), variant: "destructive" });
     } finally {
       setPhotoUploading(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
@@ -409,10 +373,10 @@ export default function BrewSessionDetail() {
       finalGravityActual: session.finalGravityActual != null ? String(session.finalGravityActual) : "",
       abvActual: session.abvActual != null ? String(session.abvActual) : "",
       notes: session.notes ?? "",
-      fermentTempMin: (session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "",
-      fermentTempMax: (session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "",
-      fermentTempIdeal: (session as any).fermentTempIdeal != null ? String((session as any).fermentTempIdeal) : "",
-      autoAdvanceToConditioning: (session as any).autoAdvanceToConditioning ?? null,
+      fermentTempMin: session.fermentTempMin != null ? String(session.fermentTempMin) : "",
+      fermentTempMax: session.fermentTempMax != null ? String(session.fermentTempMax) : "",
+      fermentTempIdeal: session.fermentTempIdeal != null ? String(session.fermentTempIdeal) : "",
+      autoAdvanceToConditioning: session.autoAdvanceToConditioning ?? null,
       packagingMethod: session.packagingMethod ?? null,
     });
     setEditing(true);
@@ -435,7 +399,7 @@ export default function BrewSessionDetail() {
         fermentTempIdeal: editForm.fermentTempIdeal ? Number(editForm.fermentTempIdeal) : null,
         autoAdvanceToConditioning: editForm.autoAdvanceToConditioning,
         packagingMethod: editForm.packagingMethod,
-      } as any,
+      },
     });
   };
 
@@ -458,7 +422,7 @@ export default function BrewSessionDetail() {
   if (!session) return <div className="p-6 text-muted-foreground">Session not found.</div>;
 
   const chartData = (session.readings ?? []).map((r) => ({
-    date: formatReadingTime(r.readingAt),
+    date: formatDateTime(r.readingAt),
     temp: r.temperatureFahrenheit,
     gravity: r.gravity,
   }));
@@ -493,7 +457,7 @@ export default function BrewSessionDetail() {
         {!editing ? (
           <>
             <div className="flex items-center gap-2 mb-3">
-              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[session.status] ?? ""}`}>{STATUS_LABELS[session.status] ?? session.status}</span>
+              <BrewStatusBadge status={session.status} />
               <ScoreBadge value={session.overallScore} />
             </div>
             <div className="mb-3 overflow-x-auto">
@@ -522,7 +486,7 @@ export default function BrewSessionDetail() {
               <div><label className="text-xs text-muted-foreground mb-1 block">Status</label>
                 <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{BREW_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><label className="text-xs text-muted-foreground mb-1 block">Packaged In</label>
@@ -549,21 +513,21 @@ export default function BrewSessionDetail() {
                 <Input type="number" step="0.1"
                   value={editForm.fermentTempMin ?? ""}
                   onChange={(e) => setEditForm({ ...editForm, fermentTempMin: e.target.value })}
-                  placeholder={(session as any).fermentTempMin != null ? String((session as any).fermentTempMin) : "from recipe"} />
+                  placeholder={session.fermentTempMin != null ? String(session.fermentTempMin) : "from recipe"} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Ideal Temp (°{tempUnit})</label>
                 <Input type="number" step="0.1"
                   value={editForm.fermentTempIdeal ?? ""}
                   onChange={(e) => setEditForm({ ...editForm, fermentTempIdeal: e.target.value })}
-                  placeholder={(session as any).fermentTempIdeal != null ? String((session as any).fermentTempIdeal) : "from recipe"} />
+                  placeholder={session.fermentTempIdeal != null ? String(session.fermentTempIdeal) : "from recipe"} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Max Temp (°{tempUnit})</label>
                 <Input type="number" step="0.1"
                   value={editForm.fermentTempMax ?? ""}
                   onChange={(e) => setEditForm({ ...editForm, fermentTempMax: e.target.value })}
-                  placeholder={(session as any).fermentTempMax != null ? String((session as any).fermentTempMax) : "from recipe"} />
+                  placeholder={session.fermentTempMax != null ? String(session.fermentTempMax) : "from recipe"} />
               </div>
             </div>
             <div>
@@ -694,6 +658,13 @@ export default function BrewSessionDetail() {
           </div>
         </div>
         <div className="p-4 space-y-4">
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoUpload}
+          />
           {/* Photo */}
           {session.photoPath ? (
             <div className="relative group w-full max-w-sm">
@@ -719,13 +690,6 @@ export default function BrewSessionDetail() {
             </div>
           ) : (
             <div>
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
               <Button
                 variant="outline"
                 size="sm"
@@ -739,13 +703,6 @@ export default function BrewSessionDetail() {
           )}
           {session.photoPath && (
             <div>
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
               <Button
                 variant="ghost"
                 size="sm"
@@ -816,9 +773,9 @@ export default function BrewSessionDetail() {
                   <div key={entry.id} className="flex items-start gap-3 pl-1 group">
                     <div className="w-3.5 h-3.5 rounded-full bg-primary border-2 border-background ring-1 ring-primary shrink-0 mt-0.5 z-10" />
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_COLORS[entry.status] ?? ""}`}>{STATUS_LABELS[entry.status] ?? entry.status}</span>
+                      <BrewStatusBadge status={entry.status} className="shrink-0" />
                       <span className="text-xs text-muted-foreground">
-                        {new Date(entry.changedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                        {formatDateTime(entry.changedAt)}
                       </span>
                     </div>
                     <button
@@ -869,7 +826,7 @@ export default function BrewSessionDetail() {
                   className="flex-1 text-xs bg-background border border-input rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="">Select a device…</option>
-                  {(sensorDevices ?? []).map((d: any) => (
+                  {(sensorDevices ?? []).map((d) => (
                     <option key={d.device.id} value={String(d.device.id)}>
                       {d.device.deviceName}
                       {d.assignedBrewName ? ` (→ ${d.assignedBrewName})` : d.connectionStatus === "connected" ? " · live" : ""}
@@ -901,22 +858,14 @@ export default function BrewSessionDetail() {
         <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${
-                sensorConnStatus === "connected" ? "bg-green-500" :
-                sensorConnStatus === "warning" ? "bg-amber-500" :
-                sensorConnStatus === "offline" ? "bg-destructive" : "bg-muted-foreground"
-              }`} />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${connectionDotClass(sensorConnStatus)}`} />
               <h2 className="text-sm font-semibold text-foreground">{telemetry.device.deviceName}</h2>
               <span className="text-xs text-muted-foreground font-mono">· {telemetry.device.deviceKey}</span>
-              <span className={`text-xs capitalize ${
-                sensorConnStatus === "connected" ? "text-green-600 dark:text-green-400" :
-                sensorConnStatus === "warning" ? "text-amber-600 dark:text-amber-400" :
-                sensorConnStatus === "offline" ? "text-destructive" : "text-muted-foreground"
-              }`}>{sensorConnStatus}</span>
+              <span className={`text-xs capitalize ${connectionTextClass(sensorConnStatus)}`}>{sensorConnStatus}</span>
             </div>
             {telemetry.latestReading && (
               <span className="text-xs text-muted-foreground">
-                {new Date(telemetry.latestReading.receivedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {formatDateTimeShort(telemetry.latestReading.receivedAt)}
               </span>
             )}
           </div>
@@ -934,18 +883,18 @@ export default function BrewSessionDetail() {
                 <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Temperature</p>
                   <p className="text-base font-semibold text-amber-700 dark:text-amber-400">
-                    {Number(telemetry.latestReading.temperature).toFixed(1)}{telemetry.latestReading.temperatureUnit === "F" ? "°F" : "°C"}
+                    {formatSensorTemp(telemetry.latestReading.temperature, telemetry.latestReading.temperatureUnit)}
                   </p>
                 </div>
               )}
               {telemetry.latestReading.battery != null && (
                 <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Battery</p>
-                  <p className={`text-base font-semibold ${(telemetry.latestReading as any).batteryPercentEstimate != null && (telemetry.latestReading as any).batteryPercentEstimate < 10 ? "text-destructive" : (telemetry.latestReading as any).batteryPercentEstimate != null && (telemetry.latestReading as any).batteryPercentEstimate < 20 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                  <p className={`text-base font-semibold ${batteryClass(telemetry.latestReading.batteryPercentEstimate, "text-foreground")}`}>
                     {Number(telemetry.latestReading.battery).toFixed(2)}V
                   </p>
-                  {(telemetry.latestReading as any).batteryPercentEstimate != null && (
-                    <p className="text-xs text-muted-foreground">~{Math.round((telemetry.latestReading as any).batteryPercentEstimate)}%</p>
+                  {telemetry.latestReading.batteryPercentEstimate != null && (
+                    <p className="text-xs text-muted-foreground">~{Math.round(telemetry.latestReading.batteryPercentEstimate)}%</p>
                   )}
                 </div>
               )}
@@ -1020,7 +969,7 @@ export default function BrewSessionDetail() {
       ) : null}
 
       {/* iSpindel Readings History */}
-      {telemetry?.device && (telemetry as any).readings && (telemetry as any).readings.length > 0 && (
+      {telemetry?.device && telemetry.readings && telemetry.readings.length > 0 && (
         <div className="bg-card border border-card-border rounded-lg">
           <button
             type="button"
@@ -1030,7 +979,7 @@ export default function BrewSessionDetail() {
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-muted-foreground" />
               iSpindel Readings
-              <span className="text-xs text-muted-foreground font-normal">({(telemetry as any).readings.length} for this brew)</span>
+              <span className="text-xs text-muted-foreground font-normal">({telemetry.readings.length} for this brew)</span>
             </div>
             {showSensorHistory ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
           </button>
@@ -1049,18 +998,18 @@ export default function BrewSessionDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {[...(telemetry as any).readings].reverse().map((r: any) => (
-                    <>
+                  {[...telemetry.readings].reverse().map((r) => (
+                    <Fragment key={r.id}>
                       <tr key={r.id} className="hover:bg-muted/20 transition-colors">
                         <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
-                          {new Date(r.receivedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          {formatDateTimeShort(r.receivedAt)}
                         </td>
                         <td className="px-2 py-1.5 text-right font-mono text-blue-700 dark:text-blue-400">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>
-                        <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? `${Number(r.temperature).toFixed(1)}${r.temperatureUnit === "F" ? "°F" : "°C"}` : "—"}</td>
+                        <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? formatSensorTemp(r.temperature, r.temperatureUnit) : "—"}</td>
                         <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>
                         <td className="px-2 py-1.5 text-right whitespace-nowrap">
                           {r.battery != null ? (
-                            <span className={r.batteryPercentEstimate != null && r.batteryPercentEstimate < 10 ? "text-destructive" : r.batteryPercentEstimate != null && r.batteryPercentEstimate < 20 ? "text-amber-600 dark:text-amber-400" : ""}>
+                            <span className={batteryClass(r.batteryPercentEstimate)}>
                               {Number(r.battery).toFixed(2)}V{r.batteryPercentEstimate != null ? ` (~${Math.round(r.batteryPercentEstimate)}%)` : ""}
                             </span>
                           ) : "—"}
@@ -1082,7 +1031,7 @@ export default function BrewSessionDetail() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -1106,12 +1055,9 @@ export default function BrewSessionDetail() {
           );
         })();
 
-        const fermStartLabel = fermStartEntry
-          ? new Date(fermStartEntry.changedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-          : null;
-        const fermEndLabel = fermEndEntry
-          ? new Date(fermEndEntry.changedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-          : null;
+        const fermStartLabel = fermStartEntry ? formatDateTimeShort(fermStartEntry.changedAt) : null;
+        const fermEndLabel = fermEndEntry ? formatDateTimeShort(fermEndEntry.changedAt) : null;
+        const tempRange = (telemetry as any)?.tempRange;
 
         const showTemp = chartSeries === "both" || chartSeries === "temp";
         const showGravity = chartSeries === "both" || chartSeries === "gravity";
@@ -1232,39 +1178,30 @@ export default function BrewSessionDetail() {
                     label={{ value: "■ Ferm end", position: "insideTopRight", fontSize: 9, fill: "#3b82f6", dy: -2 }}
                   />
                 )}
-                {showTemp && (telemetry as any)?.tempRange?.ideal != null && (
+                {showTemp && tempRange?.ideal != null && (
                   <ReferenceLine
                     yAxisId="temp"
-                    y={(() => {
-                      const tr = (telemetry as any).tempRange;
-                      return tr.unit === "C" ? tr.ideal * 9 / 5 + 32 : tr.ideal;
-                    })()}
+                    y={tempRangeToF(tempRange.ideal, tempRange.unit)}
                     stroke="#22c55e"
                     strokeDasharray="5 3"
                     strokeWidth={1.5}
                     label={{ value: "Ideal", position: "insideTopRight", fontSize: 9, fill: "#22c55e" }}
                   />
                 )}
-                {showTemp && (telemetry as any)?.tempRange?.min != null && (
+                {showTemp && tempRange?.min != null && (
                   <ReferenceLine
                     yAxisId="temp"
-                    y={(() => {
-                      const tr = (telemetry as any).tempRange;
-                      return tr.unit === "C" ? tr.min * 9 / 5 + 32 : tr.min;
-                    })()}
+                    y={tempRangeToF(tempRange.min, tempRange.unit)}
                     stroke="#ef4444"
                     strokeDasharray="3 3"
                     strokeWidth={1}
                     label={{ value: "Min", position: "insideBottomRight", fontSize: 9, fill: "#ef4444" }}
                   />
                 )}
-                {showTemp && (telemetry as any)?.tempRange?.max != null && (
+                {showTemp && tempRange?.max != null && (
                   <ReferenceLine
                     yAxisId="temp"
-                    y={(() => {
-                      const tr = (telemetry as any).tempRange;
-                      return tr.unit === "C" ? tr.max * 9 / 5 + 32 : tr.max;
-                    })()}
+                    y={tempRangeToF(tempRange.max, tempRange.unit)}
                     stroke="#ef4444"
                     strokeDasharray="3 3"
                     strokeWidth={1}
@@ -1353,7 +1290,7 @@ export default function BrewSessionDetail() {
             const allReadings = session.readings ?? [];
             const filtered = readingFilter === "all"
               ? allReadings
-              : allReadings.filter((r) => (r as any).source === (readingFilter === "sensor" ? "ispindel" : "manual"));
+              : allReadings.filter((r) => r.source === (readingFilter === "sensor" ? "ispindel" : "manual"));
             const reversed = [...filtered].reverse();
 
             if (reversed.length === 0) {
@@ -1371,11 +1308,11 @@ export default function BrewSessionDetail() {
               <>
                 <div className="space-y-1">
                   {visible.map((reading) => {
-                    const src = (reading as any).source as "manual" | "ispindel" | undefined;
+                    const src = reading.source;
                     return (
                       <div key={reading.id} className="flex items-start gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
                         <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
-                          <span className="text-xs text-muted-foreground">{formatReadingTime(reading.readingAt)}</span>
+                          <span className="text-xs text-muted-foreground">{formatDateTime(reading.readingAt)}</span>
                           <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
                             src === "ispindel"
                               ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
@@ -1390,10 +1327,10 @@ export default function BrewSessionDetail() {
                             const tempF = reading.temperatureFahrenheit;
                             let devEl: React.ReactNode = null;
                             if (tr?.ideal != null) {
-                              const idealF = tr.unit === "C" ? tr.ideal * 9 / 5 + 32 : tr.ideal;
+                              const idealF = tempRangeToF(tr.ideal, tr.unit);
                               const dev = tempF - idealF;
-                              const minF = tr.min != null ? (tr.unit === "C" ? tr.min * 9 / 5 + 32 : tr.min) : null;
-                              const maxF = tr.max != null ? (tr.unit === "C" ? tr.max * 9 / 5 + 32 : tr.max) : null;
+                              const minF = tr.min != null ? tempRangeToF(tr.min, tr.unit) : null;
+                              const maxF = tr.max != null ? tempRangeToF(tr.max, tr.unit) : null;
                               const outOfRange = (minF != null && tempF < minF) || (maxF != null && tempF > maxF);
                               const nearLimit = !outOfRange && ((minF != null && tempF - minF < 2) || (maxF != null && maxF - tempF < 2));
                               const color = outOfRange ? "text-red-600 dark:text-red-400" : nearLimit ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400";
@@ -1408,18 +1345,14 @@ export default function BrewSessionDetail() {
                               </>
                             );
                           })()}
-                          {reading.temperatureFahrenheit == null && null}
                           {reading.gravity != null && (
                             <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
                               <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}
                             </span>
                           )}
                           {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
-                          {reading.notes && src !== "ispindel" && (
-                            <span className="text-muted-foreground text-xs truncate">{reading.notes}</span>
-                          )}
-                          {reading.notes && src === "ispindel" && (
-                            <span className="text-muted-foreground text-xs truncate font-mono">{reading.notes}</span>
+                          {reading.notes && (
+                            <span className={cn("text-muted-foreground text-xs truncate", src === "ispindel" && "font-mono")}>{reading.notes}</span>
                           )}
                         </div>
                         <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">

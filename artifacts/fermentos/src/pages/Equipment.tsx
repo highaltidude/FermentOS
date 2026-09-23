@@ -13,7 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FilterChip } from "@/components/ui/filter-chip";
 import { useToast } from "@/hooks/use-toast";
+import { formatDate } from "@/lib/format";
 
 const CATEGORIES = [
   "Kettle", "Fermenter", "Mash Tun", "Chiller", "Pump", "Keg", "Tap System",
@@ -36,13 +38,6 @@ const emptyForm = () => ({
 });
 
 type EquipmentFormData = ReturnType<typeof emptyForm>;
-
-// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
-function formatDate(d: string | null | undefined) {
-  if (!d) return null;
-  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, day ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 interface EquipmentFormProps {
   form: EquipmentFormData;
@@ -233,13 +228,13 @@ export default function Equipment() {
           <Input className="pl-8 text-sm h-9" placeholder="Search equipment..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <button onClick={() => setCategoryFilter(undefined)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${!categoryFilter ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>
+          <FilterChip active={!categoryFilter} onClick={() => setCategoryFilter(undefined)}>
             All
-          </button>
+          </FilterChip>
           {categories.map((c) => (
-            <button key={c} onClick={() => setCategoryFilter(c === categoryFilter ? undefined : c)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${categoryFilter === c ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>
+            <FilterChip key={c} active={categoryFilter === c} onClick={() => setCategoryFilter(c === categoryFilter ? undefined : c)}>
               {c}
-            </button>
+            </FilterChip>
           ))}
         </div>
       </div>

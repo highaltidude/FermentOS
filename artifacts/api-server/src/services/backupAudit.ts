@@ -13,8 +13,6 @@ import { classifyTables, type BackupAuditResult } from "../lib/backupAudit";
  * endpoint reports it, and POST /admin/update refuses to run below 100%.
  */
 
-export { classifyTables, type BackupAuditResult } from "../lib/backupAudit";
-
 /** Read the live table list and classify it. */
 export async function computeBackupAudit(): Promise<BackupAuditResult> {
   const result = await pool.query<{ table_name: string }>(

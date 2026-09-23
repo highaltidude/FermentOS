@@ -7,7 +7,7 @@ export function calcInsights(
   attenuationPercent: number | null;
   fermentationStatus: string;
   velocityLast24h: number | null;
-} | null {
+} {
   const gravityReadings = readings.filter((r) => r.gravity != null);
   if (gravityReadings.length < 2) {
     return {

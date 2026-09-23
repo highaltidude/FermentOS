@@ -1,10 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import {
   db,
-  appConfigTable,
   inventoryTable,
   recipeIngredientsTable,
 } from "@workspace/db";
+import { getConfigValue, setConfigValue } from "./appConfig";
 
 const FLAG_KEY = "inventory_enforcement_required";
 
@@ -22,21 +22,11 @@ export type InventoryShortage = {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function isInventoryEnforcementEnabled(): Promise<boolean> {
-  const [row] = await db
-    .select()
-    .from(appConfigTable)
-    .where(eq(appConfigTable.key, FLAG_KEY));
-  return row?.value === "true";
+  return (await getConfigValue(FLAG_KEY)) === "true";
 }
 
 export async function setInventoryEnforcementEnabled(value: boolean): Promise<void> {
-  await db
-    .insert(appConfigTable)
-    .values({ key: FLAG_KEY, value: value ? "true" : "false" })
-    .onConflictDoUpdate({
-      target: appConfigTable.key,
-      set: { value: value ? "true" : "false", updatedAt: new Date() },
-    });
+  await setConfigValue(FLAG_KEY, value ? "true" : "false");
 }
 
 /**

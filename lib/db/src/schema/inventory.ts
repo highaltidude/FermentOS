@@ -1,6 +1,4 @@
 import { pgTable, serial, text, real, timestamp, date } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 import { ingredientTypeEnum } from "./recipes";
 
 export const maltTypeEnum = ["lme", "dme", "all_grain"] as const;
@@ -21,6 +19,4 @@ export const inventoryTable = pgTable("inventory", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertInventorySchema = createInsertSchema(inventoryTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertInventory = z.infer<typeof insertInventorySchema>;
 export type InventoryItem = typeof inventoryTable.$inferSelect;

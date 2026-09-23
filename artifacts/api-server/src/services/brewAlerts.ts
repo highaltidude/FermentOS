@@ -1,6 +1,8 @@
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable, appConfigTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable } from "@workspace/db";
 import { eq, isNotNull, and, gte, lte } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
+import { batteryWarningLevel } from "../lib/batteryUtil";
+import { getConfigValue } from "./appConfig";
 
 /**
  * Brew telemetry and alert computation.
@@ -74,8 +76,8 @@ export function buildAlerts(
   }
 
   const pct = reading?.batteryPercentEstimate ?? null;
-  if (pct != null && pct < 20) {
-    const level = pct < 10 ? "critical" : "warning";
+  const level = pct != null ? batteryWarningLevel(pct) : null;
+  if (pct != null && level) {
     alerts.push({
       type: "battery_low",
       message: `Battery ${level}: ${reading!.battery != null ? `${Number(reading!.battery).toFixed(2)}V ` : ""}(~${Math.round(pct)}%)`,
@@ -197,8 +199,7 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
     }
   }
 
-  const [tempUnitRow] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, "ferment_temp_unit"));
-  const tempUnit = (tempUnitRow?.value === "C" ? "C" : "F") as "F" | "C";
+  const tempUnit = ((await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F") as "F" | "C";
 
   const tempRange: TempRange = (tempMin != null || tempMax != null || tempIdeal != null)
     ? { min: tempMin, max: tempMax, ideal: tempIdeal, unit: tempUnit }

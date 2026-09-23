@@ -1,6 +1,4 @@
 import { pgTable, serial, text, real, integer, boolean, timestamp, date } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 import { recipesTable } from "./recipes";
 
 // Lifecycle stages: brew_day → fermenting → conditioning → packaged.
@@ -8,6 +6,10 @@ import { recipesTable } from "./recipes";
 // rows from older schemas (planned, scheduled, brewing, complete) into the
 // new values.
 export const brewStatusEnum = ["brew_day", "fermenting", "conditioning", "packaged"] as const;
+
+// Every stage before packaged. packaged is terminal — the beer is in the keg,
+// so it no longer counts as an active brew or warrants alerts.
+export const ACTIVE_BREW_STATUSES: readonly (typeof brewStatusEnum)[number][] = ["brew_day", "fermenting", "conditioning"];
 
 // How a finished batch was packaged. Null until the batch is packaged — and
 // still null for batches packaged before this was tracked.
@@ -77,8 +79,6 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertBrewSessionSchema = createInsertSchema(brewSessionsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertBrewSession = z.infer<typeof insertBrewSessionSchema>;
 export type BrewSession = typeof brewSessionsTable.$inferSelect;
 
 export const fermentationReadingSourceEnum = ["manual", "ispindel"] as const;
@@ -94,8 +94,6 @@ export const fermentationReadingsTable = pgTable("fermentation_readings", {
   source: text("source", { enum: fermentationReadingSourceEnum }).notNull().default("manual"),
 });
 
-export const insertFermentationReadingSchema = createInsertSchema(fermentationReadingsTable).omit({ id: true });
-export type InsertFermentationReading = z.infer<typeof insertFermentationReadingSchema>;
 export type FermentationReading = typeof fermentationReadingsTable.$inferSelect;
 
 export const brewSessionStatusLogTable = pgTable("brew_session_status_log", {

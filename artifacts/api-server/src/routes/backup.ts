@@ -1,17 +1,25 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import cron, { type ScheduledTask } from "node-cron";
 import multer from "multer";
 import SftpClient from "ssh2-sftp-client";
-import { db } from "@workspace/db";
-import { appConfigTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
 import { computeBackupAudit } from "../services/backupAudit";
-import { logger } from "../lib/logger.js";
-import { runRetentionCleanup, pruneSystemHealthSamples } from "../services/readingRetention.js";
+import {
+  type BackupConfig,
+  type BackupTarget,
+  type SftpConfig,
+  DEFAULT_LOCAL_PATH,
+  backupFilename,
+  getConfig,
+  getStatus,
+  localBackupDir,
+  runBackup,
+  runDump,
+  saveConfig,
+  startScheduler,
+} from "../services/backup.js";
 
 const router = Router();
 
@@ -24,35 +32,7 @@ const restoreUpload = multer({
   limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB cap — pg_dump output for a homelab brew DB is tiny
 });
 
-export type SftpConfig = {
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  remotePath: string;
-  prefix: string;
-};
-
-export type BackupTarget = "sftp" | "local";
-
-export type BackupConfig = {
-  sftp: Partial<SftpConfig>;
-  schedule: "none" | "daily" | "weekly";
-  /** Local directory where backups are written when target = "local". */
-  localPath?: string;
-  /** Days to keep backups. 0 / undefined = keep forever. Clamped 0–60 when set. */
-  retentionDays?: number;
-  /** Run a backup right before applying a software update. */
-  backupBeforeUpdate?: "none" | "sftp" | "local";
-};
-
-export type BackupStatus = {
-  lastRun: string | null;
-  lastResult: "success" | "error" | null;
-  lastMessage: string | null;
-};
-
-export type LocalBackupFile = {
+type LocalBackupFile = {
   name: string;
   /** File size in bytes. */
   size: number;
@@ -61,285 +41,6 @@ export type LocalBackupFile = {
   /** ISO timestamp — file birthtime (may equal mtime on some filesystems). */
   createdAt: string;
 };
-
-// Re-exported for existing importers; the definition now lives beside the
-// logic in services/backupAudit.ts, which POST /admin/update also uses.
-export type { BackupAuditResult } from "../services/backupAudit";
-
-const CONFIG_KEY = "backup_config";
-const STATUS_KEY = "backup_status";
-// Mirrors the uploads convention in app.ts: cwd is the repo root under systemd
-// and /app in the container, so one expression is correct in both. It must not
-// come from os.homedir() — the image creates the service account with
-// `adduser --system`, which leaves HOME as /nonexistent, so every local backup
-// died with EACCES before a single byte was written (#155).
-const DEFAULT_LOCAL_PATH = path.resolve(process.cwd(), "data/backups");
-
-// The literal marker Debian's `adduser --system` leaves as a home directory.
-const NONEXISTENT_HOME_PREFIX = "/nonexistent";
-
-function defaultConfig(): BackupConfig {
-  return { sftp: {}, schedule: "none", localPath: DEFAULT_LOCAL_PATH, retentionDays: 0, backupBeforeUpdate: "none" };
-}
-
-export async function getConfig(): Promise<BackupConfig> {
-  const row = await db.select().from(appConfigTable).where(eq(appConfigTable.key, CONFIG_KEY)).limit(1);
-  if (!row[0]?.value) return defaultConfig();
-  try {
-    const parsed = JSON.parse(row[0].value) as Partial<BackupConfig>;
-    return { ...defaultConfig(), ...parsed, sftp: parsed.sftp ?? {} };
-  } catch { return defaultConfig(); }
-}
-
-async function saveConfig(cfg: BackupConfig) {
-  await db.insert(appConfigTable).values({ key: CONFIG_KEY, value: JSON.stringify(cfg) })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: JSON.stringify(cfg), updatedAt: new Date() } });
-}
-
-async function getStatus(): Promise<BackupStatus> {
-  const row = await db.select().from(appConfigTable).where(eq(appConfigTable.key, STATUS_KEY)).limit(1);
-  if (!row[0]?.value) return { lastRun: null, lastResult: null, lastMessage: null };
-  try { return JSON.parse(row[0].value) as BackupStatus; } catch { return { lastRun: null, lastResult: null, lastMessage: null }; }
-}
-
-async function saveStatus(s: BackupStatus) {
-  await db.insert(appConfigTable).values({ key: STATUS_KEY, value: JSON.stringify(s) })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: JSON.stringify(s), updatedAt: new Date() } });
-}
-
-async function runDump(): Promise<string> {
-  const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) throw new Error("DATABASE_URL not set");
-  const tmpFile = path.join(os.tmpdir(), `fermentos_${Date.now()}.sql`);
-  execSync(`pg_dump "${dbUrl}" -f "${tmpFile}"`, { timeout: 60000 });
-  return tmpFile;
-}
-
-function backupFilename(prefix: string): string {
-  return `${prefix || "fermentos"}_${new Date().toISOString().replace(/[:.]/g, "-")}.sql`;
-}
-
-async function pushToSftp(localFile: string, cfg: BackupConfig): Promise<string> {
-  const sftp = cfg.sftp;
-  if (!sftp.host || !sftp.username) throw new Error("SFTP host and username are required");
-  const client = new SftpClient();
-  await client.connect({
-    host: sftp.host,
-    port: sftp.port ?? 22,
-    username: sftp.username,
-    password: sftp.password,
-  });
-  const filename = backupFilename(sftp.prefix || "fermentos");
-  const remotePath = sftp.remotePath ? `${sftp.remotePath.replace(/\/$/, "")}/${filename}` : `/${filename}`;
-  try {
-    await client.put(localFile, remotePath);
-    if (cfg.retentionDays && cfg.retentionDays > 0) {
-      try {
-        await pruneSftp(client, sftp, cfg.retentionDays);
-      } catch (e) {
-        logger.warn({ err: e }, "SFTP prune failed (backup itself succeeded)");
-      }
-    }
-  } finally {
-    await client.end();
-  }
-  return remotePath;
-}
-
-async function pushToLocal(localFile: string, cfg: BackupConfig): Promise<string> {
-  const dir = cfg.localPath || DEFAULT_LOCAL_PATH;
-  fs.mkdirSync(dir, { recursive: true });
-  const filename = backupFilename(cfg.sftp.prefix || "fermentos");
-  const dest = path.join(dir, filename);
-  fs.copyFileSync(localFile, dest);
-  if (cfg.retentionDays && cfg.retentionDays > 0) {
-    try {
-      pruneLocal(dir, cfg.sftp.prefix || "fermentos", cfg.retentionDays);
-    } catch (e) {
-      logger.warn({ err: e }, "Local prune failed (backup itself succeeded)");
-    }
-  }
-  return dest;
-}
-
-function pruneLocal(dir: string, prefix: string, retentionDays: number): number {
-  if (!fs.existsSync(dir)) return 0;
-  const cutoff = Date.now() - retentionDays * 86_400_000;
-  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_.*\\.sql$`);
-  let deleted = 0;
-  for (const name of fs.readdirSync(dir)) {
-    if (!re.test(name)) continue;
-    const full = path.join(dir, name);
-    try {
-      const stat = fs.statSync(full);
-      if (stat.mtimeMs < cutoff) {
-        fs.unlinkSync(full);
-        deleted += 1;
-      }
-    } catch { /* ignore individual file errors */ }
-  }
-  if (deleted > 0) logger.info({ dir, deleted, retentionDays }, "Pruned old local backups");
-  return deleted;
-}
-
-async function pruneSftp(client: SftpClient, sftp: Partial<SftpConfig>, retentionDays: number): Promise<number> {
-  const remoteDir = sftp.remotePath || "/";
-  const prefix = sftp.prefix || "fermentos";
-  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_.*\\.sql$`);
-  const cutoffMs = Date.now() - retentionDays * 86_400_000;
-  let deleted = 0;
-  const list = await client.list(remoteDir);
-  for (const item of list) {
-    if (item.type !== "-" || !re.test(item.name)) continue;
-    if (item.modifyTime < cutoffMs) {
-      const full = `${remoteDir.replace(/\/$/, "")}/${item.name}`;
-      try {
-        await client.delete(full);
-        deleted += 1;
-      } catch { /* ignore individual file errors */ }
-    }
-  }
-  if (deleted > 0) logger.info({ remoteDir, deleted, retentionDays }, "Pruned old SFTP backups");
-  return deleted;
-}
-
-export async function runBackup(target: BackupTarget = "sftp"): Promise<{ ok: boolean; message: string }> {
-  const cfg = await getConfig();
-  let tmpFile: string | null = null;
-  try {
-    tmpFile = await runDump();
-    const dest = target === "local" ? await pushToLocal(tmpFile, cfg) : await pushToSftp(tmpFile, cfg);
-    const msg = target === "local" ? `Saved to ${dest}` : `Uploaded to ${dest}`;
-    await saveStatus({ lastRun: new Date().toISOString(), lastResult: "success", lastMessage: msg });
-    logger.info({ dest, target }, "Backup succeeded");
-    return { ok: true, message: msg };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await saveStatus({ lastRun: new Date().toISOString(), lastResult: "error", lastMessage: msg });
-    logger.error({ err, target }, "Backup failed");
-    return { ok: false, message: msg };
-  } finally {
-    if (tmpFile) try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
-  }
-}
-
-async function runScheduledBackup(): Promise<void> {
-  const cfg = await getConfig();
-
-  // Try SFTP first if host is configured
-  if (cfg.sftp?.host && cfg.sftp?.username) {
-    const result = await runBackup("sftp");
-    if (result.ok) {
-      logger.info("Scheduled backup succeeded via SFTP");
-      return;
-    }
-    // SFTP failed — fall through to local
-    logger.warn({ message: result.message }, "Scheduled SFTP backup failed, falling back to local");
-
-    // Save an interim status so the UI shows what happened
-    await saveStatus({
-      lastRun: new Date().toISOString(),
-      lastResult: "error",
-      lastMessage: `SFTP failed (${result.message}) — attempting local fallback`,
-    });
-  }
-
-  // No SFTP configured or SFTP failed — run local
-  const localResult = await runBackup("local");
-  if (localResult.ok) {
-    // Overwrite status with a message that explains what happened
-    const usedFallback = cfg.sftp?.host && cfg.sftp?.username;
-    await saveStatus({
-      lastRun: new Date().toISOString(),
-      lastResult: "success",
-      lastMessage: usedFallback
-        ? `SFTP unavailable — ${localResult.message}`
-        : localResult.message,
-    });
-    logger.info({ message: localResult.message }, "Scheduled backup succeeded via local");
-  } else {
-    await saveStatus({
-      lastRun: new Date().toISOString(),
-      lastResult: "error",
-      lastMessage: `Both SFTP and local backup failed: ${localResult.message}`,
-    });
-    logger.error({ message: localResult.message }, "Scheduled backup failed on both SFTP and local");
-  }
-}
-
-let activeCronJob: ScheduledTask | null = null;
-
-function cronExpression(schedule: BackupConfig["schedule"]): string | null {
-  if (schedule === "daily") return "0 2 * * *";
-  if (schedule === "weekly") return "0 2 * * 0";
-  return null;
-}
-
-export function startScheduler(schedule: BackupConfig["schedule"]) {
-  if (activeCronJob) { activeCronJob.stop(); activeCronJob = null; }
-  const expr = cronExpression(schedule);
-  if (!expr) { logger.info("Backup scheduler disabled"); return; }
-  activeCronJob = cron.schedule(expr, () => {
-    logger.info({ schedule }, "Running scheduled backup");
-    runScheduledBackup().catch((e) => logger.error({ e }, "Scheduled backup error"));
-  });
-  logger.info({ schedule, expr }, "Backup scheduler started");
-}
-
-/**
- * Repairs a stored localPath that was derived from a home directory that does
- * not exist. Changing DEFAULT_LOCAL_PATH alone would only help fresh installs:
- * getConfig spreads the defaults *under* the saved row, so an install that ever
- * saved backup settings has the broken path persisted and would keep using it.
- *
- * Scoped to the /nonexistent marker on purpose. A path the user actually chose
- * is never second-guessed, and after one rewrite this no longer matches.
- */
-async function repairNonexistentLocalPath(): Promise<void> {
-  const cfg = await getConfig();
-  if (!cfg.localPath?.startsWith(NONEXISTENT_HOME_PREFIX)) return;
-
-  const from = cfg.localPath;
-  await saveConfig({ ...cfg, localPath: DEFAULT_LOCAL_PATH });
-  logger.warn(
-    { from, to: DEFAULT_LOCAL_PATH },
-    "Repaired backup localPath that pointed inside a nonexistent home directory",
-  );
-}
-
-/**
- * Surfaces an unwritable backup directory at boot rather than at 2am. Only
- * warns: silently redirecting dumps somewhere other than the configured path
- * would mean the UI shows one location while backups land in another.
- */
-function warnIfLocalPathUnwritable(dir: string): void {
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    fs.accessSync(dir, fs.constants.W_OK);
-  } catch (e) {
-    logger.warn({ err: e, dir }, "Local backup directory is not writable — local backups will fail");
-  }
-}
-
-export async function initBackupScheduler() {
-  try {
-    await repairNonexistentLocalPath();
-    const cfg = await getConfig();
-    warnIfLocalPathUnwritable(cfg.localPath || DEFAULT_LOCAL_PATH);
-    startScheduler(cfg.schedule);
-  } catch (e) {
-    logger.error({ e }, "Failed to init backup scheduler");
-  }
-
-  cron.schedule("0 3 * * *", () => {
-    runRetentionCleanup()
-      .then((result) => logger.info(result, "Nightly reading retention cleanup"))
-      .catch((e) => logger.error({ e }, "Reading retention cleanup error"));
-    pruneSystemHealthSamples()
-      .then((result) => logger.info(result, "Nightly system health sample cleanup"))
-      .catch((e) => logger.error({ e }, "System health sample cleanup error"));
-  });
-}
 
 // ── Security helpers ───────────────────────────────────────────────────────
 
@@ -363,6 +64,30 @@ function resolveLocalBackupPath(dir: string, filename: string): string | null {
   // Must stay strictly inside the directory (path.sep prevents base == full).
   if (!resolved.startsWith(base + path.sep)) return null;
   return resolved;
+}
+
+/**
+ * Validate a :filename param and resolve it to an existing file in the local
+ * backup directory. On failure the error response has already been sent and
+ * this returns null.
+ */
+async function resolveExistingLocalBackup(filename: string, res: Response): Promise<string | null> {
+  if (!isValidBackupFilename(filename)) {
+    res.status(400).json({ error: "Invalid filename" });
+    return null;
+  }
+
+  const cfg = await getConfig();
+  const full = resolveLocalBackupPath(localBackupDir(cfg), filename);
+  if (!full) {
+    res.status(400).json({ error: "Invalid path" });
+    return null;
+  }
+  if (!fs.existsSync(full)) {
+    res.status(404).json({ error: "File not found" });
+    return null;
+  }
+  return full;
 }
 
 // ── Restore helper (shared by upload-restore and local-file-restore) ───────
@@ -498,7 +223,7 @@ router.get("/backup/download", async (req, res) => {
   let tmpFile: string | null = null;
   try {
     tmpFile = await runDump();
-    const filename = `fermentos_${new Date().toISOString().replace(/[:.]/g, "-")}.sql`;
+    const filename = backupFilename("fermentos");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Type", "application/sql");
     const stream = fs.createReadStream(tmpFile);
@@ -519,7 +244,7 @@ router.get("/backup/download", async (req, res) => {
  */
 router.get("/backup/local-files", async (req, res) => {
   const cfg = await getConfig();
-  const dir = cfg.localPath || DEFAULT_LOCAL_PATH;
+  const dir = localBackupDir(cfg);
 
   if (!fs.existsSync(dir)) {
     return res.json({ files: [] as LocalBackupFile[], dir });
@@ -554,15 +279,8 @@ router.get("/backup/local-files", async (req, res) => {
  */
 router.get("/backup/local-files/:filename/download", async (req, res) => {
   const { filename } = req.params;
-  if (!isValidBackupFilename(filename)) {
-    return res.status(400).json({ error: "Invalid filename" });
-  }
-
-  const cfg = await getConfig();
-  const dir = cfg.localPath || DEFAULT_LOCAL_PATH;
-  const full = resolveLocalBackupPath(dir, filename);
-  if (!full) return res.status(400).json({ error: "Invalid path" });
-  if (!fs.existsSync(full)) return res.status(404).json({ error: "File not found" });
+  const full = await resolveExistingLocalBackup(filename, res);
+  if (!full) return;
 
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.setHeader("Content-Type", "application/sql");
@@ -576,15 +294,8 @@ router.get("/backup/local-files/:filename/download", async (req, res) => {
  */
 router.delete("/backup/local-files/:filename", async (req, res) => {
   const { filename } = req.params;
-  if (!isValidBackupFilename(filename)) {
-    return res.status(400).json({ error: "Invalid filename" });
-  }
-
-  const cfg = await getConfig();
-  const dir = cfg.localPath || DEFAULT_LOCAL_PATH;
-  const full = resolveLocalBackupPath(dir, filename);
-  if (!full) return res.status(400).json({ error: "Invalid path" });
-  if (!fs.existsSync(full)) return res.status(404).json({ error: "File not found" });
+  const full = await resolveExistingLocalBackup(filename, res);
+  if (!full) return;
 
   try {
     fs.unlinkSync(full);
@@ -602,15 +313,8 @@ router.delete("/backup/local-files/:filename", async (req, res) => {
  */
 router.post("/backup/local-files/:filename/restore", async (req, res) => {
   const { filename } = req.params;
-  if (!isValidBackupFilename(filename)) {
-    return res.status(400).json({ error: "Invalid filename" });
-  }
-
-  const cfg = await getConfig();
-  const dir = cfg.localPath || DEFAULT_LOCAL_PATH;
-  const full = resolveLocalBackupPath(dir, filename);
-  if (!full) return res.status(400).json({ error: "Invalid path" });
-  if (!fs.existsSync(full)) return res.status(404).json({ error: "File not found" });
+  const full = await resolveExistingLocalBackup(filename, res);
+  if (!full) return;
 
   try {
     const result = await runRestoreFromFile(full);

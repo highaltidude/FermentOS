@@ -1,30 +1,22 @@
 import { Link } from "wouter";
-import { useEffect, useState } from "react";
 import { Beer, BookOpen, Package, Thermometer, Droplets, ArrowRight, Plus, Flame } from "lucide-react";
 import {
   useGetDashboardSummary,
   useGetActiveBrews,
   useListBrewSessions,
   getListBrewSessionsQueryKey,
+  useGetHaStatus,
+  getGetHaStatusQueryKey,
 } from "@workspace/api-client-react";
 import { boilPhase, boilRemainingMs, formatCountdown } from "@/lib/boil";
+import { STATUS_LABELS } from "@/lib/brewStatus";
+import { formatDate } from "@/lib/format";
+import { estimateAbv } from "@/lib/brewMath";
+import { useNow } from "@/hooks/useNow";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/ui/score-picker";
-
-const STATUS_COLORS: Record<string, string> = {
-  brew_day: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/40",
-  fermenting: "bg-green-100 text-green-800 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800/40",
-  conditioning: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/40",
-  packaged: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/40",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  brew_day: "Brew Day",
-  fermenting: "Fermenting",
-  conditioning: "Conditioning",
-  packaged: "Packaged",
-};
+import { BrewStatusBadge } from "@/components/BrewStatusBadge";
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: number | string; icon: React.ElementType; color: string }) {
   return (
@@ -38,19 +30,6 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: n
       </div>
     </div>
   );
-}
-
-function parseLocalDate(d: string): Date {
-  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, day ?? 1);
-}
-
-function formatDate(d: string) {
-  return parseLocalDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function estimateAbv(og: number, fg: number): number {
-  return (og - fg) * 131.25;
 }
 
 function formatInsightStatus(status: string): string {
@@ -68,12 +47,7 @@ function BoilCard() {
     { query: { refetchInterval: 30_000, queryKey: getListBrewSessionsQueryKey({ status: "brew_day" }) } },
   );
   const anyRunning = !!sessions?.some((s) => boilPhase(s) === "running");
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!anyRunning) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [anyRunning]);
+  const now = useNow(anyRunning, 1000);
 
   if (!sessions?.length) return null;
 
@@ -113,19 +87,9 @@ export default function Dashboard() {
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
   const { data: activeBrews, isLoading: brewsLoading } = useGetActiveBrews();
 
-  const [sensors, setSensors] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchSensors = () => {
-      fetch("/api/ha/status")
-        .then((r) => r.json())
-        .then((data) => setSensors(Array.isArray(data) ? data : []))
-        .catch(() => {});
-    };
-    fetchSensors();
-    const interval = setInterval(fetchSensors, 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data: sensors = [] } = useGetHaStatus({
+    query: { refetchInterval: 60_000, queryKey: getGetHaStatusQueryKey() },
+  });
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -179,9 +143,7 @@ export default function Dashboard() {
                   <div className="px-4 py-3 hover:bg-muted transition-colors cursor-pointer">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm font-medium text-foreground">{brew.recipeName}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[brew.status] ?? ""}`}>
-                        {STATUS_LABELS[brew.status] ?? brew.status}
-                      </span>
+                      <BrewStatusBadge status={brew.status} />
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>Day {brew.daysSinceBrew}</span>
@@ -282,9 +244,7 @@ export default function Dashboard() {
                   <div className="px-4 py-3 hover:bg-muted transition-colors cursor-pointer">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-foreground">{session.recipeName}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[session.status] ?? ""}`}>
-                        {STATUS_LABELS[session.status] ?? session.status}
-                      </span>
+                      <BrewStatusBadge status={session.status} />
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{formatDate(session.brewDate)}</span>

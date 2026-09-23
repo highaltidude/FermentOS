@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useNow } from "@/hooks/useNow";
+import { getErrorMessage } from "@/lib/utils";
 import {
   boilPhase,
   boilRemainingMs,
@@ -27,17 +29,6 @@ import {
   type BoilAlertGroup,
 } from "@/lib/boil";
 import { unlockBoilAudio, boilBeep, boilVibrate, useWakeLock, wakeLockSupported } from "@/lib/boilAlerts";
-
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    setNow(Date.now());
-    const t = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(t);
-  }, [active]);
-  return now;
-}
 
 function groupLabel(g: BoilAlertGroup): string {
   return g.flameout ? "Flameout" : `${g.atMinutesRemaining} min`;
@@ -126,7 +117,7 @@ export default function BoilSession() {
   const { data: notify } = useGetNotificationSettings();
 
   const phase = session ? boilPhase(session) : "idle";
-  const now = useNow(phase === "running");
+  const now = useNow(phase === "running", 250);
   const wakeLockHeld = useWakeLock(phase === "running" || phase === "paused");
 
   const ingredients = recipe?.ingredients ?? [];
@@ -149,7 +140,7 @@ export default function BoilSession() {
         qc.invalidateQueries({ queryKey: getListBrewSessionsQueryKey() });
       },
       onError: (e: unknown) =>
-        toast({ title: "Boil timer not updated", description: e instanceof Error ? e.message : String(e), variant: "destructive" }),
+        toast({ title: "Boil timer not updated", description: getErrorMessage(e), variant: "destructive" }),
     },
   });
   const send = (action: BoilAction, extra: { boilMinutes?: number; doneAdditionIds?: number[] } = {}) =>

@@ -1,13 +1,28 @@
 import { Router } from "express";
 import { eq, asc } from "drizzle-orm";
-import { db, beerStylesTable, appConfigTable } from "@workspace/db";
-import { CreateBeerStyleBody, DeleteBeerStyleParams } from "@workspace/api-zod";
+import { db, beerStylesTable } from "@workspace/db";
+import {
+  CreateBeerStyleBody,
+  SetNotificationSettingsBody,
+  SetUnitSystemBody,
+  SetFermentTempUnitBody,
+  SetBreweryNameBody,
+} from "@workspace/api-zod";
+import { parseIdParam } from "../lib/http";
 import {
   isInventoryEnforcementEnabled,
   setInventoryEnforcementEnabled,
 } from "../services/inventoryEnforcement";
-import { getUnitSystem, setUnitSystem, isUnitSystem } from "../services/unitSystem";
+import { getUnitSystem, setUnitSystem } from "../services/unitSystem";
 import { getRetentionDays, setRetentionDays } from "../services/readingRetention.js";
+import { getConfigValue, setConfigValue } from "../services/appConfig";
+import { getBreweryName, setBreweryName } from "../services/breweryName";
+import {
+  getTempAlertReadings,
+  setTempAlertReadings,
+  MIN_TEMP_ALERT_READINGS,
+  MAX_TEMP_ALERT_READINGS,
+} from "../services/tempAlertReadings";
 import {
   getNotifyConfig,
   setNotifyConfig,
@@ -16,7 +31,6 @@ import {
   type AlertType,
   type NotifyChannel,
 } from "../services/notifications.js";
-import { SetNotificationSettingsBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -41,11 +55,12 @@ router.get("/settings/unit-system", async (_req, res) => {
 
 router.put("/settings/unit-system", async (req, res) => {
   const { system } = req.body as { system: unknown };
-  if (!isUnitSystem(system)) {
+  const parsed = SetUnitSystemBody.shape.system.safeParse(system);
+  if (!parsed.success) {
     return res.status(400).json({ error: "system must be 'imperial', 'metric', or 'both'" });
   }
-  await setUnitSystem(system);
-  return res.json({ system });
+  await setUnitSystem(parsed.data);
+  return res.json({ system: parsed.data });
 });
 
 router.get("/settings/styles", async (_req, res) => {
@@ -68,10 +83,10 @@ router.post("/settings/styles", async (req, res) => {
 });
 
 router.delete("/settings/styles/:id", async (req, res) => {
-  const params = DeleteBeerStyleParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
-  await db.delete(beerStylesTable).where(eq(beerStylesTable.id, params.data.id));
+  await db.delete(beerStylesTable).where(eq(beerStylesTable.id, id));
   return res.status(204).send();
 });
 
@@ -92,27 +107,18 @@ router.put("/settings/reading-retention", async (req, res) => {
   return res.json({ days: saved });
 });
 
-const BREWERY_NAME_KEY = "brewery_name";
-
 router.get("/settings/brewery-name", async (_req, res) => {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, BREWERY_NAME_KEY));
-  return res.json({ name: row?.value ?? null });
+  return res.json({ name: await getBreweryName() });
 });
 
 router.put("/settings/brewery-name", async (req, res) => {
   const { name } = req.body as { name: unknown };
-  if (name !== null && name !== undefined && typeof name !== "string") {
+  const parsed = SetBreweryNameBody.shape.name.safeParse(name);
+  if (!parsed.success) {
     return res.status(400).json({ error: "name must be a string or null" });
   }
-  const trimmed = typeof name === "string" ? name.trim() : null;
-  if (trimmed) {
-    await db
-      .insert(appConfigTable)
-      .values({ key: BREWERY_NAME_KEY, value: trimmed })
-      .onConflictDoUpdate({ target: appConfigTable.key, set: { value: trimmed, updatedAt: new Date() } });
-  } else {
-    await db.delete(appConfigTable).where(eq(appConfigTable.key, BREWERY_NAME_KEY));
-  }
+  const trimmed = typeof parsed.data === "string" ? parsed.data.trim() : null;
+  await setBreweryName(trimmed || null);
   return res.json({ name: trimmed || null });
 });
 
@@ -120,8 +126,8 @@ const VALID_DEFAULT_READINGS = new Set([5, 10, 25, 50, 100]);
 const DEFAULT_READINGS_KEY = "default_readings_shown";
 
 router.get("/settings/default-readings-shown", async (_req, res) => {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, DEFAULT_READINGS_KEY));
-  const parsed = row?.value ? parseInt(row.value, 10) : 5;
+  const value = await getConfigValue(DEFAULT_READINGS_KEY);
+  const parsed = value ? parseInt(value, 10) : 5;
   const count = Number.isFinite(parsed) && VALID_DEFAULT_READINGS.has(parsed) ? parsed : 5;
   return res.json({ count });
 });
@@ -131,67 +137,55 @@ router.put("/settings/default-readings-shown", async (req, res) => {
   if (typeof count !== "number" || !VALID_DEFAULT_READINGS.has(count)) {
     return res.status(400).json({ error: "count must be 5, 10, 25, 50, or 100" });
   }
-  await db
-    .insert(appConfigTable)
-    .values({ key: DEFAULT_READINGS_KEY, value: String(count) })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: String(count), updatedAt: new Date() } });
+  await setConfigValue(DEFAULT_READINGS_KEY, String(count));
   return res.json({ count });
 });
 
-const VALID_FERMENT_TEMP_UNITS = new Set(["F", "C"]);
 const FERMENT_TEMP_UNIT_KEY = "ferment_temp_unit";
-const TEMP_ALERT_READINGS_KEY = "temp_alert_consecutive_readings";
 
 router.get("/settings/ferment-temp-unit", async (_req, res) => {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, FERMENT_TEMP_UNIT_KEY));
-  return res.json({ unit: row?.value ?? "F" });
+  return res.json({ unit: (await getConfigValue(FERMENT_TEMP_UNIT_KEY)) ?? "F" });
 });
 
 router.put("/settings/ferment-temp-unit", async (req, res) => {
   const { unit } = req.body as { unit: unknown };
-  if (typeof unit !== "string" || !VALID_FERMENT_TEMP_UNITS.has(unit)) {
+  const parsed = SetFermentTempUnitBody.shape.unit.safeParse(unit);
+  if (!parsed.success) {
     return res.status(400).json({ error: "unit must be 'F' or 'C'" });
   }
-  await db
-    .insert(appConfigTable)
-    .values({ key: FERMENT_TEMP_UNIT_KEY, value: unit })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: unit, updatedAt: new Date() } });
-  return res.json({ unit });
+  await setConfigValue(FERMENT_TEMP_UNIT_KEY, parsed.data);
+  return res.json({ unit: parsed.data });
 });
 
 router.get("/settings/temp-alert-readings", async (_req, res) => {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, TEMP_ALERT_READINGS_KEY));
-  const parsed = row?.value ? parseInt(row.value, 10) : 2;
-  const count = Number.isFinite(parsed) && parsed >= 2 && parsed <= 10 ? parsed : 2;
+  const count = await getTempAlertReadings();
   return res.json({ count });
 });
 
 router.put("/settings/temp-alert-readings", async (req, res) => {
   const { count } = req.body as { count: unknown };
-  if (typeof count !== "number" || !Number.isInteger(count) || count < 2 || count > 10) {
+  if (
+    typeof count !== "number" ||
+    !Number.isInteger(count) ||
+    count < MIN_TEMP_ALERT_READINGS ||
+    count > MAX_TEMP_ALERT_READINGS
+  ) {
     return res.status(400).json({ error: "count must be an integer between 2 and 10" });
   }
-  await db
-    .insert(appConfigTable)
-    .values({ key: TEMP_ALERT_READINGS_KEY, value: String(count) })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: String(count), updatedAt: new Date() } });
+  await setTempAlertReadings(count);
   return res.json({ count });
 });
 
 const AUTO_CONDITIONING_KEY = "auto_advance_to_conditioning";
 
 router.get("/settings/auto-conditioning", async (_req, res) => {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, AUTO_CONDITIONING_KEY));
-  return res.json({ enabled: row?.value === "true" });
+  return res.json({ enabled: (await getConfigValue(AUTO_CONDITIONING_KEY)) === "true" });
 });
 
 router.put("/settings/auto-conditioning", async (req, res) => {
   const { enabled } = req.body as { enabled: unknown };
   if (typeof enabled !== "boolean") return res.status(400).json({ error: "Body must be { enabled: boolean }" });
-  await db
-    .insert(appConfigTable)
-    .values({ key: AUTO_CONDITIONING_KEY, value: String(enabled) })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value: String(enabled), updatedAt: new Date() } });
+  await setConfigValue(AUTO_CONDITIONING_KEY, String(enabled));
   return res.json({ enabled });
 });
 

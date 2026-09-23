@@ -27,7 +27,7 @@ export function boilPhase(s: BoilFields): BoilPhase {
   return "running";
 }
 
-export function boilElapsedMs(s: BoilFields, now: number): number {
+function boilElapsedMs(s: BoilFields, now: number): number {
   if (!s.boilStartedAt) return 0;
   const until = s.boilEndedAt ? ms(s.boilEndedAt) : s.boilPausedAt ? ms(s.boilPausedAt) : now;
   return Math.max(0, until - ms(s.boilStartedAt) - (s.boilPausedMs ?? 0));

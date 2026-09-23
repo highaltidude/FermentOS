@@ -1,6 +1,4 @@
 import { pgTable, serial, text, real, integer, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 
 export const recipesTable = pgTable("recipes", {
   id: serial("id").primaryKey(),
@@ -28,8 +26,6 @@ export const recipesTable = pgTable("recipes", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertRecipeSchema = createInsertSchema(recipesTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertRecipe = z.infer<typeof insertRecipeSchema>;
 export type Recipe = typeof recipesTable.$inferSelect;
 
 export const ingredientTypeEnum = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"] as const;
@@ -47,8 +43,6 @@ export const recipeIngredientsTable = pgTable("recipe_ingredients", {
   notes: text("notes"),
 });
 
-export const insertRecipeIngredientSchema = createInsertSchema(recipeIngredientsTable).omit({ id: true });
-export type InsertRecipeIngredient = z.infer<typeof insertRecipeIngredientSchema>;
 export type RecipeIngredient = typeof recipeIngredientsTable.$inferSelect;
 
 export const stepPhaseEnum = ["mash", "boil", "fermentation", "conditioning", "packaging", "other"] as const;
@@ -62,6 +56,4 @@ export const recipeStepsTable = pgTable("recipe_steps", {
   durationMinutes: integer("duration_minutes"),
 });
 
-export const insertRecipeStepSchema = createInsertSchema(recipeStepsTable).omit({ id: true });
-export type InsertRecipeStep = z.infer<typeof insertRecipeStepSchema>;
 export type RecipeStep = typeof recipeStepsTable.$inferSelect;

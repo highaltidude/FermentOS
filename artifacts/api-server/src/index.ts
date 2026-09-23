@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { initBackupScheduler } from "./routes/backup";
+import { initBackupScheduler } from "./services/backup";
+import { startRetentionCleanup } from "./services/readingRetention";
 import { migrateLegacyStatuses } from "./lib/dataMigrations";
 import { startSystemHealthSampler } from "./services/systemHealthSampler";
 import { startAlertMonitor } from "./services/alertMonitor";
@@ -27,7 +28,12 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
-  initBackupScheduler().catch((e) => logger.error({ e }, "Backup scheduler init failed"));
+  // Retention cleanup is registered once backup init settles, whether or not
+  // it failed — the same point it was registered when it lived inside it.
+  initBackupScheduler()
+    .catch((e) => logger.error({ e }, "Backup scheduler init failed"))
+    .then(startRetentionCleanup)
+    .catch((e) => logger.error({ e }, "Retention cleanup scheduling failed"));
   migrateLegacyStatuses().catch((e) => logger.error({ e }, "Legacy status migration failed"));
   startSystemHealthSampler();
   startAlertMonitor();

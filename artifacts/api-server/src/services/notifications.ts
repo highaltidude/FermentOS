@@ -1,7 +1,8 @@
 import { db, appConfigTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { parseNotifyTypes } from "../lib/notifyTypes";
+import { setConfigValue } from "./appConfig";
 
 /**
  * Outbound notification delivery.
@@ -14,7 +15,7 @@ import { parseNotifyTypes } from "../lib/notifyTypes";
  * Node 20 has global fetch, so neither channel needs a dependency.
  */
 
-export const NOTIFY_KEYS = {
+const NOTIFY_KEYS = {
   channel: "notify_channel",
   ntfyServer: "notify_ntfy_server",
   ntfyTopic: "notify_ntfy_topic",
@@ -29,8 +30,8 @@ export const ALERT_TYPES = ["temp_out_of_range", "gravity_stalled", "device_offl
 export type AlertType = (typeof ALERT_TYPES)[number];
 
 export const DEFAULT_NOTIFY_TYPES: AlertType[] = [...ALERT_TYPES];
-export const DEFAULT_REPEAT_HOURS = 6;
-export const DEFAULT_NTFY_SERVER = "https://ntfy.sh";
+const DEFAULT_REPEAT_HOURS = 6;
+const DEFAULT_NTFY_SERVER = "https://ntfy.sh";
 
 export type NotifyChannel = "none" | "ntfy" | "webhook";
 
@@ -103,10 +104,7 @@ export async function setNotifyConfig(cfg: NotifyConfig): Promise<void> {
     [NOTIFY_KEYS.boilAlerts, String(cfg.boilAlerts)],
   ];
   for (const [key, value] of pairs) {
-    await db
-      .insert(appConfigTable)
-      .values({ key, value })
-      .onConflictDoUpdate({ target: appConfigTable.key, set: { value, updatedAt: new Date() } });
+    await setConfigValue(key, value);
   }
 }
 

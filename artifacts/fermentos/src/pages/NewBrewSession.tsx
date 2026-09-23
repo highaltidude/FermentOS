@@ -1,27 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { useCreateBrewSession, useListRecipes } from "@workspace/api-client-react";
+import { useCreateBrewSession, useListRecipes, type BrewStatus, type PackagingMethod } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { fetchFermentTempUnit } from "@/lib/utils";
-
-const STATUSES = ["brew_day", "fermenting", "conditioning", "packaged"];
-const STATUS_LABELS: Record<string, string> = {
-  brew_day: "Brew Day",
-  fermenting: "Fermenting",
-  conditioning: "Conditioning",
-  packaged: "Packaged",
-};
-
-const PACKAGING_METHODS = ["keg", "bottle"];
-const PACKAGING_LABELS: Record<string, string> = {
-  keg: "Keg",
-  bottle: "Bottle",
-};
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
+import { BREW_STATUSES, STATUS_LABELS, PACKAGING_METHODS, PACKAGING_LABELS } from "@/lib/brewStatus";
 
 export default function NewBrewSession() {
   const [, navigate] = useLocation();
@@ -29,14 +16,12 @@ export default function NewBrewSession() {
   const { data: recipes } = useListRecipes({});
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("none");
   const [form, setForm] = useState({
-    recipeName: "", status: "brew_day", brewDate: new Date().toISOString().split("T")[0],
+    recipeName: "", status: "brew_day" as BrewStatus, brewDate: new Date().toISOString().split("T")[0],
     batchSizeGallons: "5.5", originalGravityActual: "", finalGravityActual: "", notes: "",
     fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
-    packagingMethod: "keg",
+    packagingMethod: "keg" as NonNullable<PackagingMethod>,
   });
-  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
-
-  useEffect(() => { fetchFermentTempUnit().then(setTempUnit); }, []);
+  const tempUnit = useFermentTempUnit();
 
   const createMutation = useCreateBrewSession({
     mutation: {
@@ -77,7 +62,7 @@ export default function NewBrewSession() {
           batchSizeGallons: String(recipe.batchSizeGallons),
           fermentTempMin: recipe.fermentTempMin != null ? String(recipe.fermentTempMin) : f.fermentTempMin,
           fermentTempMax: recipe.fermentTempMax != null ? String(recipe.fermentTempMax) : f.fermentTempMax,
-          fermentTempIdeal: (recipe as any).fermentTempIdeal != null ? String((recipe as any).fermentTempIdeal) : f.fermentTempIdeal,
+          fermentTempIdeal: recipe.fermentTempIdeal != null ? String(recipe.fermentTempIdeal) : f.fermentTempIdeal,
         }));
       }
     }
@@ -93,7 +78,7 @@ export default function NewBrewSession() {
       data: {
         recipeId: selectedRecipeId && selectedRecipeId !== "none" ? Number(selectedRecipeId) : undefined,
         recipeName: form.recipeName,
-        status: form.status as any,
+        status: form.status,
         brewDate: form.brewDate,
         batchSizeGallons: Number(form.batchSizeGallons),
         originalGravityActual: form.originalGravityActual ? Number(form.originalGravityActual) : undefined,
@@ -102,7 +87,7 @@ export default function NewBrewSession() {
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
         fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : undefined,
-        packagingMethod: form.status === "packaged" ? (form.packagingMethod as any) : undefined,
+        packagingMethod: form.status === "packaged" ? form.packagingMethod : undefined,
       },
     });
   };
@@ -140,15 +125,15 @@ export default function NewBrewSession() {
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Status</label>
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as BrewStatus })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
+              <SelectContent>{BREW_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           {form.status === "packaged" && (
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Packaged In</label>
-              <Select value={form.packagingMethod} onValueChange={(v) => setForm({ ...form, packagingMethod: v })}>
+              <Select value={form.packagingMethod} onValueChange={(v) => setForm({ ...form, packagingMethod: v as NonNullable<PackagingMethod> })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{PACKAGING_METHODS.map((m) => <SelectItem key={m} value={m}>{PACKAGING_LABELS[m] ?? m}</SelectItem>)}</SelectContent>
               </Select>

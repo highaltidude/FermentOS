@@ -1,0 +1,32 @@
+# Optional HTTPS overlay — puts Caddy with a local CA in front of the app.
+# Enable it by adding to .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
+#   FERMENTOS_IP=192.168.1.50
+#   FERMENTOS_NAMES=fermentos.local   (optional)
+# then `docker compose up -d`. See "Serve FermentOS over HTTPS" in README.md.
+services:
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - app
+    environment:
+      FERMENTOS_IP: ${FERMENTOS_IP:?set FERMENTOS_IP in .env to this host's LAN IP}
+      FERMENTOS_NAMES: ${FERMENTOS_NAMES:-}
+      FERMENTOS_UPSTREAM: app:8080
+      CADDY_PKI_DIR: /data/caddy/pki/authorities/local
+      PUBLIC_HTTPS_PORT: ${HTTPS_PORT:-443}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Holds the local CA's root key — back it up with the rest of your data,
+      # and never share it: anyone with it can impersonate sites to devices
+      # that trust the root.
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -2,6 +2,19 @@
 // prefixes its URL with this.
 export const BASE = import.meta.env.BASE_URL;
 
+// Where devices that only speak plain HTTP (iSpindel, Home Assistant's REST
+// sensor) should send requests. Over HTTP that is simply this page's host and
+// port. Over HTTPS the optional Caddy front keeps /api/* on plain HTTP port 80.
+export function plainHttpHost(): { host: string; port: string } {
+  const { protocol, hostname, port } = window.location;
+  return { host: hostname, port: protocol === "http:" && port ? port : "80" };
+}
+
+export function plainHttpOrigin(): string {
+  const { host, port } = plainHttpHost();
+  return `http://${host}${port === "80" ? "" : `:${port}`}`;
+}
+
 export type BackupBeforeUpdate = "none" | "sftp" | "local";
 
 export type LockInfo = {

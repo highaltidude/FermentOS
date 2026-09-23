@@ -60,6 +60,7 @@ install to a tracked first batch.
 - **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
 - **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. See [Get alerts on your phone](#get-alerts-on-your-phone)
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
+- **Optional HTTPS** — One command puts FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
 - **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something
 - **Auto-advance to Conditioning** — Move a batch on automatically once fermentation looks finished, so a forgotten status does not leave it sitting in Fermenting for weeks
@@ -341,16 +342,114 @@ one. If FermentOS is served over HTTPS and installed as an app, you also get a
 it (desktop Chrome and Edge). iPhone does not support app-icon shortcuts, so use
 the separate Boil icon there.
 
-**What you do not get yet:** offline access and web push notifications. Both
-require HTTPS, which a plain home-network install does not have. This is why
-phone alerts go through ntfy or a webhook instead — those work over plain HTTP
-today. If you want to put FermentOS behind HTTPS, see issues
-[#144](https://github.com/highaltidude/FermentOS/issues/144),
-[#145](https://github.com/highaltidude/FermentOS/issues/145), and
-[#146](https://github.com/highaltidude/FermentOS/issues/146).
+**What you do not get yet:** offline access and web push notifications
+([#145](https://github.com/highaltidude/FermentOS/issues/145),
+[#146](https://github.com/highaltidude/FermentOS/issues/146)). Both will need
+HTTPS, which is why phone alerts go through ntfy or a webhook — those work over
+plain HTTP today. The Chrome install prompt, the Start Boil shortcut, and keeping
+the screen awake during the boil already work once FermentOS is on HTTPS; see
+[Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional).
 
 Repeat visits are quick either way: the app's assets are cached by your browser,
 so day-to-day use is not waiting on the Pi.
+
+---
+
+### Serve FermentOS over HTTPS (optional)
+
+Everything in FermentOS works over plain HTTP, and you can skip this section. Turn
+HTTPS on if you want what browsers keep for secure sites:
+
+- Chrome's proper **Install app** prompt, and the long-press **Start Boil** shortcut
+- the screen staying awake on the boil timer
+- later, offline access and web push ([#145](https://github.com/highaltidude/FermentOS/issues/145), [#146](https://github.com/highaltidude/FermentOS/issues/146))
+
+**Why not a self-signed certificate?** Clicking past the browser warning does not
+help: Chrome still refuses to install the app or run a service worker on a page
+with a certificate error. What works is a small certificate authority of your
+own, which each device trusts once. FermentOS sets one up for you with
+[Caddy](https://caddyserver.com): it creates a root certificate that lasts ten
+years, issues and renews the site certificate from it automatically, and sits in
+front of FermentOS on ports 443 (HTTPS) and 80 (HTTP).
+
+iSpindel and Home Assistant keep using plain HTTP — Caddy passes `/api/...` on
+port 80 straight through, so an iSpindel set to port 80 needs no changes (if
+yours posts to the app's own port, e.g. 3000, that keeps working too). Your old
+`http://<pi-ip>:3000` address also keeps working. Every other page on port 80
+redirects to HTTPS.
+
+**1. Turn it on**
+
+*Installed with `install.sh` (the usual Raspberry Pi install):* from the
+FermentOS folder, run
+
+```bash
+sudo bash enable-https.sh
+```
+
+It installs Caddy, points it at FermentOS, and prints the addresses to use. It
+issues the certificate for the Pi's IP and for `<hostname>.local`; to choose
+them yourself, set `FERMENTOS_IP` and `FERMENTOS_NAMES` (space-separated) when
+running it. If ports 80 or 443 are taken by something else, it stops and says
+so — set `HTTP_PORT` / `HTTPS_PORT` to use others.
+
+*Installed with Docker (on a Pi or anything else):* add these lines to `.env` in
+the FermentOS folder, then run `docker compose up -d`:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
+FERMENTOS_IP=192.168.1.50        # this machine's LAN IP
+FERMENTOS_NAMES=fermentos.local  # optional extra names, space-separated
+```
+
+`COMPOSE_FILE` makes every later `docker compose` command, including
+`docker-install.sh` and updates, include Caddy. `HTTP_PORT` / `HTTPS_PORT` move
+it off 80/443 if those are taken.
+
+**2. Reserve the IP address.** The certificate names the Pi's IP, so give the Pi
+a fixed address in your router's DHCP settings. If the IP ever changes, re-run
+`enable-https.sh` (or update `FERMENTOS_IP`) — devices keep trusting the same
+root, so there's nothing to redo on them. `<hostname>.local` names work on
+iPhone, Mac, Windows and Linux, and on Android 12 or later; use the IP on older
+Android phones.
+
+**3. Trust the root certificate on each device.** Download it from
+`http://<pi-ip>/root.crt`, then:
+
+- **iPhone / iPad:** open the download and allow the profile, install it under
+  **Settings → General → VPN & Device Management**, *then* turn it on under
+  **Settings → General → About → Certificate Trust Settings**. Skipping that
+  last switch is the usual reason it "doesn't work".
+- **Android:** **Settings → Security → More security settings → Encryption &
+  credentials → Install a certificate → CA certificate**, and pick the
+  downloaded file. (Menu names vary a little by phone maker; search Settings for
+  "CA certificate".)
+- **Windows:** double-click the file → **Install Certificate** → **Local
+  Machine** → **Trusted Root Certification Authorities**.
+- **Mac:** double-click to add it to Keychain Access, open it, and set
+  **When using this certificate** to **Always Trust**.
+- **Firefox (desktop):** uses its own list — **Settings → Privacy & Security →
+  View Certificates → Authorities → Import**.
+
+Now open `https://<pi-ip>` and install FermentOS from there as described
+[above](#install-it-on-your-phone).
+
+**Keep the CA private.** The root's private key lives on the Pi (Docker: the
+`caddy_data` volume; native: `/var/lib/caddy`). Anyone holding it could
+impersonate *any* website to the devices that trust your root, so never copy it
+anywhere shared. To undo everything, run `sudo bash enable-https.sh --disable`
+(or remove the `COMPOSE_FILE` line and run `docker compose up -d
+--remove-orphans`), and remove the certificate from each device.
+
+**Other ways to get HTTPS**, if they suit you better:
+
+- **Tailscale** — if every device you use already runs Tailscale, `tailscale
+  serve` can put FermentOS on your tailnet name with a publicly-trusted
+  certificate, so there's no root to install. Devices without Tailscale can't
+  reach that address.
+- **Chrome flag (one device, for testing)** — `chrome://flags` → *Insecure
+  origins treated as secure* → add `http://<pi-ip>:3000`. Chrome on that device
+  then treats FermentOS as secure. Handy for a quick try; not something to rely on.
 
 ---
 
@@ -369,7 +468,7 @@ Open the iSpindel's built-in web UI (connect it to your network in hotspot mode 
 | Field | Value |
 |-------|-------|
 | Server Address | your FermentOS host IP (e.g. `192.168.1.100`) |
-| Port | `80` |
+| Port | the port you open FermentOS on (e.g. `3000`), or `80` if you [serve it over HTTPS](#serve-fermentos-over-https-optional) |
 | URL | `/api/integrations/ispindel` |
 | Protocol | HTTP |
 

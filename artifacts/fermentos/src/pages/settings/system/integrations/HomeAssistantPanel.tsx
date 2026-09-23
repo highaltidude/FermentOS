@@ -1,10 +1,11 @@
 import { CheckCircle, Copy, Home } from "lucide-react";
 import { useCopyToClipboard } from "../../useCopyToClipboard";
+import { plainHttpOrigin } from "../../shared";
 
 export function HomeAssistantPanel() {
   const { copiedKey, copy } = useCopyToClipboard();
 
-  const endpointUrl = `http://${window.location.hostname}/api/ha/status`;
+  const endpointUrl = `${plainHttpOrigin()}/api/ha/status`;
 
   // /api/ha/status returns an array of your configured sensor devices, not a
   // single "current brew" object — replace iSpindel001 below with the

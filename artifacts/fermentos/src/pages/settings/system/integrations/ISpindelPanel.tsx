@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useCopyToClipboard } from "../../useCopyToClipboard";
+import { plainHttpHost, plainHttpOrigin } from "../../shared";
 import { batteryClass, connectionDotClass, formatShortDateTime } from "./ispindelFormat";
 import { ISpindelDeviceDetail } from "./ISpindelDeviceDetail";
 
@@ -92,7 +93,8 @@ export function ISpindelPanel() {
     mutation: { onSuccess: () => { qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() }); toast({ title: "Simulated reading sent" }); } },
   });
 
-  const endpointUrl = `http://${window.location.hostname}/api/integrations/ispindel`;
+  const plainHttp = plainHttpHost();
+  const endpointUrl = `${plainHttpOrigin()}/api/integrations/ispindel`;
   const enabled = settings?.enabled ?? true;
 
   return (
@@ -140,7 +142,7 @@ export function ISpindelPanel() {
               {copiedKey === "url" ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">In the iSpindel web UI: Protocol → HTTP · Server Address → <code className="font-mono">{window.location.hostname}</code> · Port → 80 · URL → <code className="font-mono">/api/integrations/ispindel</code></p>
+          <p className="text-xs text-muted-foreground mt-1">In the iSpindel web UI: Protocol → HTTP · Server Address → <code className="font-mono">{plainHttp.host}</code> · Port → {plainHttp.port} · URL → <code className="font-mono">/api/integrations/ispindel</code></p>
         </div>
 
         {/* Token */}

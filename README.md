@@ -714,7 +714,7 @@ Authorization: Bearer <token>
 ```
 
 **Always-exempt endpoints** (reachable with no token, even under lockdown):
-- `GET /healthz`
+- `GET /api/healthz`
 - `GET /api/admin/repair-script`, `GET /api/admin/sudoers-line` — recovery scripts, must stay reachable from a plain `curl` on the host even if you lock yourself out
 - `GET /api/ha/status` — read-only Home Assistant polling target
 - `POST /api/integrations/ispindel`, `GET /api/integrations/ispindel/status` — the iSpindel device itself can't send a bearer token

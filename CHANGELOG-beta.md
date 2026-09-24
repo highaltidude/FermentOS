@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.7.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.6.1-beta1...fermentos-v1.7.0-beta1) (2026-09-24)
+
+
+### Features
+
+* **boil:** boil timer with hop-addition alerts and a Start Boil launch shortcut ([ea03b95](https://github.com/highaltidude/FermentOS/commit/ea03b95e43b82236794e58a15964e3f2cacde952))
+* **https:** optional Caddy overlay with a local CA for HTTPS ([9a8c22c](https://github.com/highaltidude/FermentOS/commit/9a8c22c6686355ba9e52a06166052b549572e200))
+
+
+### Bug Fixes
+
+* **auth:** exempt HA, iSpindel and recovery endpoints under API lockdown ([4c8f087](https://github.com/highaltidude/FermentOS/commit/4c8f087de47bf24392da0e94b31fc32aac09300f))
+* **https:** let the Docker COMPOSE_FILE setting work on Windows ([9fa827e](https://github.com/highaltidude/FermentOS/commit/9fa827e7dc2a689e669874cb1addbc1d5b1ba508))
+* **notifications:** keep alert types off when all are unchecked ([f86d3bf](https://github.com/highaltidude/FermentOS/commit/f86d3bfc1ee08d621f18d3809ab02030dc81f85f))
+* **recipes:** let boil and whirlpool additions have a time ([efa7e49](https://github.com/highaltidude/FermentOS/commit/efa7e4979c8999a1be02bb4c825156bc074415f1))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

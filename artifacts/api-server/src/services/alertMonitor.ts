@@ -5,6 +5,7 @@ import { logger } from "../lib/logger.js";
 import { computeBrewAlerts, tempExcursion, type BrewTelemetry } from "./brewAlerts.js";
 import { getNotifyConfig, sendNotification, type AlertType } from "./notifications.js";
 import { resolveRepeatHours } from "../lib/notifyIntervals.js";
+import { alertAppliesToStatus, notifiesOncePerBrew } from "../lib/alertPolicy.js";
 import { getTempAlertReadings } from "./tempAlertReadings.js";
 
 /**
@@ -26,6 +27,8 @@ import { getTempAlertReadings } from "./tempAlertReadings.js";
  * already slow by construction — device_offline needs 4x the report interval
  * to elapse, gravity_stalled needs 24 hours of flat gravity, and battery_low
  * only trips once the pack is under 20% — so they notify on first detection.
+ * gravity_stalled is further limited by lib/alertPolicy.ts: it is only checked
+ * while fermenting and is sent at most once per brew.
  */
 function consecutiveTempExcursions(telemetry: BrewTelemetry): number {
   const range = telemetry.tempRange ?? null;
@@ -62,7 +65,7 @@ async function runAlertCheck(): Promise<void> {
   // Only active stages are worth alerting on. `packaged` is terminal — the beer
   // is in the keg, a stale probe reading must never wake anyone up.
   const sessions = await db
-    .select({ id: brewSessionsTable.id, recipeName: brewSessionsTable.recipeName })
+    .select({ id: brewSessionsTable.id, recipeName: brewSessionsTable.recipeName, status: brewSessionsTable.status })
     .from(brewSessionsTable)
     .where(inArray(brewSessionsTable.status, [...ACTIVE_BREW_STATUSES]));
 
@@ -86,7 +89,8 @@ async function runAlertCheck(): Promise<void> {
       const firing = new Set(
         (telemetry?.alerts ?? [])
           .map((a) => a.type)
-          .filter((t): t is AlertType => (config.types as string[]).includes(t)),
+          .filter((t): t is AlertType => (config.types as string[]).includes(t))
+          .filter((t) => alertAppliesToStatus(t, session.status)),
       );
 
       const existing = await db
@@ -104,13 +108,16 @@ async function runAlertCheck(): Promise<void> {
         // seen count, so a recurrence is treated as a fresh incident.
         const resuming = prior && prior.resolvedAt != null;
         const seenCount = !prior || resuming ? 1 : prior.seenCount + 1;
-        const lastNotifiedAt = resuming ? null : prior?.lastNotifiedAt ?? null;
+        // A once-per-brew type keeps its send time through a recurrence, so the
+        // row remembers this brew has already been told.
+        const oncePerBrew = notifiesOncePerBrew(alert.type);
+        const lastNotifiedAt = resuming && !oncePerBrew ? null : prior?.lastNotifiedAt ?? null;
 
         // Per alert type: temperature can carry its own interval, the rest use
         // the global one.
         const repeatMs =
           resolveRepeatHours(alert.type, config.repeatHours, config.tempRepeatHours) * 60 * 60 * 1000;
-        const dueForRepeat = lastNotifiedAt != null && now.getTime() - new Date(lastNotifiedAt).getTime() >= repeatMs;
+        const dueForRepeat = !oncePerBrew && lastNotifiedAt != null && now.getTime() - new Date(lastNotifiedAt).getTime() >= repeatMs;
         // Temperature has to persist across N readings; the rest are already
         // slow enough to stand on their own (see consecutiveTempExcursions).
         const debounced = alert.type !== "temp_out_of_range" || tempStreak >= requiredTempReadings;

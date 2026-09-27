@@ -268,7 +268,7 @@ something needs attention:
 | Alert | Fires when |
 |-------|-----------|
 | Temperature out of range | A reading falls outside the batch's fermentation temperature range |
-| Fermentation stalled | Gravity has not moved for 24 hours |
+| Fermentation stalled | Gravity has not moved for 24 hours while the batch is Fermenting — sent once per batch |
 | Sensor offline | Your iSpindel has stopped reporting |
 | Sensor battery low | The iSpindel battery drops below 20% |
 | Boil additions | A boil timer is running and a hop addition, or flameout, is due |
@@ -319,6 +319,10 @@ minute does not wake you at 3am. **Re-notify at most every** controls how often
 a problem that is still ongoing nags you again. Temperature can have its own,
 shorter interval — it is the one alert you can act on the moment you hear it, so
 an hourly nudge is useful where an hourly battery warning would just be noise.
+
+The stall alert is the exception: it is sent once per batch and never repeats,
+and it stops being checked when you move the batch to Conditioning, where flat
+gravity is exactly what you want.
 
 ---
 

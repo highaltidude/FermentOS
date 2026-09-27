@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const ALERT_TYPE_LABELS: { value: AlertType; label: string; desc: string }[] = [
   { value: "temp_out_of_range", label: "Temperature out of range", desc: "Reading outside the session's ferment temp range" },
-  { value: "gravity_stalled", label: "Fermentation stalled", desc: "Gravity unchanged for 24+ hours" },
+  { value: "gravity_stalled", label: "Fermentation stalled", desc: "Gravity unchanged for 24+ hours while fermenting — sent once per batch" },
   { value: "device_offline", label: "Sensor offline", desc: "iSpindel has stopped reporting" },
   { value: "battery_low", label: "Sensor battery low", desc: "iSpindel battery under 20%" },
 ];

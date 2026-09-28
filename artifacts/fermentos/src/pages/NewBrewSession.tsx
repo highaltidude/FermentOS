@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
+import { TempRangeFields } from "@/components/TempRangeFields";
 import { BREW_STATUSES, STATUS_LABELS, PACKAGING_METHODS, PACKAGING_LABELS } from "@/lib/brewStatus";
 
 export default function NewBrewSession() {
@@ -19,6 +20,7 @@ export default function NewBrewSession() {
     recipeName: "", status: "brew_day" as BrewStatus, brewDate: new Date().toISOString().split("T")[0],
     batchSizeGallons: "5.5", originalGravityActual: "", finalGravityActual: "", notes: "",
     fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
+    conditionTempMin: "", conditionTempMax: "", conditionTempIdeal: "",
     packagingMethod: "keg" as NonNullable<PackagingMethod>,
   });
   const tempUnit = useFermentTempUnit();
@@ -63,6 +65,9 @@ export default function NewBrewSession() {
           fermentTempMin: recipe.fermentTempMin != null ? String(recipe.fermentTempMin) : f.fermentTempMin,
           fermentTempMax: recipe.fermentTempMax != null ? String(recipe.fermentTempMax) : f.fermentTempMax,
           fermentTempIdeal: recipe.fermentTempIdeal != null ? String(recipe.fermentTempIdeal) : f.fermentTempIdeal,
+          conditionTempMin: recipe.conditionTempMin != null ? String(recipe.conditionTempMin) : f.conditionTempMin,
+          conditionTempMax: recipe.conditionTempMax != null ? String(recipe.conditionTempMax) : f.conditionTempMax,
+          conditionTempIdeal: recipe.conditionTempIdeal != null ? String(recipe.conditionTempIdeal) : f.conditionTempIdeal,
         }));
       }
     }
@@ -87,6 +92,9 @@ export default function NewBrewSession() {
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
         fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : undefined,
+        conditionTempMin: form.conditionTempMin ? Number(form.conditionTempMin) : undefined,
+        conditionTempMax: form.conditionTempMax ? Number(form.conditionTempMax) : undefined,
+        conditionTempIdeal: form.conditionTempIdeal ? Number(form.conditionTempIdeal) : undefined,
         packagingMethod: form.status === "packaged" ? form.packagingMethod : undefined,
       },
     });
@@ -149,19 +157,15 @@ export default function NewBrewSession() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Min Temp (°{tempUnit})</label>
-            <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Ideal Temp (°{tempUnit})</label>
-            <Input type="number" step="0.1" value={form.fermentTempIdeal} onChange={(e) => setForm({ ...form, fermentTempIdeal: e.target.value })} placeholder="e.g., 68" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Max Temp (°{tempUnit})</label>
-            <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
-          </div>
+        <div>
+          <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
+          <TempRangeFields prefix="fermentTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
+        </div>
+
+        <div>
+          <div className="text-xs text-muted-foreground mb-2 font-medium">Conditioning Temperature (optional)</div>
+          <TempRangeFields prefix="conditionTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
+          <p className="text-xs text-muted-foreground mt-1">Leave blank for no temperature alerts while conditioning.</p>
         </div>
 
         <div>

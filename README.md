@@ -58,7 +58,7 @@ install to a tracked first batch.
 - **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
 - **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
-- **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. See [Get alerts on your phone](#get-alerts-on-your-phone)
+- **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. Temperature is checked against the fermentation range while fermenting and an optional separate conditioning range (for a cold crash or lagering) while conditioning. See [Get alerts on your phone](#get-alerts-on-your-phone)
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
 - **Optional HTTPS** — One command puts FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
@@ -173,6 +173,11 @@ Set the **fermentation temperature range** while you are here. It is optional,
 but it is what lets FermentOS tell you later that a batch is running hot — see
 step 7.
 
+If the beer spends conditioning at a different temperature — a cold crash, a
+lager, warm bottle conditioning — also set the **conditioning temperature
+range**. Leave it blank and FermentOS stops checking temperature once the batch
+moves to Conditioning.
+
 For the boil timer, set each boil hop's **Use** to **Boil**. A field appears for
 the **minutes left in the boil** when it goes in: 60 for bittering, 15 for
 flavor, 0 for flameout. Set whirlpool hops to **Whirlpool**; they are called at
@@ -194,7 +199,7 @@ something and tells you exactly what is missing.
 **4. Start a brew session**
 
 **Brew Log → New Session.** Choose your recipe from the dropdown and FermentOS
-fills in the name, batch size, and fermentation temperature range for you.
+fills in the name, batch size, and fermentation and conditioning temperature ranges for you.
 
 You do not need a recipe to log a batch — a **name and a brew date are the only
 required fields**, so a spur-of-the-moment brew can be recorded now and tidied
@@ -267,7 +272,7 @@ something needs attention:
 
 | Alert | Fires when |
 |-------|-----------|
-| Temperature out of range | A reading falls outside the batch's fermentation temperature range |
+| Temperature out of range | A reading falls outside the batch's fermentation temperature range — or, while conditioning, its conditioning range if one is set |
 | Fermentation stalled | Gravity has not moved for 24 hours while the batch is Fermenting — sent once per batch |
 | Sensor offline | Your iSpindel has stopped reporting |
 | Sensor battery low | The iSpindel battery drops below 20% |
@@ -311,6 +316,12 @@ recipe has a fermentation temperature range set, FermentOS has nothing to
 compare a reading against, and temperature alerts will never fire. The other
 three alerts still work fine. Set the range on the session, or on the recipe so
 future batches inherit it.
+
+Conditioning has its own optional range. While a batch is in Conditioning,
+temperature is checked against that instead, and if neither the session nor the
+recipe has one, temperature alerts are off for that stage. The brew page's chart
+lines follow the same rule and are labelled **Cond.** when they show the
+conditioning range.
 
 You can also tune how jumpy temperature alerts are with **Settings → Brewing →
 Fermentation Temperature → Temperature Alert Threshold**. It is the number of consecutive
@@ -870,6 +881,9 @@ All endpoints are prefixed with `/api`. Replace `<host>` with your host's addres
   "fermentTempMin": 64,
   "fermentTempMax": 70,
   "fermentTempIdeal": 67,
+  "conditionTempMin": 32,
+  "conditionTempMax": 38,
+  "conditionTempIdeal": 34,
   "notes": "Optional brew notes"
 }
 ```
@@ -955,6 +969,9 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
   "fermentTempMin": 64,
   "fermentTempMax": 70,
   "fermentTempIdeal": 67,
+  "conditionTempMin": 32,
+  "conditionTempMax": 38,
+  "conditionTempIdeal": 34,
   "notes": "Optional"
 }
 ```

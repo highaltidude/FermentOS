@@ -1476,6 +1476,18 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        conditionTempMin:
+          type: number
+          nullable: true
+          description: Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.
+        conditionTempMax:
+          type: number
+          nullable: true
+          description: Maximum conditioning temperature threshold
+        conditionTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal conditioning temperature target
         daysPlanned:
           type: integer
           nullable: true
@@ -1656,6 +1668,18 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        conditionTempMin:
+          type: number
+          nullable: true
+          description: Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.
+        conditionTempMax:
+          type: number
+          nullable: true
+          description: Maximum conditioning temperature threshold
+        conditionTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal conditioning temperature target
         daysPlanned:
           type: integer
           nullable: true
@@ -1721,6 +1745,18 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        conditionTempMin:
+          type: number
+          nullable: true
+          description: Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.
+        conditionTempMax:
+          type: number
+          nullable: true
+          description: Maximum conditioning temperature threshold
+        conditionTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal conditioning temperature target
         daysPlanned:
           type: integer
           nullable: true
@@ -1891,6 +1927,18 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        conditionTempMin:
+          type: number
+          nullable: true
+          description: Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.
+        conditionTempMax:
+          type: number
+          nullable: true
+          description: Maximum conditioning temperature threshold
+        conditionTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal conditioning temperature target
         autoAdvanceToConditioning:
           type: boolean
           nullable: true
@@ -2017,6 +2065,18 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        conditionTempMin:
+          type: number
+          nullable: true
+          description: Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.
+        conditionTempMax:
+          type: number
+          nullable: true
+          description: Maximum conditioning temperature threshold
+        conditionTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal conditioning temperature target
       required: [recipeName, status, brewDate, batchSizeGallons]
 
     UpdateBrewSessionBody:
@@ -2068,6 +2128,18 @@ components:
           type: number
           nullable: true
           description: Ideal fermentation temperature target
+        conditionTempMin:
+          type: number
+          nullable: true
+          description: Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.
+        conditionTempMax:
+          type: number
+          nullable: true
+          description: Maximum conditioning temperature threshold
+        conditionTempIdeal:
+          type: number
+          nullable: true
+          description: Ideal conditioning temperature target
         autoAdvanceToConditioning:
           type: boolean
           nullable: true

@@ -3,6 +3,7 @@ import { eq, isNotNull, and, gte, lte } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
 import { batteryWarningLevel } from "../lib/batteryUtil";
 import { getConfigValue } from "./appConfig";
+import { activeTempPhase } from "../lib/alertPolicy";
 
 /**
  * Brew telemetry and alert computation.
@@ -16,7 +17,14 @@ import { getConfigValue } from "./appConfig";
 
 export type BrewAlert = { type: string; message: string; triggeredAt: string };
 
-export type TempRange = { min: number | null; max: number | null; ideal: number | null; unit: "F" | "C" } | null;
+export type TempRange = {
+  min: number | null;
+  max: number | null;
+  ideal: number | null;
+  unit: "F" | "C";
+  /** Which stage's range this is, so the chart can label it. */
+  phase: "fermenting" | "conditioning";
+} | null;
 
 export function calcConnectionStatus(
   lastSeenAt: Date | null,
@@ -100,6 +108,41 @@ export function buildAlerts(
 
 type Reading = typeof sensorReadingsTable.$inferSelect;
 
+const RANGE_COLUMNS = {
+  fermenting: { min: "fermentTempMin", max: "fermentTempMax", ideal: "fermentTempIdeal" },
+  conditioning: { min: "conditionTempMin", max: "conditionTempMax", ideal: "conditionTempIdeal" },
+} as const;
+
+/**
+ * The temperature range in force for the brew's current stage: the session's
+ * own values, each falling back to the linked recipe. Null when nothing is set,
+ * which switches temperature alerts off — so a batch in conditioning with no
+ * conditioning range is simply not checked.
+ */
+async function resolveTempRange(brewId: number): Promise<TempRange> {
+  const [session] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, brewId));
+  if (!session) return null;
+
+  const phase = activeTempPhase(session.status);
+  const cols = RANGE_COLUMNS[phase];
+  let min = session[cols.min];
+  let max = session[cols.max];
+  let ideal = session[cols.ideal];
+
+  if ((min == null || max == null || ideal == null) && session.recipeId) {
+    const [recipe] = await db.select().from(recipesTable).where(eq(recipesTable.id, session.recipeId));
+    if (recipe) {
+      min = min ?? recipe[cols.min];
+      max = max ?? recipe[cols.max];
+      ideal = ideal ?? recipe[cols.ideal];
+    }
+  }
+
+  if (min == null && max == null && ideal == null) return null;
+  const unit = (await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F";
+  return { min, max, ideal, unit, phase };
+}
+
 export type BrewTelemetry = {
   brewSessionId: number;
   device: typeof sensorDevicesTable.$inferSelect | null;
@@ -172,38 +215,7 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
 
   const connectionStatus = calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
 
-  // Fetch temp range from session, falling back to linked recipe
-  const [brewSession] = await db
-    .select({
-      fermentTempMin: brewSessionsTable.fermentTempMin,
-      fermentTempMax: brewSessionsTable.fermentTempMax,
-      fermentTempIdeal: brewSessionsTable.fermentTempIdeal,
-      recipeId: brewSessionsTable.recipeId,
-    })
-    .from(brewSessionsTable)
-    .where(eq(brewSessionsTable.id, brewId));
-
-  let tempMin: number | null = brewSession?.fermentTempMin ?? null;
-  let tempMax: number | null = brewSession?.fermentTempMax ?? null;
-  let tempIdeal: number | null = brewSession?.fermentTempIdeal ?? null;
-
-  if ((tempMin == null || tempMax == null || tempIdeal == null) && brewSession?.recipeId) {
-    const [recipe] = await db
-      .select({ fermentTempMin: recipesTable.fermentTempMin, fermentTempMax: recipesTable.fermentTempMax, fermentTempIdeal: recipesTable.fermentTempIdeal })
-      .from(recipesTable)
-      .where(eq(recipesTable.id, brewSession.recipeId));
-    if (recipe) {
-      tempMin = tempMin ?? recipe.fermentTempMin ?? null;
-      tempMax = tempMax ?? recipe.fermentTempMax ?? null;
-      tempIdeal = tempIdeal ?? recipe.fermentTempIdeal ?? null;
-    }
-  }
-
-  const tempUnit = ((await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F") as "F" | "C";
-
-  const tempRange: TempRange = (tempMin != null || tempMax != null || tempIdeal != null)
-    ? { min: tempMin, max: tempMax, ideal: tempIdeal, unit: tempUnit }
-    : null;
+  const tempRange = await resolveTempRange(brewId);
 
   const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
 

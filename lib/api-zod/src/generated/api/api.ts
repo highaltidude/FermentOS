@@ -122,6 +122,20 @@ export const GetDashboardSummaryResponse = zod.object({
         .number()
         .nullish()
         .describe("Ideal fermentation temperature target"),
+      conditionTempMin: zod
+        .number()
+        .nullish()
+        .describe(
+          "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+        ),
+      conditionTempMax: zod
+        .number()
+        .nullish()
+        .describe("Maximum conditioning temperature threshold"),
+      conditionTempIdeal: zod
+        .number()
+        .nullish()
+        .describe("Ideal conditioning temperature target"),
       autoAdvanceToConditioning: zod
         .boolean()
         .nullish()
@@ -243,6 +257,20 @@ export const ListRecipesResponseItem = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -291,6 +319,20 @@ export const CreateRecipeBody = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -341,6 +383,20 @@ export const GetRecipeResponse = zod
       .number()
       .nullish()
       .describe("Ideal fermentation temperature target"),
+    conditionTempMin: zod
+      .number()
+      .nullish()
+      .describe(
+        "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+      ),
+    conditionTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum conditioning temperature threshold"),
+    conditionTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal conditioning temperature target"),
     daysPlanned: zod.number().nullish(),
     daysBrewing: zod.number().nullish(),
     daysFermenting: zod.number().nullish(),
@@ -460,6 +516,20 @@ export const UpdateRecipeBody = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -493,6 +563,20 @@ export const UpdateRecipeResponse = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   daysPlanned: zod.number().nullish(),
   daysBrewing: zod.number().nullish(),
   daysFermenting: zod.number().nullish(),
@@ -882,6 +966,20 @@ export const ListBrewSessionsResponseItem = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   autoAdvanceToConditioning: zod
     .boolean()
     .nullish()
@@ -947,6 +1045,20 @@ export const CreateBrewSessionBody = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
 });
 
 /**
@@ -1053,6 +1165,20 @@ export const GetBrewSessionResponse = zod
       .number()
       .nullish()
       .describe("Ideal fermentation temperature target"),
+    conditionTempMin: zod
+      .number()
+      .nullish()
+      .describe(
+        "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+      ),
+    conditionTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum conditioning temperature threshold"),
+    conditionTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal conditioning temperature target"),
     autoAdvanceToConditioning: zod
       .boolean()
       .nullish()
@@ -1153,6 +1279,20 @@ export const UpdateBrewSessionBody = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   autoAdvanceToConditioning: zod
     .boolean()
     .nullish()
@@ -1258,6 +1398,20 @@ export const UpdateBrewSessionResponse = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   autoAdvanceToConditioning: zod
     .boolean()
     .nullish()
@@ -1456,6 +1610,20 @@ export const UpsertBrewRatingResponse = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   autoAdvanceToConditioning: zod
     .boolean()
     .nullish()
@@ -1618,6 +1786,20 @@ export const ControlBoilResponse = zod.object({
     .number()
     .nullish()
     .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
   autoAdvanceToConditioning: zod
     .boolean()
     .nullish()

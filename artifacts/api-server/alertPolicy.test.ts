@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 // The pure module, which imports nothing — services/alertMonitor.ts reaches
 // `@workspace/db` and throws at load without DATABASE_URL, as CI has none.
-import { alertAppliesToStatus, notifiesOncePerBrew } from "./src/lib/alertPolicy.js";
+import { activeTempPhase, alertAppliesToStatus, notifiesOncePerBrew } from "./src/lib/alertPolicy.js";
 
 const OTHER_TYPES = ["temp_out_of_range", "device_offline", "battery_low"];
 const ACTIVE = ["brew_day", "fermenting", "conditioning"];
@@ -28,6 +28,15 @@ describe("notifiesOncePerBrew", () => {
     expect(notifiesOncePerBrew("gravity_stalled")).toBe(true);
     for (const type of OTHER_TYPES) {
       expect(notifiesOncePerBrew(type)).toBe(false);
+    }
+  });
+});
+
+describe("activeTempPhase", () => {
+  it("uses the conditioning range only while conditioning", () => {
+    expect(activeTempPhase("conditioning")).toBe("conditioning");
+    for (const status of ["brew_day", "fermenting", "packaged"]) {
+      expect(activeTempPhase(status)).toBe("fermenting");
     }
   });
 });

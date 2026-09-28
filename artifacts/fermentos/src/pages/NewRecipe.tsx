@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
 import { StyleSelect } from "@/components/StyleSelect";
+import { TempRangeFields } from "@/components/TempRangeFields";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlaceholder } from "@/lib/ingredients";
 
@@ -41,6 +42,7 @@ export default function NewRecipe() {
     colorSrm: "", estimatedBrewTimeMinutes: "", efficiencyPercent: "", caloriesPerServing: "", notes: "",
     daysPlanned: "", daysBrewing: "", daysFermenting: "", daysConditioning: "", daysPackaged: "",
     fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
+    conditionTempMin: "", conditionTempMax: "", conditionTempIdeal: "",
   });
   const tempUnit = useFermentTempUnit();
 
@@ -94,6 +96,9 @@ export default function NewRecipe() {
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
         fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : undefined,
+        conditionTempMin: form.conditionTempMin ? Number(form.conditionTempMin) : undefined,
+        conditionTempMax: form.conditionTempMax ? Number(form.conditionTempMax) : undefined,
+        conditionTempIdeal: form.conditionTempIdeal ? Number(form.conditionTempIdeal) : undefined,
         daysPlanned: form.daysPlanned ? Number(form.daysPlanned) : undefined,
         daysBrewing: form.daysBrewing ? Number(form.daysBrewing) : undefined,
         daysFermenting: form.daysFermenting ? Number(form.daysFermenting) : undefined,
@@ -216,20 +221,15 @@ export default function NewRecipe() {
             <h2 className="text-sm font-semibold text-foreground">Fermentation Temperature</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Optional — used for alerts and deviation tracking</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Min (°{tempUnit})</label>
-              <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Ideal (°{tempUnit})</label>
-              <Input type="number" step="0.1" value={form.fermentTempIdeal} onChange={(e) => setForm({ ...form, fermentTempIdeal: e.target.value })} placeholder="e.g., 68" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Max (°{tempUnit})</label>
-              <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
-            </div>
+          <TempRangeFields prefix="fermentTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
+        </div>
+
+        <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Conditioning Temperature</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Optional — used for alerts while conditioning. Leave blank for no temperature alerts in that stage.</p>
           </div>
+          <TempRangeFields prefix="conditionTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
         </div>
 
         <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">

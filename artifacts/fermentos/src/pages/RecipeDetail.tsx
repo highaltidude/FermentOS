@@ -33,6 +33,7 @@ import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlace
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { ScoreBadge } from "@/components/ui/score-picker";
 import { StyleSelect } from "@/components/StyleSelect";
+import { TempRangeFields } from "@/components/TempRangeFields";
 
 const STEP_PHASE_COLORS: Record<string, string> = {
   mash: "bg-amber-100 text-amber-800 border-amber-200",
@@ -548,6 +549,7 @@ export default function RecipeDetail() {
     caloriesPerServing: "", notes: "", daysPlanned: "", daysBrewing: "", daysFermenting: "",
     daysConditioning: "", daysPackaged: "",
     fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
+    conditionTempMin: "", conditionTempMax: "", conditionTempIdeal: "",
   });
 
   const startEdit = () => {
@@ -573,6 +575,9 @@ export default function RecipeDetail() {
         fermentTempMin: recipe.fermentTempMin != null ? String(recipe.fermentTempMin) : "",
         fermentTempMax: recipe.fermentTempMax != null ? String(recipe.fermentTempMax) : "",
         fermentTempIdeal: recipe.fermentTempIdeal != null ? String(recipe.fermentTempIdeal) : "",
+        conditionTempMin: recipe.conditionTempMin != null ? String(recipe.conditionTempMin) : "",
+        conditionTempMax: recipe.conditionTempMax != null ? String(recipe.conditionTempMax) : "",
+        conditionTempIdeal: recipe.conditionTempIdeal != null ? String(recipe.conditionTempIdeal) : "",
       });
     }
     setEditing(true);
@@ -602,6 +607,9 @@ export default function RecipeDetail() {
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : null,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : null,
         fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : null,
+        conditionTempMin: form.conditionTempMin ? Number(form.conditionTempMin) : null,
+        conditionTempMax: form.conditionTempMax ? Number(form.conditionTempMax) : null,
+        conditionTempIdeal: form.conditionTempIdeal ? Number(form.conditionTempIdeal) : null,
       },
     });
   };
@@ -710,16 +718,19 @@ export default function RecipeDetail() {
                 </div>
               </div>
             )}
-            {(recipe.fermentTempMin != null || recipe.fermentTempIdeal != null || recipe.fermentTempMax != null) && (
-              <div className="border-t border-border pt-3 mt-3">
-                <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
+            {([
+              { label: "Fermentation Temperature", min: recipe.fermentTempMin, ideal: recipe.fermentTempIdeal, max: recipe.fermentTempMax },
+              { label: "Conditioning Temperature", min: recipe.conditionTempMin, ideal: recipe.conditionTempIdeal, max: recipe.conditionTempMax },
+            ]).filter((r) => r.min != null || r.ideal != null || r.max != null).map((r) => (
+              <div key={r.label} className="border-t border-border pt-3 mt-3">
+                <div className="text-xs text-muted-foreground mb-2 font-medium">{r.label}</div>
                 <div className="flex items-center gap-3 text-sm">
-                  {recipe.fermentTempMin != null && <span className="text-muted-foreground">Min: <span className="text-foreground font-medium">{recipe.fermentTempMin}°{tempUnit}</span></span>}
-                  {recipe.fermentTempIdeal != null && <span className="text-primary font-semibold">Ideal: {recipe.fermentTempIdeal}°{tempUnit}</span>}
-                  {recipe.fermentTempMax != null && <span className="text-muted-foreground">Max: <span className="text-foreground font-medium">{recipe.fermentTempMax}°{tempUnit}</span></span>}
+                  {r.min != null && <span className="text-muted-foreground">Min: <span className="text-foreground font-medium">{r.min}°{tempUnit}</span></span>}
+                  {r.ideal != null && <span className="text-primary font-semibold">Ideal: {r.ideal}°{tempUnit}</span>}
+                  {r.max != null && <span className="text-muted-foreground">Max: <span className="text-foreground font-medium">{r.max}°{tempUnit}</span></span>}
                 </div>
               </div>
-            )}
+            ))}
           </>
         ) : (
           <div className="space-y-3">
@@ -756,20 +767,12 @@ export default function RecipeDetail() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Min (°{tempUnit})</label>
-                  <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Ideal (°{tempUnit})</label>
-                  <Input type="number" step="0.1" value={form.fermentTempIdeal} onChange={(e) => setForm({ ...form, fermentTempIdeal: e.target.value })} placeholder="e.g., 68" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Max (°{tempUnit})</label>
-                  <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
-                </div>
-              </div>
+              <TempRangeFields prefix="fermentTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-2 font-medium">Conditioning Temperature (optional)</div>
+              <TempRangeFields prefix="conditionTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
+              <p className="text-xs text-muted-foreground mt-1">Leave blank for no temperature alerts while conditioning.</p>
             </div>
           </div>
         )}

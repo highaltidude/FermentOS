@@ -39,6 +39,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { RateBatchWizard } from "@/components/RateBatchWizard";
 import { BrewStatusBadge } from "@/components/BrewStatusBadge";
+import { TempRangeFields } from "@/components/TempRangeFields";
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: BrewStatus; onStatusChange: (s: BrewStatus) => void; isPending?: boolean }) {
   const idx = BREW_STATUSES.indexOf(status);
@@ -376,6 +377,9 @@ export default function BrewSessionDetail() {
       fermentTempMin: session.fermentTempMin != null ? String(session.fermentTempMin) : "",
       fermentTempMax: session.fermentTempMax != null ? String(session.fermentTempMax) : "",
       fermentTempIdeal: session.fermentTempIdeal != null ? String(session.fermentTempIdeal) : "",
+      conditionTempMin: session.conditionTempMin != null ? String(session.conditionTempMin) : "",
+      conditionTempMax: session.conditionTempMax != null ? String(session.conditionTempMax) : "",
+      conditionTempIdeal: session.conditionTempIdeal != null ? String(session.conditionTempIdeal) : "",
       autoAdvanceToConditioning: session.autoAdvanceToConditioning ?? null,
       packagingMethod: session.packagingMethod ?? null,
     });
@@ -397,6 +401,9 @@ export default function BrewSessionDetail() {
         fermentTempMin: editForm.fermentTempMin ? Number(editForm.fermentTempMin) : null,
         fermentTempMax: editForm.fermentTempMax ? Number(editForm.fermentTempMax) : null,
         fermentTempIdeal: editForm.fermentTempIdeal ? Number(editForm.fermentTempIdeal) : null,
+        conditionTempMin: editForm.conditionTempMin ? Number(editForm.conditionTempMin) : null,
+        conditionTempMax: editForm.conditionTempMax ? Number(editForm.conditionTempMax) : null,
+        conditionTempIdeal: editForm.conditionTempIdeal ? Number(editForm.conditionTempIdeal) : null,
         autoAdvanceToConditioning: editForm.autoAdvanceToConditioning,
         packagingMethod: editForm.packagingMethod,
       },
@@ -507,28 +514,18 @@ export default function BrewSessionDetail() {
               <div><label className="text-xs text-muted-foreground mb-1 block">FG (actual)</label><Input type="number" step="0.001" value={editForm.finalGravityActual} onChange={(e) => setEditForm({ ...editForm, finalGravityActual: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground mb-1 block">ABV % (actual)</label><Input type="number" step="0.1" value={editForm.abvActual} onChange={(e) => setEditForm({ ...editForm, abvActual: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Min Temp (°{tempUnit})</label>
-                <Input type="number" step="0.1"
-                  value={editForm.fermentTempMin ?? ""}
-                  onChange={(e) => setEditForm({ ...editForm, fermentTempMin: e.target.value })}
-                  placeholder={session.fermentTempMin != null ? String(session.fermentTempMin) : "from recipe"} />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Ideal Temp (°{tempUnit})</label>
-                <Input type="number" step="0.1"
-                  value={editForm.fermentTempIdeal ?? ""}
-                  onChange={(e) => setEditForm({ ...editForm, fermentTempIdeal: e.target.value })}
-                  placeholder={session.fermentTempIdeal != null ? String(session.fermentTempIdeal) : "from recipe"} />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Max Temp (°{tempUnit})</label>
-                <Input type="number" step="0.1"
-                  value={editForm.fermentTempMax ?? ""}
-                  onChange={(e) => setEditForm({ ...editForm, fermentTempMax: e.target.value })}
-                  placeholder={session.fermentTempMax != null ? String(session.fermentTempMax) : "from recipe"} />
-              </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
+              <TempRangeFields prefix="fermentTemp" values={editForm} unit={tempUnit}
+                onChange={(p) => setEditForm({ ...editForm, ...p })}
+                placeholders={["from recipe", "from recipe", "from recipe"]} />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-2 font-medium">Conditioning Temperature (optional)</div>
+              <TempRangeFields prefix="conditionTemp" values={editForm} unit={tempUnit}
+                onChange={(p) => setEditForm({ ...editForm, ...p })}
+                placeholders={["from recipe", "from recipe", "from recipe"]} />
+              <p className="text-xs text-muted-foreground mt-1">Blank here and on the recipe means no temperature alerts while conditioning.</p>
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Auto-advance to Conditioning</label>
@@ -1058,6 +1055,8 @@ export default function BrewSessionDetail() {
         const fermStartLabel = fermStartEntry ? formatDateTimeShort(fermStartEntry.changedAt) : null;
         const fermEndLabel = fermEndEntry ? formatDateTimeShort(fermEndEntry.changedAt) : null;
         const tempRange = (telemetry as any)?.tempRange;
+        // The server sends the range for the current stage; say which one in the labels.
+        const rangeTag = tempRange?.phase === "conditioning" ? "Cond. " : "";
 
         const showTemp = chartSeries === "both" || chartSeries === "temp";
         const showGravity = chartSeries === "both" || chartSeries === "gravity";
@@ -1185,7 +1184,7 @@ export default function BrewSessionDetail() {
                     stroke="#22c55e"
                     strokeDasharray="5 3"
                     strokeWidth={1.5}
-                    label={{ value: "Ideal", position: "insideTopRight", fontSize: 9, fill: "#22c55e" }}
+                    label={{ value: `${rangeTag}Ideal`, position: "insideTopRight", fontSize: 9, fill: "#22c55e" }}
                   />
                 )}
                 {showTemp && tempRange?.min != null && (
@@ -1195,7 +1194,7 @@ export default function BrewSessionDetail() {
                     stroke="#ef4444"
                     strokeDasharray="3 3"
                     strokeWidth={1}
-                    label={{ value: "Min", position: "insideBottomRight", fontSize: 9, fill: "#ef4444" }}
+                    label={{ value: `${rangeTag}Min`, position: "insideBottomRight", fontSize: 9, fill: "#ef4444" }}
                   />
                 )}
                 {showTemp && tempRange?.max != null && (
@@ -1205,7 +1204,7 @@ export default function BrewSessionDetail() {
                     stroke="#ef4444"
                     strokeDasharray="3 3"
                     strokeWidth={1}
-                    label={{ value: "Max", position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
+                    label={{ value: `${rangeTag}Max`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
                   />
                 )}
                 {showTemp && (

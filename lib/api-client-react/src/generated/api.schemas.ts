@@ -105,6 +105,12 @@ export interface Recipe {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning. */
+  conditionTempMin?: number | null;
+  /** Maximum conditioning temperature threshold */
+  conditionTempMax?: number | null;
+  /** Ideal conditioning temperature target */
+  conditionTempIdeal?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -206,6 +212,12 @@ export interface CreateRecipeBody {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning. */
+  conditionTempMin?: number | null;
+  /** Maximum conditioning temperature threshold */
+  conditionTempMax?: number | null;
+  /** Ideal conditioning temperature target */
+  conditionTempIdeal?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -232,6 +244,12 @@ export interface UpdateRecipeBody {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning. */
+  conditionTempMin?: number | null;
+  /** Maximum conditioning temperature threshold */
+  conditionTempMax?: number | null;
+  /** Ideal conditioning temperature target */
+  conditionTempIdeal?: number | null;
   daysPlanned?: number | null;
   daysBrewing?: number | null;
   daysFermenting?: number | null;
@@ -305,6 +323,12 @@ export interface BrewSession {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning. */
+  conditionTempMin?: number | null;
+  /** Maximum conditioning temperature threshold */
+  conditionTempMax?: number | null;
+  /** Ideal conditioning temperature target */
+  conditionTempIdeal?: number | null;
   /** null = use global setting, true = always auto-advance, false = always manual */
   autoAdvanceToConditioning?: boolean | null;
   tastingNotes?: string | null;
@@ -374,6 +398,12 @@ export interface CreateBrewSessionBody {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning. */
+  conditionTempMin?: number | null;
+  /** Maximum conditioning temperature threshold */
+  conditionTempMax?: number | null;
+  /** Ideal conditioning temperature target */
+  conditionTempIdeal?: number | null;
 }
 
 export interface UpdateBrewSessionBody {
@@ -395,6 +425,12 @@ export interface UpdateBrewSessionBody {
   fermentTempMax?: number | null;
   /** Ideal fermentation temperature target */
   fermentTempIdeal?: number | null;
+  /** Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning. */
+  conditionTempMin?: number | null;
+  /** Maximum conditioning temperature threshold */
+  conditionTempMax?: number | null;
+  /** Ideal conditioning temperature target */
+  conditionTempIdeal?: number | null;
   /** null = use global setting, true = always auto-advance, false = always manual */
   autoAdvanceToConditioning?: boolean | null;
   tastingNotes?: string | null;

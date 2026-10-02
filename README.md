@@ -761,9 +761,9 @@ sensor:
 sudo apt update && sudo apt upgrade -y
 ```
 
-**2. Install Node.js v20**
+**2. Install Node.js v24**
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 

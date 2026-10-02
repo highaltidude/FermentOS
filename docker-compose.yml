@@ -45,7 +45,7 @@ services:
       # does not auto-create it as root, which the uid-100 service user could not write.
       - ./data/backups:/app/data/backups
     healthcheck:
-      # node, not wget/curl — the runner image (node:20-slim) doesn't have either installed.
+      # node, not wget/curl — the runner image (node:24-slim) doesn't have either installed.
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/api/healthz', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 15s
       timeout: 5s

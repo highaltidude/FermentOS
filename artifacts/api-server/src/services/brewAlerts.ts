@@ -4,6 +4,7 @@ import { calcInsights } from "../lib/fermentationInsights";
 import { batteryWarningLevel } from "../lib/batteryUtil";
 import { getConfigValue } from "./appConfig";
 import { activeTempPhase } from "../lib/alertPolicy";
+import { isGravityStalled } from "../lib/gravityStall";
 
 /**
  * Brew telemetry and alert computation.
@@ -219,17 +220,8 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
 
   const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
 
-  // Gravity stall alert — gravity unchanged for 24h
-  if (readings.length >= 2) {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentReadings = readings.filter((r) => r.gravity != null && new Date(r.receivedAt) >= cutoff);
-    if (recentReadings.length >= 2) {
-      const gravityValues = recentReadings.map((r) => r.gravity!);
-      const range = Math.max(...gravityValues) - Math.min(...gravityValues);
-      if (range < 0.001) {
-        alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });
-      }
-    }
+  if (isGravityStalled(readings)) {
+    alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });
   }
 
   return { brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, hasAssignments: true };

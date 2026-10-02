@@ -1,0 +1,57 @@
+# Version updates land on beta, like every other change, so they ride the
+# normal beta -> main promotion. Security-update PRs ignore target-branch and
+# always open against main; retarget them to beta (or apply the bump on beta).
+#
+# Commits are chore(deps) so a routine bump never cuts a release on its own.
+# Retitle a PR fix(deps) when the update is worth shipping.
+#
+# The cooldown holds back versions published in the last week, so a
+# compromised or broken release has time to be pulled before it reaches a PR.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    target-branch: beta
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Minor and patch bumps arrive as one PR; majors stay separate so each
+      # can be tested on its own.
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: beta
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: "/docker"
+    target-branch: beta
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      # Move Node majors by hand, to the next LTS, together with CI and
+      # install.sh. Dependabot would otherwise offer odd-numbered releases.
+      - dependency-name: node
+        update-types: [version-update:semver-major]

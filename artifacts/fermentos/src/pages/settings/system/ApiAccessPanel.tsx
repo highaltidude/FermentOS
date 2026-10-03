@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { copyText } from "@/lib/clipboard";
 import { BASE } from "../shared";
 
 type ApiToken = {
@@ -111,11 +112,10 @@ export function ApiAccessPanel() {
   };
 
   const handleCopy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyText(text)) {
       toast({ title: "Copied to clipboard" });
-    } catch {
-      toast({ title: "Could not copy", variant: "destructive" });
+    } else {
+      toast({ title: "Couldn't copy", description: "Select the text and copy it by hand.", variant: "destructive" });
     }
   };
 

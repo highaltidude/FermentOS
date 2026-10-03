@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, sensorDevicesTable, sensorReadingsTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable, ACTIVE_BREW_STATUSES } from "@workspace/db";
 import { eq, and, gte } from "drizzle-orm";
-import { calcConnectionStatus, buildAlerts } from "../services/brewAlerts";
+import { calcConnectionStatus, buildAlerts, computeBrewAlerts } from "../services/brewAlerts";
+import { alertsForBrew } from "../lib/alertPolicy";
 import { getLatestReading, getActiveAssignment, getBrewName } from "../services/sensorDevices";
 import { calcInsights } from "../lib/fermentationInsights";
 
@@ -36,7 +37,21 @@ router.get("/status", async (req, res) => {
       }
 
       const connectionStatus = calcConnectionStatus(device.lastSeenAt, latestReading?.reportedInterval ?? null);
-      const alerts = buildAlerts(device, latestReading, connectionStatus);
+      // An assigned device reports its brew's alerts too, from the same
+      // computation the brew page and the notifications use: the temperature
+      // range for the brew's current stage and the 24-hour stall check.
+      // Unassigned, there is no range to check, so only offline and battery.
+      let alerts;
+      if (activeAssignment) {
+        const telemetry = await computeBrewAlerts(activeAssignment.brewSessionId);
+        const status = telemetry.status ?? null;
+        alerts = alertsForBrew(telemetry.alerts, {
+          status,
+          active: status != null && (ACTIVE_BREW_STATUSES as readonly string[]).includes(status),
+        });
+      } else {
+        alerts = buildAlerts(device, latestReading, connectionStatus);
+      }
 
       return {
         deviceId: device.id,

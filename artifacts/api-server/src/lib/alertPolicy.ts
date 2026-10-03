@@ -26,6 +26,27 @@ export function activeTempPhase(status: string): "fermenting" | "conditioning" {
   return status === "conditioning" ? "conditioning" : "fermenting";
 }
 
+/** Alerts that come from the brew (its range and its gravity), not the device. */
+const BREW_ALERT_TYPES = new Set(["temp_out_of_range", "gravity_stalled"]);
+
+/**
+ * The alerts that hold for a brew in its current stage — what the alert
+ * monitor would act on, minus its debounce and repeat bookkeeping. Used where
+ * alerts are reported per device (the Home Assistant endpoint): device alerts
+ * always count, brew alerts only while the brew is active and only when they
+ * apply to its stage. `active` is passed in because ACTIVE_BREW_STATUSES lives
+ * in @workspace/db, which this file must not import.
+ */
+export function alertsForBrew<A extends { type: string }>(
+  alerts: A[],
+  brew: { status: string | null | undefined; active: boolean },
+): A[] {
+  return alerts.filter((a) => {
+    if (!BREW_ALERT_TYPES.has(a.type)) return true;
+    return brew.active && brew.status != null && alertAppliesToStatus(a.type, brew.status);
+  });
+}
+
 /** Types sent at most once per brew session, ignoring the repeat interval. */
 export function notifiesOncePerBrew(alertType: string): boolean {
   return alertType === "gravity_stalled";

@@ -34,7 +34,7 @@ packages:
 
 catalog:
   '@tailwindcss/vite': ^4.3.3
-  '@tanstack/react-query': ^5.103.3
+  '@tanstack/react-query': ^5.104.0
   # Matches the oldest Node FermentOS runs on (install.sh still accepts 22), so
   # nothing typechecks against an API the runtime lacks. Raise with that floor.
   '@types/node': ^22.19.0

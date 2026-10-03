@@ -11,14 +11,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@types/multer": "^2.1.0",
+    "@types/multer": "^2.2.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
     "multer": "^2.4.0",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.6.0",
     "pino": "^9",
     "pino-http": "^10",
     "ssh2-sftp-client": "^12.1.1"

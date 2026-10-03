@@ -49,6 +49,9 @@ import type {
   GetUpcomingBrewsParams,
   HaStatusResponse,
   HealthStatus,
+  HttpsEnableBody,
+  HttpsJobStarted,
+  HttpsStatus,
   ISpindelPayload,
   ISpindelReadingsPage,
   ISpindelSettings,
@@ -7550,3 +7553,275 @@ export function useGetSystemHealthHistory<
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+export const getGetHttpsStatusUrl = () => {
+  return `/api/admin/https`;
+};
+
+/**
+ * @summary HTTPS (Caddy front) status, plus the progress of any enable/disable job
+ */
+export const getHttpsStatus = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<HttpsStatus> => {
+  return customFetch<HttpsStatus>(getGetHttpsStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetHttpsStatusQueryKey = () => {
+  return [`/api/admin/https`] as const;
+};
+
+export const getGetHttpsStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getHttpsStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHttpsStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetHttpsStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHttpsStatus>>> = ({
+    signal,
+  }) => getHttpsStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getHttpsStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetHttpsStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getHttpsStatus>>
+>;
+export type GetHttpsStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HTTPS (Caddy front) status, plus the progress of any enable/disable job
+ */
+
+export function useGetHttpsStatus<
+  TData = Awaited<ReturnType<typeof getHttpsStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHttpsStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetHttpsStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getEnableHttpsUrl = () => {
+  return `/api/admin/https/enable`;
+};
+
+/**
+ * Starts the root-owned HTTPS helper in the background; poll GET /admin/https for progress. Native (install.sh) installs only — Docker installs turn HTTPS on through .env.
+ * @summary Turn HTTPS on (or re-apply it) on a native install
+ */
+export const enableHttps = async (
+  httpsEnableBody: HttpsEnableBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<HttpsJobStarted> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<HttpsJobStarted>(getEnableHttpsUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(httpsEnableBody),
+  });
+};
+
+export const getEnableHttpsMutationKey = () => ["enableHttps"] as const;
+
+export const getEnableHttpsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enableHttps>>,
+    TError,
+    EnableHttpsMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof enableHttps>>,
+  TError,
+  EnableHttpsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getEnableHttpsMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof enableHttps>>,
+    EnableHttpsMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return enableHttps(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EnableHttpsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof enableHttps>>
+>;
+export type EnableHttpsMutationBody = BodyType<HttpsEnableBody>;
+export type EnableHttpsMutationError = ErrorType<ErrorResponse>;
+export type EnableHttpsMutationVariables = { data: BodyType<HttpsEnableBody> };
+
+/**
+ * @summary Turn HTTPS on (or re-apply it) on a native install
+ */
+export const useEnableHttps = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enableHttps>>,
+    TError,
+    EnableHttpsMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof enableHttps>>,
+  TError,
+  EnableHttpsMutationVariables,
+  TContext
+> => {
+  return useMutation(getEnableHttpsMutationOptions(options));
+};
+
+export const getDisableHttpsUrl = () => {
+  return `/api/admin/https/disable`;
+};
+
+/**
+ * @summary Turn HTTPS off on a native install
+ */
+export const disableHttps = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<HttpsJobStarted> => {
+  return customFetch<HttpsJobStarted>(getDisableHttpsUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDisableHttpsMutationKey = () => ["disableHttps"] as const;
+
+export const getDisableHttpsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disableHttps>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof disableHttps>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = getDisableHttpsMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof disableHttps>>,
+    void
+  > = () => {
+    return disableHttps(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DisableHttpsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof disableHttps>>
+>;
+
+export type DisableHttpsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Turn HTTPS off on a native install
+ */
+export const useDisableHttps = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disableHttps>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof disableHttps>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDisableHttpsMutationOptions(options));
+};

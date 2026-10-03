@@ -52,6 +52,10 @@ attached_assets/
 
 # Runtime data files — written by the app on the host, not version-controlled
 artifacts/api-server/update-history.json
+/update-history.json
+/update.log
+/update.lock
+/https.log
 .env.backup
 
 # Database dumps. pg_dump output carries api_tokens and app_config (ntfy topic,

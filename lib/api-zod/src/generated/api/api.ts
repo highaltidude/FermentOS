@@ -3657,3 +3657,82 @@ export const GetSystemHealthHistoryResponseItem = zod.object({
 export const GetSystemHealthHistoryResponse = zod.array(
   GetSystemHealthHistoryResponseItem,
 );
+
+/**
+ * @summary HTTPS (Caddy front) status, plus the progress of any enable/disable job
+ */
+export const GetHttpsStatusResponse = zod.object({
+  installType: zod.enum(["native", "docker"]),
+  enabled: zod
+    .boolean()
+    .describe(
+      "Native: the FermentOS Caddy configuration is installed. Docker: the Caddy service from docker-compose.https.yml answers.\n",
+    ),
+  caddyRunning: zod.boolean(),
+  rootCertReachable: zod
+    .boolean()
+    .describe("The CA root is being served on the plain-HTTP port"),
+  ip: zod
+    .string()
+    .nullable()
+    .describe("Address the certificate is issued for (native only)"),
+  names: zod.array(zod.string()),
+  httpPort: zod.number().int(),
+  httpsPort: zod.number().int(),
+  detectedIps: zod
+    .array(zod.string())
+    .describe("This host's LAN IPv4 addresses (native only)"),
+  defaultNames: zod.array(zod.string()),
+  helper: zod
+    .enum(["ok", "missing", "outdated", "notApplicable"])
+    .describe(
+      "Whether the root-owned helper the Settings buttons need is installed and allowed by sudoers. missing/outdated are fixed by running the repair script once.\n",
+    ),
+  job: zod.object({
+    state: zod.enum(["idle", "running", "succeeded", "failed"]),
+    action: zod
+      .union([zod.literal("enable"), zod.literal("disable"), zod.literal(null)])
+      .nullable(),
+    startedAt: zod.string().datetime({ offset: true }).nullable(),
+    finishedAt: zod.string().datetime({ offset: true }).nullable(),
+    logTail: zod.string().nullable(),
+  }),
+});
+
+/**
+ * Starts the root-owned HTTPS helper in the background; poll GET /admin/https for progress. Native (install.sh) installs only — Docker installs turn HTTPS on through .env.
+ * @summary Turn HTTPS on (or re-apply it) on a native install
+ */
+export const enableHttpsBodyNamesMax = 5;
+
+export const enableHttpsBodyHttpPortMax = 65535;
+
+export const enableHttpsBodyHttpsPortMax = 65535;
+
+export const EnableHttpsBody = zod.object({
+  ip: zod.string().describe("This host's LAN IPv4 address"),
+  names: zod.array(zod.string()).max(enableHttpsBodyNamesMax).optional(),
+  httpPort: zod
+    .number()
+    .int()
+    .min(1)
+    .max(enableHttpsBodyHttpPortMax)
+    .optional(),
+  httpsPort: zod
+    .number()
+    .int()
+    .min(1)
+    .max(enableHttpsBodyHttpsPortMax)
+    .optional(),
+});
+
+export const EnableHttpsResponse = zod.object({
+  started: zod.boolean(),
+});
+
+/**
+ * @summary Turn HTTPS off on a native install
+ */
+export const DisableHttpsResponse = zod.object({
+  started: zod.boolean(),
+});

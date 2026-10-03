@@ -60,7 +60,7 @@ install to a tracked first batch.
 - **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
 - **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. Temperature is checked against the fermentation range while fermenting and an optional separate conditioning range (for a cold crash or lagering) while conditioning. See [Get alerts on your phone](#get-alerts-on-your-phone)
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
-- **Optional HTTPS** — One command puts FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
+- **Optional HTTPS** — Turn it on from Settings (or with one command) to put FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
 - **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something
 - **Auto-advance to Conditioning** — Move a batch on automatically once fermentation looks finished, so a forgotten status does not leave it sitting in Fermenting for weeks
@@ -395,21 +395,35 @@ redirects to HTTPS.
 
 **1. Turn it on**
 
-*Installed with `install.sh` (the usual Raspberry Pi install):* from the
-FermentOS folder, run
+Open **Settings → System → Integrations → HTTPS**. The panel walks you through
+the rest of this section — turning it on, the root certificate download, and the
+steps for each kind of device.
+
+*Installed with `install.sh` (the usual Raspberry Pi install):* pick the Pi's
+address, optionally add names such as `fermentos.local`, and click **Turn on
+HTTPS**. FermentOS installs Caddy, points it at itself, and shows the addresses
+to use; **Turn off** puts everything back. If ports 80 or 443 are taken by
+something else it stops and says so — choose other ports under the panel's port
+option. If the Pi already runs Caddy with its own configuration, it stops too,
+rather than replace that configuration and take your other sites offline.
+
+Installing Caddy needs root, which FermentOS gets through a small helper that
+`install.sh` puts in place. On an install from before this was added, the panel
+shows a one-time command to run on the Pi first:
 
 ```bash
-sudo bash enable-https.sh
+curl -sSL http://<pi-ip>:3000/api/admin/repair-script | sudo bash
 ```
 
-It installs Caddy, points it at FermentOS, and prints the addresses to use. It
-issues the certificate for the Pi's IP and for `<hostname>.local`; to choose
-them yourself, set `FERMENTOS_IP` and `FERMENTOS_NAMES` (space-separated) when
-running it. If ports 80 or 443 are taken by something else, it stops and says
-so — set `HTTP_PORT` / `HTTPS_PORT` to use others.
+From a shell instead, run `sudo bash enable-https.sh` in the FermentOS folder.
+It does the same thing, issuing the certificate for the Pi's IP and for
+`<hostname>.local`; set `FERMENTOS_IP` and `FERMENTOS_NAMES` (space-separated)
+to choose them yourself, and `HTTP_PORT` / `HTTPS_PORT` to move off 80/443.
 
-*Installed with Docker (on a Pi or anything else):* add these lines to `.env` in
-the FermentOS folder, then run `docker compose up -d`:
+*Installed with Docker (on a Pi or anything else):* the app runs in a container
+and can't add a service to your compose setup, so the panel generates the lines
+for you and shows when Caddy is up. Add them to `.env` in the FermentOS folder,
+then run `docker compose up -d`:
 
 ```bash
 COMPOSE_PATH_SEPARATOR=:          # lets the next line work on Windows too
@@ -423,9 +437,10 @@ FERMENTOS_NAMES=fermentos.local  # optional extra names, space-separated
 it off 80/443 if those are taken.
 
 **2. Reserve the IP address.** The certificate names the Pi's IP, so give the Pi
-a fixed address in your router's DHCP settings. If the IP ever changes, re-run
-`enable-https.sh` (or update `FERMENTOS_IP`) — devices keep trusting the same
-root, so there's nothing to redo on them. `<hostname>.local` names work on
+a fixed address in your router's DHCP settings. If the IP ever changes, choose
+the new address in Settings and re-apply (or re-run `enable-https.sh`, or update
+`FERMENTOS_IP`) — devices keep trusting the same root, so there's nothing to
+redo on them. `<hostname>.local` names work on
 iPhone, Mac, Windows and Linux, and on Android 12 or later; use the IP on older
 Android phones.
 
@@ -453,7 +468,7 @@ Now open `https://<pi-ip>` and install FermentOS from there as described
 **Keep the CA private.** The root's private key lives on the Pi (Docker: the
 `caddy_data` volume; native: `/var/lib/caddy`). Anyone holding it could
 impersonate *any* website to the devices that trust your root, so never copy it
-anywhere shared. To undo everything, run `sudo bash enable-https.sh --disable`
+anywhere shared. To undo everything, click **Turn off** in Settings or run `sudo bash enable-https.sh --disable`
 (or remove the `COMPOSE_FILE` line and run `docker compose up -d
 --remove-orphans`), and remove the certificate from each device.
 
@@ -1251,6 +1266,9 @@ Bare-metal/systemd installs only (Docker updates by rebuilding the image).
 | POST | `/api/admin/update-lock/clear` | Force-clear a stuck update/rollback lock |
 | GET | `/api/admin/repair-script` | A copy-pasteable `sudo bash` script that fixes missing sudoers permissions — always exempt from auth |
 | GET | `/api/admin/sudoers-line` | The raw sudoers line the repair script installs — always exempt from auth |
+| GET | `/api/admin/https` | HTTPS status: install type, whether Caddy is running and serving the root certificate, the certificate's address, names and ports, this host's LAN addresses, whether the root helper is installed, and the progress of any turn-on/turn-off job |
+| POST | `/api/admin/https/enable` | Turn HTTPS on or re-apply it (native installs) — body `{ "ip": "<IPv4>", "names"?: string[], "httpPort"?: number, "httpsPort"?: number }`. Runs in the background; returns 202, 400 on invalid settings or a missing helper, 409 while an HTTPS job, update or rollback runs |
+| POST | `/api/admin/https/disable` | Turn HTTPS off (native installs), same responses |
 
 ---
 

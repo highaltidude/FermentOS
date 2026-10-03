@@ -234,12 +234,21 @@ success "Service installed and started"
 # calls hang forever waiting for a password — which is what causes the
 # update progress bar to freeze at 95% on "Restarting service".
 step "Configuring passwordless sudo for service control"
+
+# Root-owned copy of the HTTPS helper for Settings → System → Integrations → HTTPS. It has to
+# live outside the install directory: that belongs to ${SERVICE_USER}, and a
+# script the service user can edit must never be runnable as root.
+sudo install -d -o root -g root -m 0755 /usr/local/libexec/fermentos
+sudo install -o root -g root -m 0755 "${INSTALL_DIR}/scripts/https-helper.sh" /usr/local/libexec/fermentos/https
+sudo install -o root -g root -m 0644 "${INSTALL_DIR}/docker/Caddyfile" /usr/local/libexec/fermentos/Caddyfile
+
 SUDOERS_TMP="$(mktemp)"
+# Keep this line in step with SUDOERS_LINE in artifacts/api-server/src/routes/admin.ts.
 cat > "$SUDOERS_TMP" <<EOF
 # FermentOS — installed by install.sh. Allows the service user to restart
-# the fermentos unit and reboot the host from the in-app admin UI without a
-# password prompt. Safe to remove if you don't use those buttons.
-${SERVICE_USER} ALL=(root) NOPASSWD: /bin/systemctl restart fermentos, /usr/bin/systemctl restart fermentos, /bin/systemctl reboot, /usr/bin/systemctl reboot, /sbin/reboot, /usr/sbin/reboot
+# the fermentos unit, reboot the host and turn HTTPS on or off from the in-app
+# admin UI without a password prompt. Safe to remove if you don't use those buttons.
+${SERVICE_USER} ALL=(root) NOPASSWD: /bin/systemctl restart fermentos, /usr/bin/systemctl restart fermentos, /bin/systemctl daemon-reload, /usr/bin/systemctl daemon-reload, /bin/systemctl reboot, /usr/bin/systemctl reboot, /sbin/reboot, /usr/sbin/reboot, /usr/local/libexec/fermentos/https
 EOF
 chmod 0440 "$SUDOERS_TMP"
 # visudo -c validates the syntax before we install — a malformed file in

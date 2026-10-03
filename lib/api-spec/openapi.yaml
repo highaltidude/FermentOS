@@ -1375,6 +1375,79 @@ paths:
                 items:
                   $ref: "#/components/schemas/SystemHealthSample"
 
+  /admin/https:
+    get:
+      operationId: getHttpsStatus
+      tags: [system]
+      summary: HTTPS (Caddy front) status, plus the progress of any enable/disable job
+      responses:
+        "200":
+          description: Current HTTPS status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HttpsStatus"
+
+  /admin/https/enable:
+    post:
+      operationId: enableHttps
+      tags: [system]
+      summary: Turn HTTPS on (or re-apply it) on a native install
+      description: >
+        Starts the root-owned HTTPS helper in the background; poll
+        GET /admin/https for progress. Native (install.sh) installs only —
+        Docker installs turn HTTPS on through .env.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HttpsEnableBody"
+      responses:
+        "202":
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HttpsJobStarted"
+        "400":
+          description: Invalid settings, or not available on this install
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: An HTTPS job, update or rollback is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/https/disable:
+    post:
+      operationId: disableHttps
+      tags: [system]
+      summary: Turn HTTPS off on a native install
+      responses:
+        "202":
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HttpsJobStarted"
+        "400":
+          description: Not available on this install
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: An HTTPS job, update or rollback is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     IdParam:
@@ -1397,6 +1470,105 @@ components:
         error:
           type: string
       required: [error]
+
+    HttpsStatus:
+      type: object
+      properties:
+        installType:
+          type: string
+          enum: [native, docker]
+        enabled:
+          type: boolean
+          description: >
+            Native: the FermentOS Caddy configuration is installed. Docker: the
+            Caddy service from docker-compose.https.yml answers.
+        caddyRunning:
+          type: boolean
+        rootCertReachable:
+          type: boolean
+          description: The CA root is being served on the plain-HTTP port
+        ip:
+          type: string
+          nullable: true
+          description: Address the certificate is issued for (native only)
+        names:
+          type: array
+          items:
+            type: string
+        httpPort:
+          type: integer
+        httpsPort:
+          type: integer
+        detectedIps:
+          type: array
+          description: This host's LAN IPv4 addresses (native only)
+          items:
+            type: string
+        defaultNames:
+          type: array
+          items:
+            type: string
+        helper:
+          type: string
+          enum: [ok, missing, outdated, notApplicable]
+          description: >
+            Whether the root-owned helper the Settings buttons need is installed
+            and allowed by sudoers. missing/outdated are fixed by running the
+            repair script once.
+        job:
+          $ref: "#/components/schemas/HttpsJob"
+      required: [installType, enabled, caddyRunning, rootCertReachable, ip, names, httpPort, httpsPort, detectedIps, defaultNames, helper, job]
+
+    HttpsJob:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [idle, running, succeeded, failed]
+        action:
+          type: string
+          enum: [enable, disable]
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        logTail:
+          type: string
+          nullable: true
+      required: [state, action, startedAt, finishedAt, logTail]
+
+    HttpsEnableBody:
+      type: object
+      properties:
+        ip:
+          type: string
+          description: This host's LAN IPv4 address
+        names:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+        httpPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        httpsPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+      required: [ip]
+
+    HttpsJobStarted:
+      type: object
+      properties:
+        started:
+          type: boolean
+      required: [started]
 
     BrewStatus:
       type: string

@@ -13,6 +13,104 @@ export interface ErrorResponse {
   error: string;
 }
 
+export type HttpsStatusInstallType =
+  (typeof HttpsStatusInstallType)[keyof typeof HttpsStatusInstallType];
+
+export const HttpsStatusInstallType = {
+  native: "native",
+  docker: "docker",
+} as const;
+
+/**
+ * Whether the root-owned helper the Settings buttons need is installed and allowed by sudoers. missing/outdated are fixed by running the repair script once.
+ */
+export type HttpsStatusHelper =
+  (typeof HttpsStatusHelper)[keyof typeof HttpsStatusHelper];
+
+export const HttpsStatusHelper = {
+  ok: "ok",
+  missing: "missing",
+  outdated: "outdated",
+  notApplicable: "notApplicable",
+} as const;
+
+export type HttpsJobState = (typeof HttpsJobState)[keyof typeof HttpsJobState];
+
+export const HttpsJobState = {
+  idle: "idle",
+  running: "running",
+  succeeded: "succeeded",
+  failed: "failed",
+} as const;
+
+/**
+ * @nullable
+ */
+export type HttpsJobAction =
+  | (typeof HttpsJobAction)[keyof typeof HttpsJobAction]
+  | null;
+
+export const HttpsJobAction = {
+  enable: "enable",
+  disable: "disable",
+} as const;
+
+export interface HttpsJob {
+  state: HttpsJobState;
+  /** @nullable */
+  action: HttpsJobAction;
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  finishedAt: string | null;
+  /** @nullable */
+  logTail: string | null;
+}
+
+export interface HttpsStatus {
+  installType: HttpsStatusInstallType;
+  /** Native: the FermentOS Caddy configuration is installed. Docker: the Caddy service from docker-compose.https.yml answers. */
+  enabled: boolean;
+  caddyRunning: boolean;
+  /** The CA root is being served on the plain-HTTP port */
+  rootCertReachable: boolean;
+  /**
+   * Address the certificate is issued for (native only)
+   * @nullable
+   */
+  ip: string | null;
+  names: string[];
+  httpPort: number;
+  httpsPort: number;
+  /** This host's LAN IPv4 addresses (native only) */
+  detectedIps: string[];
+  defaultNames: string[];
+  /** Whether the root-owned helper the Settings buttons need is installed and allowed by sudoers. missing/outdated are fixed by running the repair script once. */
+  helper: HttpsStatusHelper;
+  job: HttpsJob;
+}
+
+export interface HttpsEnableBody {
+  /** This host's LAN IPv4 address */
+  ip: string;
+  /** @maxItems 5 */
+  names?: string[];
+  /**
+   * @minimum 1
+   * @maximum 65535
+   */
+  httpPort?: number;
+  /**
+   * @minimum 1
+   * @maximum 65535
+   */
+  httpsPort?: number;
+}
+
+export interface HttpsJobStarted {
+  started: boolean;
+}
+
 export type BrewStatus = (typeof BrewStatus)[keyof typeof BrewStatus];
 
 export const BrewStatus = {

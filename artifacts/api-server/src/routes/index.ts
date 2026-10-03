@@ -13,6 +13,7 @@ import backupRouter from "./backup";
 import haRouter from "./ha";
 import sensorsRouter from "./sensors";
 import integrationsRouter from "./integrations";
+import httpsRouter from "./https";
 import { apiAuth } from "../middlewares/apiAuth";
 
 const router: IRouter = Router();
@@ -33,6 +34,7 @@ router.use("/equipment", equipmentRouter);
 router.use("/admin", adminRouter);
 router.use(settingsRouter);
 router.use(systemRouter);
+router.use(httpsRouter);
 router.use(backupRouter);
 router.use("/ha", haRouter);
 router.use(sensorsRouter);

@@ -1,11 +1,14 @@
 import { Router } from "express";
 import { execSync, spawn } from "child_process";
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, renameSync } from "fs";
 import path from "path";
 import os from "os";
 import { getConfig as getBackupConfig, runBackup } from "../services/backup.js";
 import { computeBackupAudit } from "../services/backupAudit.js";
 import { IS_DOCKER } from "../lib/runtime.js";
+import { HTTPS_HELPER_PATH } from "../lib/httpsConfig.js";
+import { LOCK_STALE_MS, clearLock, getLockState, lockBusyBody, readLock, writeLock } from "../services/updateLock.js";
+import { httpsJobBusyBody } from "../services/httpsSetup.js";
 
 const router = Router();
 
@@ -46,20 +49,14 @@ const UPDATE_LOG = path.join(REPO_ROOT, "update.log");
 const UPDATE_SCRIPT = path.join(REPO_ROOT, "update.sh");
 const ROLLBACK_SCRIPT = path.join(REPO_ROOT, "rollback.sh");
 const HISTORY_FILE = path.join(REPO_ROOT, "update-history.json");
-// Single-flight lock for update + rollback. Both routes refuse to start a new
-// run if a fresh lock is on disk; the spawned scripts remove this file on
-// exit (success or failure) via a bash `trap`. We treat anything older than
-// LOCK_STALE_MS as "the script crashed before clearing it" and let the user
-// force-clear from the UI.
-const UPDATE_LOCK_FILE = path.join(REPO_ROOT, "update.lock");
-const LOCK_STALE_MS = 15 * 60 * 1000;
 // The unix user the api-server is running as. Embedded in the sudoers-repair
 // script so a copy-paste fix is targeted at the right account.
 const SERVICE_USER = os.userInfo().username;
-// NOPASSWD entry that lets the service user restart the unit, reload systemd
-// and reboot the host. Served raw by /sudoers-line and embedded in the script
-// from /repair-script.
-const SUDOERS_LINE = `${SERVICE_USER} ALL=(root) NOPASSWD: /bin/systemctl restart fermentos, /usr/bin/systemctl restart fermentos, /bin/systemctl daemon-reload, /usr/bin/systemctl daemon-reload, /bin/systemctl reboot, /usr/bin/systemctl reboot, /sbin/reboot, /usr/sbin/reboot`;
+// NOPASSWD entry that lets the service user restart the unit, reload systemd,
+// reboot the host and run the root-owned HTTPS helper. Served raw by
+// /sudoers-line and embedded in the script from /repair-script. Keep in step
+// with the line install.sh writes.
+const SUDOERS_LINE = `${SERVICE_USER} ALL=(root) NOPASSWD: /bin/systemctl restart fermentos, /usr/bin/systemctl restart fermentos, /bin/systemctl daemon-reload, /usr/bin/systemctl daemon-reload, /bin/systemctl reboot, /usr/bin/systemctl reboot, /sbin/reboot, /usr/sbin/reboot, ${HTTPS_HELPER_PATH}`;
 // Cap on retained deploy history. 10 is plenty for a "oh no, undo that
 // release" workflow without letting the file grow unbounded over years of
 // auto-updates. Oldest entries are evicted FIFO.
@@ -327,50 +324,6 @@ function invalidateSudoOkCache() {
   sudoOkCache = null;
 }
 
-// ── Update lock ────────────────────────────────────────────────────────────
-type LockInfo = { kind: "update" | "rollback"; startedAt: string; hash?: string };
-
-function readLock(): LockInfo | null {
-  try {
-    if (!existsSync(UPDATE_LOCK_FILE)) return null;
-    const raw = readFileSync(UPDATE_LOCK_FILE, "utf8");
-    return JSON.parse(raw) as LockInfo;
-  } catch {
-    return null;
-  }
-}
-
-function writeLock(info: LockInfo) {
-  const tmp = `${UPDATE_LOCK_FILE}.tmp`;
-  writeFileSync(tmp, JSON.stringify(info));
-  renameSync(tmp, UPDATE_LOCK_FILE);
-}
-
-function clearLock() {
-  try {
-    if (existsSync(UPDATE_LOCK_FILE)) unlinkSync(UPDATE_LOCK_FILE);
-  } catch {
-    // best-effort
-  }
-}
-
-type LockState = LockInfo & { ageMs: number; stale: boolean };
-
-function getLockState(): LockState | null {
-  const l = readLock();
-  if (!l) return null;
-  const ageMs = Date.now() - new Date(l.startedAt).getTime();
-  return { ...l, ageMs, stale: ageMs > LOCK_STALE_MS };
-}
-
-// 409 body for "an update or rollback already holds the lock".
-function lockBusyBody(lock: LockState) {
-  return {
-    error: `An ${lock.kind} is already in progress (started ${Math.floor(lock.ageMs / 1000)}s ago). Wait for it to finish before starting another.`,
-    lock,
-  };
-}
-
 // Assembles the /version payload. The fields that never vary between the
 // Docker, bare-metal and git-failure cases are filled in here — including the
 // version, which stays known even when everything git-derived is not.
@@ -496,6 +449,28 @@ router.get("/repair-script", (_req, res) => {
     );
     return;
   }
+  // The root-owned HTTPS helper and its Caddyfile ride along, base64-encoded so
+  // nothing in their contents can break out of the script. They are installed
+  // before the sudoers entry, so sudoers never names a path that isn't there.
+  const b64 = (rel: string) => {
+    try {
+      return readFileSync(path.join(REPO_ROOT, rel)).toString("base64");
+    } catch {
+      return "";
+    }
+  };
+  const helperB64 = b64("scripts/https-helper.sh");
+  const caddyfileB64 = b64("docker/Caddyfile");
+  const helperBlock = helperB64 && caddyfileB64
+    ? `install -d -o root -g root -m 0755 ${path.dirname(HTTPS_HELPER_PATH)}
+echo '${helperB64}' | base64 -d > "$TMP"
+install -o root -g root -m 0755 "$TMP" ${HTTPS_HELPER_PATH}
+echo '${caddyfileB64}' | base64 -d > "$TMP"
+install -o root -g root -m 0644 "$TMP" ${path.dirname(HTTPS_HELPER_PATH)}/Caddyfile
+echo "OK: HTTPS helper installed at ${HTTPS_HELPER_PATH}."
+`
+    : `echo "WARN: HTTPS helper not found in the install directory — skipping it."
+`;
   const script = `#!/usr/bin/env bash
 set -euo pipefail
 
@@ -510,10 +485,11 @@ fi
 
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT
+${helperBlock}
 cat > "$TMP" <<'SUDOERS'
 # FermentOS — installed by /api/admin/repair-script. Allows the service user
-# to restart the fermentos unit, reload systemd, and reboot the host from
-# the in-app admin UI without a password prompt.
+# to restart the fermentos unit, reload systemd, reboot the host and turn
+# HTTPS on or off from the in-app admin UI without a password prompt.
 ${SUDOERS_LINE}
 SUDOERS
 chmod 0440 "$TMP"
@@ -613,6 +589,8 @@ router.post("/update", async (req, res) => {
   if (earlyLock && !earlyLock.stale) {
     return res.status(409).json(lockBusyBody(earlyLock));
   }
+  const httpsBusy = httpsJobBusyBody();
+  if (httpsBusy) return res.status(409).json(httpsBusy);
 
   // Refuse to update while any table is unclassified. An update can migrate or
   // drop a table nobody has decided is worth backing up, and the restore path
@@ -886,6 +864,11 @@ router.post("/rollback", (req, res) => {
   const existingLock = getLockState();
   if (existingLock && !existingLock.stale) {
     res.status(409).json(lockBusyBody(existingLock));
+    return;
+  }
+  const httpsBusy = httpsJobBusyBody();
+  if (httpsBusy) {
+    res.status(409).json(httpsBusy);
     return;
   }
 

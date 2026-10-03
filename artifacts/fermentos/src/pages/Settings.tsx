@@ -18,6 +18,7 @@ import {
   Plug,
   Thermometer,
   Bell,
+  ShieldCheck,
 } from "lucide-react";
 import { SystemHealthPanel } from "@/components/SystemHealthPanel";
 import { BreweryNamePanel } from "./settings/brewing/BreweryNamePanel";
@@ -30,6 +31,7 @@ import { FermentTempPanel } from "./settings/brewing/FermentTempPanel";
 import { NotificationsPanel } from "./settings/brewing/NotificationsPanel";
 import { SystemUpdatePanel } from "./settings/system/updates/SystemUpdatePanel";
 import { ApiAccessPanel } from "./settings/system/ApiAccessPanel";
+import { HttpsPanel } from "./settings/system/HttpsPanel";
 import { ISpindelPanel } from "./settings/system/integrations/ISpindelPanel";
 import { HomeAssistantPanel } from "./settings/system/integrations/HomeAssistantPanel";
 import { DatabaseBackupPanel } from "./settings/system/DatabaseBackupPanel";
@@ -264,6 +266,20 @@ export default function Settings() {
                 </div>
                 <div className="p-4">
                   <ApiAccessPanel />
+                </div>
+              </div>
+
+              {/* HTTPS — Caddy with a local CA, turned on from here */}
+              <div className="bg-card border border-card-border rounded-lg">
+                <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">HTTPS</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Serve FermentOS over HTTPS with its own certificate authority — for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP.</p>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <HttpsPanel />
                 </div>
               </div>
 

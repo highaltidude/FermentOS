@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { BASE, RESTART_TIMEOUT_MS, type BackupBeforeUpdate, type VersionInfo } from "../../shared";
 import { renderReleaseMarkdown } from "./releaseMarkdown";
 import { parseLastStep, timeAgo, type HistoryEntry, type ReleaseNote, type UpdatePhase } from "./updateSteps";
+import { copyText } from "@/lib/clipboard";
 
 export function SystemUpdatePanel() {
   const { toast } = useToast();
@@ -459,8 +460,8 @@ export function SystemUpdatePanel() {
               type="button"
               title="Copy commit hash"
               className="text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => {
-                navigator.clipboard.writeText(version.hash);
+              onClick={async () => {
+                if (!(await copyText(version.hash))) return;
                 setCopiedHash(true);
                 setTimeout(() => setCopiedHash(false), 2000);
               }}
@@ -527,9 +528,12 @@ export function SystemUpdatePanel() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => {
-                navigator.clipboard.writeText(repairCurlCmd).catch(() => {});
-                toast({ title: "Copied", description: "Paste into a shell on the host." });
+              onClick={async () => {
+                if (await copyText(repairCurlCmd)) {
+                  toast({ title: "Copied", description: "Paste into a shell on the host." });
+                } else {
+                  toast({ title: "Couldn't copy", description: "Select the command and copy it by hand.", variant: "destructive" });
+                }
               }}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />

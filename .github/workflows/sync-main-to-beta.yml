@@ -64,15 +64,34 @@ jobs:
         # scanned far further back. That is why past post-promotion beta
         # releases carried 79-83 changelog entries reaching into already-shipped
         # work. The publish step below closes that gap.
+        #
+        # Only a push that changes main's released version may anchor, i.e. the
+        # release-please release commit. The promote merge lands on main first,
+        # while main still carries the previous release; anchoring then saw
+        # main == beta's base and created a stray <previous>.(patch+1)-beta1
+        # prerelease a minute before the real release re-anchored beta (1.7.1-beta1
+        # during the 1.8.0 release).
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # An all-zero or unknown "before" (first push, force push) counts as changed.
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null \
+            && git diff --quiet "$BEFORE" "$AFTER" -- .github/release-please/manifest-main.json; then
+            echo "anchored=false" >> "$GITHUB_OUTPUT"
+            echo "This push didn't change main's released version — no anchor needed"
+            exit 0
+          fi
+
           MANIFEST=.github/release-please/manifest-beta.json
           MAIN_VERSION=$(jq -r '."."' .github/release-please/manifest-main.json)
           BETA_VERSION=$(jq -r '."."' "$MANIFEST")
           BETA_BASE=$(echo "$BETA_VERSION" | sed -E 's/-beta[0-9]+$//')
 
           # Two cases need a new anchor:
-          #  - main is ahead of beta's base (a hotfix shipped straight from
+          #  - main is ahead of beta's base (a hotfix released straight from
           #    main): anchor to <main>-beta1, as a prerelease of main's version.
           #  - main has caught up with beta's base, i.e. this beta cycle was
           #    just promoted and released. Beta's version (say 1.6.0-beta1) now

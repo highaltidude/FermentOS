@@ -47,8 +47,7 @@ export const HttpsJobState = {
  * @nullable
  */
 export type HttpsJobAction =
-  | (typeof HttpsJobAction)[keyof typeof HttpsJobAction]
-  | null;
+  (typeof HttpsJobAction)[keyof typeof HttpsJobAction] | null;
 
 export const HttpsJobAction = {
   enable: "enable",
@@ -143,8 +142,7 @@ export const OffFlavor = {
  * @nullable
  */
 export type PackagingMethod =
-  | (typeof PackagingMethod)[keyof typeof PackagingMethod]
-  | null;
+  (typeof PackagingMethod)[keyof typeof PackagingMethod] | null;
 
 export const PackagingMethod = {
   keg: "keg",

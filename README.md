@@ -634,13 +634,20 @@ reference is under [Backups](#backups) in the API section.
 | GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown |
 
 If you already run Home Assistant, you can build notification automations on
-this endpoint instead of using FermentOS's own notifications. Note the
-`alerts` array here currently carries **`device_offline` and `battery_low`
-only** — temperature thresholds are evaluated per brew session and are not
-applied to this device-oriented endpoint, so a temperature automation needs
-to compare `latestReading.temperature` against your own threshold in HA. For
-temperature and stalled-fermentation alerts out of the box, use the built-in
-notifications (Settings → Brewing → Notifications) instead.
+this endpoint instead of using FermentOS's own notifications. Each device's
+`alerts` array carries the same alerts as the brew page:
+
+- `device_offline` and `battery_low` for every device
+- `temp_out_of_range` for a device assigned to a brew, checked against that
+  brew's range for its current stage — the fermentation range, or the
+  conditioning range while conditioning
+- `gravity_stalled` while that brew is Fermenting and gravity has been flat for
+  24 hours
+
+Temperature and stall alerts only appear for a brew on Brew Day, Fermenting or
+Conditioning. They are the live condition on each poll, without the built-in
+notifications' consecutive-reading threshold or once-per-batch stall rule, so
+add a `for:` to the automation's trigger to ride out a single odd reading.
 
 Response is an array, one entry per device:
 ```json
@@ -655,7 +662,9 @@ Response is an array, one entry per device:
     "lastSeenAt": "2024-03-16T10:00:00Z",
     "latestReading": { "gravity": 1.045, "temperature": 68.5, "battery": 3.9 },
     "insights": { "attenuationPercent": 42.5, "fermentationStatus": "slowing" },
-    "alerts": []
+    "alerts": [
+      { "type": "temp_out_of_range", "message": "Temperature 74.2°F is above maximum 70°F", "triggeredAt": "2024-03-16T10:00:05Z" }
+    ]
   }
 ]
 ```

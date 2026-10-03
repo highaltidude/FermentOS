@@ -1,4 +1,4 @@
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable, type brewStatusEnum } from "@workspace/db";
 import { eq, isNotNull, and, gte, lte } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
 import { batteryWarningLevel } from "../lib/batteryUtil";
@@ -108,6 +108,7 @@ export function buildAlerts(
 }
 
 type Reading = typeof sensorReadingsTable.$inferSelect;
+type BrewStatus = (typeof brewStatusEnum)[number];
 
 const RANGE_COLUMNS = {
   fermenting: { min: "fermentTempMin", max: "fermentTempMax", ideal: "fermentTempIdeal" },
@@ -120,9 +121,9 @@ const RANGE_COLUMNS = {
  * which switches temperature alerts off — so a batch in conditioning with no
  * conditioning range is simply not checked.
  */
-async function resolveTempRange(brewId: number): Promise<TempRange> {
+async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | null; range: TempRange }> {
   const [session] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, brewId));
-  if (!session) return null;
+  if (!session) return { status: null, range: null };
 
   const phase = activeTempPhase(session.status);
   const cols = RANGE_COLUMNS[phase];
@@ -139,9 +140,9 @@ async function resolveTempRange(brewId: number): Promise<TempRange> {
     }
   }
 
-  if (min == null && max == null && ideal == null) return null;
+  if (min == null && max == null && ideal == null) return { status: session.status, range: null };
   const unit = (await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F";
-  return { min, max, ideal, unit, phase };
+  return { status: session.status, range: { min, max, ideal, unit, phase } };
 }
 
 export type BrewTelemetry = {
@@ -154,6 +155,8 @@ export type BrewTelemetry = {
   /** Absent when the brew has never had a device assigned — see hasAssignments. */
   tempRange?: TempRange;
   isDeviceActive?: boolean;
+  /** The brew's stage, for callers that only alert on active brews. */
+  status?: BrewStatus | null;
   /** False when the brew has no assignment history at all. */
   hasAssignments: boolean;
 };
@@ -216,7 +219,7 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
 
   const connectionStatus = calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
 
-  const tempRange = await resolveTempRange(brewId);
+  const { status, range: tempRange } = await resolveTempRange(brewId);
 
   const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
 
@@ -224,5 +227,5 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
     alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });
   }
 
-  return { brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, hasAssignments: true };
+  return { brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, status, hasAssignments: true };
 }

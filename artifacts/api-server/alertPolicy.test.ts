@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 // The pure module, which imports nothing — services/alertMonitor.ts reaches
 // `@workspace/db` and throws at load without DATABASE_URL, as CI has none.
-import { activeTempPhase, alertAppliesToStatus, notifiesOncePerBrew } from "./src/lib/alertPolicy.js";
+import { activeTempPhase, alertAppliesToStatus, alertsForBrew, notifiesOncePerBrew } from "./src/lib/alertPolicy.js";
 
 const OTHER_TYPES = ["temp_out_of_range", "device_offline", "battery_low"];
 const ACTIVE = ["brew_day", "fermenting", "conditioning"];
@@ -38,5 +38,23 @@ describe("activeTempPhase", () => {
     for (const status of ["brew_day", "fermenting", "packaged"]) {
       expect(activeTempPhase(status)).toBe("fermenting");
     }
+  });
+});
+
+describe("alertsForBrew", () => {
+  const all = ["device_offline", "battery_low", "temp_out_of_range", "gravity_stalled"].map((type) => ({ type }));
+  const types = (status: string | null, active: boolean) => alertsForBrew(all, { status, active }).map((a) => a.type);
+
+  it("keeps everything while fermenting", () => {
+    expect(types("fermenting", true)).toEqual(["device_offline", "battery_low", "temp_out_of_range", "gravity_stalled"]);
+  });
+
+  it("drops a stall but keeps temperature while conditioning", () => {
+    expect(types("conditioning", true)).toEqual(["device_offline", "battery_low", "temp_out_of_range"]);
+  });
+
+  it("keeps only device alerts for a brew that isn't active", () => {
+    expect(types("packaged", false)).toEqual(["device_offline", "battery_low"]);
+    expect(types(null, false)).toEqual(["device_offline", "battery_low"]);
   });
 });

@@ -587,6 +587,12 @@ download it, or schedule daily or weekly runs that push to an SFTP server, keep
 a copy on the local disk, or both. Restores work from an uploaded file or from
 any backup still in local history.
 
+A restore replaces the whole database in one step: if the file turns out to be
+damaged part-way through, nothing changes. A file that was cut off during a
+download or upload is refused before anything is touched. A backup taken on an
+older version of FermentOS is brought up to the current one's tables and
+columns as it is restored.
+
 Local backups land in `data/backups` inside the install directory. On Docker that
 is bind-mounted to `./data/backups` on the host, so a dump is still there after a
 rebuild — and still reachable if the container itself will not start.

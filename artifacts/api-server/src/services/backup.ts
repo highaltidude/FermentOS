@@ -5,6 +5,7 @@ import os from "os";
 import cron, { type ScheduledTask } from "node-cron";
 import SftpClient from "ssh2-sftp-client";
 import { logger } from "../lib/logger.js";
+import { commandErrorReason } from "../lib/commandError.js";
 import { getConfigValue, setConfigValue } from "./appConfig.js";
 
 export type SftpConfig = {
@@ -85,7 +86,11 @@ export async function runDump(): Promise<string> {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL not set");
   const tmpFile = path.join(os.tmpdir(), `fermentos_${Date.now()}.sql`);
-  execSync(`pg_dump "${dbUrl}" -f "${tmpFile}"`, { timeout: 60000 });
+  try {
+    execSync(`pg_dump "${dbUrl}" -f "${tmpFile}"`, { timeout: 60000, stdio: "pipe" });
+  } catch (err) {
+    throw new Error(`pg_dump failed: ${commandErrorReason(err)}`);
+  }
   return tmpFile;
 }
 

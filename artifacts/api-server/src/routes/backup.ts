@@ -6,6 +6,7 @@ import os from "os";
 import multer from "multer";
 import SftpClient from "ssh2-sftp-client";
 import { computeBackupAudit } from "../services/backupAudit";
+import { commandErrorReason } from "../lib/commandError";
 import {
   type BackupConfig,
   type BackupTarget,
@@ -92,6 +93,24 @@ async function resolveExistingLocalBackup(filename: string, res: Response): Prom
 
 // ── Restore helper (shared by upload-restore and local-file-restore) ───────
 
+/** The last few KB of a file, for checking how a dump ends. */
+function readTail(filePath: string, bytes = 4096): string {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const size = fs.fstatSync(fd).size;
+      const len = Math.min(bytes, size);
+      const buf = Buffer.alloc(len);
+      fs.readSync(fd, buf, 0, len, size - len);
+      return buf.toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return "";
+  }
+}
+
 async function runRestoreFromFile(filePath: string): Promise<{ message: string }> {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL not set on server");
@@ -111,21 +130,53 @@ async function runRestoreFromFile(filePath: string): Promise<{ message: string }
     );
   }
 
-  // Step 1: wipe the schema
-  execSync(
-    `psql "${dbUrl}" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO PUBLIC;"`,
-    { timeout: 30000 },
-  );
+  // A cut-off file is the one failure the transaction below cannot catch:
+  // psql silently drops an unfinished last statement at end of file and exits
+  // 0, which would commit a half-restored database. pg_dump always writes this
+  // marker at the very end of a plain dump (only the \unrestrict line follows
+  // it), so its absence means the file is truncated or not a pg_dump at all.
+  if (!readTail(filePath).includes("-- PostgreSQL database dump complete")) {
+    throw new Error(
+      "This file is not a complete pg_dump — it may have been cut off during " +
+      "download or upload. Nothing was changed.",
+    );
+  }
 
-  // Step 2: recreate all tables via Drizzle migrations
-  execSync(`pnpm --filter @workspace/db run push`, {
-    timeout: 60000,
-    env: { ...process.env },
-    stdio: "pipe",
-  });
+  // Step 1: wipe and replay in one transaction. A plain pg_dump creates every
+  // table itself, so nothing may recreate them between the wipe and the replay
+  // (running drizzle push there made every restore fail on "already exists").
+  // -1 wraps both the -c and the -f in a single BEGIN/COMMIT, so a dump that
+  // fails part-way rolls back and leaves the current database untouched — the
+  // same guarantee restore.sh gives.
+  try {
+    execSync(
+      `psql "${dbUrl}" -v ON_ERROR_STOP=1 -1 ` +
+        `-c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO PUBLIC;" ` +
+        `-f "${filePath}"`,
+      { timeout: 120000, stdio: "pipe" },
+    );
+  } catch (err) {
+    throw new Error(`The backup could not be applied, so nothing was changed. ${commandErrorReason(err)}`);
+  }
 
-  // Step 3: replay the dump
-  execSync(`psql "${dbUrl}" -v ON_ERROR_STOP=1 -f "${filePath}"`, { timeout: 120000 });
+  // Step 2: bring a backup from an older release up to this release's schema.
+  // Plain push only adds: with no TTY it skips anything that would lose data
+  // (see lib/dataMigrations.ts), so a backup from a newer release is left as
+  // it is rather than trimmed. The data is already restored at this point, so
+  // a failure here is reported, not thrown — the next start runs push again.
+  try {
+    execSync(`pnpm --filter @workspace/db run push`, {
+      timeout: 60000,
+      env: { ...process.env },
+      stdio: "pipe",
+    });
+  } catch {
+    return {
+      message:
+        "Database restored, but updating it to this version's schema failed. " +
+        "Restart FermentOS to retry.",
+    };
+  }
 
   return { message: "Database restored. Restart the app for a fully clean state." };
 }

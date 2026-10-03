@@ -30,6 +30,10 @@ updates:
       # (orval.config.ts pins version: 3). Remove this once that is done.
       - dependency-name: zod
         update-types: [version-update:semver-major]
+      # @types/node tracks the oldest Node the app runs on, not the newest
+      # release; move its major by hand with the Node LTS (Docker, CI, install.sh).
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: "/"

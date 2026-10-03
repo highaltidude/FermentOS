@@ -17,8 +17,10 @@ import { apiAuth } from "../middlewares/apiAuth";
 
 const router: IRouter = Router();
 
-// Auth gate runs first; it self-exempts /admin/auth/* and /health so the
-// user can always recover from a lockdown via the web UI.
+// Auth gate runs first. It exempts a fixed list of health, recovery, Home
+// Assistant and iSpindel endpoints (middlewares/authExemptions.ts). The
+// /admin/auth/* routes are not exempt; the web UI reaches them through the
+// same-origin check, so the user can always recover from a lockdown.
 router.use(apiAuth);
 
 router.use(healthRouter);

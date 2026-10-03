@@ -1,20 +1,20 @@
 import { Router } from "express";
-import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable, appConfigTable, brewSessionStatusLogTable } from "@workspace/db";
+import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable, brewSessionStatusLogTable, ACTIVE_BREW_STATUSES } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { getBreweryName } from "../services/breweryName";
 
 const router = Router();
 
 router.get("/dashboard/summary", async (req, res) => {
-  const [recipes, sessions, inventory, breweryNameRow] = await Promise.all([
+  const [recipes, sessions, inventory, breweryName] = await Promise.all([
     db.select().from(recipesTable),
     db.select().from(brewSessionsTable).orderBy(brewSessionsTable.createdAt),
     db.select().from(inventoryTable),
-    db.select().from(appConfigTable).where(eq(appConfigTable.key, "brewery_name")),
+    getBreweryName(),
   ]);
 
   // brew_day, fermenting, and conditioning are all active. packaged is terminal.
-  const activeStatuses = ["brew_day", "fermenting", "conditioning"];
-  const activeSessions = sessions.filter((s) => activeStatuses.includes(s.status));
+  const activeSessions = sessions.filter((s) => ACTIVE_BREW_STATUSES.includes(s.status));
   const recentSessions = sessions.slice().reverse().slice(0, 5);
 
   const topRatedBrews = sessions
@@ -33,16 +33,15 @@ router.get("/dashboard/summary", async (req, res) => {
     totalBrewSessions: sessions.length,
     activeBrewCount: activeSessions.length,
     inventoryItemCount: inventory.length,
-    breweryName: breweryNameRow[0]?.value ?? null,
+    breweryName,
     recentSessions,
     topRatedBrews,
   });
 });
 
 router.get("/dashboard/active-brews", async (req, res) => {
-  const activeStatuses = ["brew_day", "fermenting", "conditioning"];
   const sessions = await db.select().from(brewSessionsTable);
-  const activeSessions = sessions.filter((s) => activeStatuses.includes(s.status));
+  const activeSessions = sessions.filter((s) => ACTIVE_BREW_STATUSES.includes(s.status));
 
   const now = new Date();
 

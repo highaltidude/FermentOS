@@ -6,7 +6,7 @@ import { getSystemStats } from "../services/systemStats.js";
 
 const router = Router();
 
-router.get("/system/stats", async (req, res) => {
+router.get("/system/stats", async (_req, res) => {
   return res.json(await getSystemStats());
 });
 

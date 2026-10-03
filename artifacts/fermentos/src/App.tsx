@@ -2,7 +2,6 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/Layout";
 import useUpdateChecker from "@/hooks/useUpdateChecker";
 import Dashboard from "@/pages/Dashboard";
@@ -12,6 +11,7 @@ import NewRecipe from "@/pages/NewRecipe";
 import BrewSessions from "@/pages/BrewSessions";
 import BrewSessionDetail from "@/pages/BrewSessionDetail";
 import NewBrewSession from "@/pages/NewBrewSession";
+import BoilSession, { BoilPicker } from "@/pages/BoilSession";
 import Inventory from "@/pages/Inventory";
 import Equipment from "@/pages/Equipment";
 import Calculators from "@/pages/Calculators";
@@ -41,8 +41,10 @@ function Router() {
         <Route path="/recipes/:id" component={RecipeDetail} />
         <Route path="/recipes" component={Recipes} />
         <Route path="/brew-sessions/new" component={NewBrewSession} />
+        <Route path="/brew-sessions/:id/boil" component={BoilSession} />
         <Route path="/brew-sessions/:id" component={BrewSessionDetail} />
         <Route path="/brew-sessions" component={BrewSessions} />
+        <Route path="/boil" component={BoilPicker} />
         <Route path="/ingredients" component={Inventory} />
         <Route path="/equipment" component={Equipment} />
         <Route path="/calculators" component={Calculators} />
@@ -57,13 +59,11 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-        <SonnerToaster />
-      </TooltipProvider>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <Router />
+      </WouterRouter>
+      <Toaster />
+      <SonnerToaster />
     </QueryClientProvider>
   );
 }

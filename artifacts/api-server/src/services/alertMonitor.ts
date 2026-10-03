@@ -1,10 +1,12 @@
 import cron from "node-cron";
-import { db, brewSessionsTable, brewAlertStateTable, appConfigTable, sensorDeviceBrewAssignmentsTable } from "@workspace/db";
+import { db, brewSessionsTable, brewAlertStateTable, sensorDeviceBrewAssignmentsTable, ACTIVE_BREW_STATUSES } from "@workspace/db";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { computeBrewAlerts, tempExcursion, type BrewTelemetry } from "./brewAlerts.js";
 import { getNotifyConfig, sendNotification, type AlertType } from "./notifications.js";
 import { resolveRepeatHours } from "../lib/notifyIntervals.js";
+import { alertAppliesToStatus, notifiesOncePerBrew } from "../lib/alertPolicy.js";
+import { getTempAlertReadings } from "./tempAlertReadings.js";
 
 /**
  * Scheduled alert monitor.
@@ -16,28 +18,6 @@ import { resolveRepeatHours } from "../lib/notifyIntervals.js";
  * through the configured channel.
  */
 
-// Only these stages are worth alerting on. `packaged` is terminal — the beer
-// is in the keg, a stale probe reading must never wake anyone up.
-const ACTIVE_STATUSES = ["brew_day", "fermenting", "conditioning"] as const;
-
-const TEMP_ALERT_READINGS_KEY = "temp_alert_consecutive_readings";
-
-/**
- * Consecutive out-of-range readings required before the first temperature
- * notification — the `temp_alert_consecutive_readings` setting, shown in the
- * UI as "Temperature Alert Threshold: N readings".
- *
- * Counted in readings, not monitor ticks. The monitor runs every 5 minutes
- * but an iSpindel typically reports every 30, so counting ticks would fire
- * after ~10 minutes on the strength of a single reading — far sooner than
- * the setting promises.
- */
-async function getRequiredTempReadings(): Promise<number> {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, TEMP_ALERT_READINGS_KEY));
-  const parsed = row?.value ? parseInt(row.value, 10) : 2;
-  return Number.isFinite(parsed) && parsed >= 2 && parsed <= 10 ? parsed : 2;
-}
-
 /**
  * Trailing run of readings that are outside the range. Readings with no
  * temperature at all are skipped rather than treated as a recovery, so one
@@ -47,6 +27,8 @@ async function getRequiredTempReadings(): Promise<number> {
  * already slow by construction — device_offline needs 4x the report interval
  * to elapse, gravity_stalled needs 24 hours of flat gravity, and battery_low
  * only trips once the pack is under 20% — so they notify on first detection.
+ * gravity_stalled is further limited by lib/alertPolicy.ts: it is only checked
+ * while fermenting and is sent at most once per brew.
  */
 function consecutiveTempExcursions(telemetry: BrewTelemetry): number {
   const range = telemetry.tempRange ?? null;
@@ -72,18 +54,20 @@ function titleFor(recipeName: string, alertType: string): string {
   return `${recipeName}: ${labels[alertType] ?? alertType}`;
 }
 
-export async function runAlertCheck(): Promise<void> {
+async function runAlertCheck(): Promise<void> {
   const config = await getNotifyConfig();
   if (config.channel === "none") return;      // nothing configured, nothing to do
   if (config.types.length === 0) return;
 
-  const requiredTempReadings = await getRequiredTempReadings();
+  const requiredTempReadings = await getTempAlertReadings();
   const now = new Date();
 
+  // Only active stages are worth alerting on. `packaged` is terminal — the beer
+  // is in the keg, a stale probe reading must never wake anyone up.
   const sessions = await db
-    .select({ id: brewSessionsTable.id, recipeName: brewSessionsTable.recipeName })
+    .select({ id: brewSessionsTable.id, recipeName: brewSessionsTable.recipeName, status: brewSessionsTable.status })
     .from(brewSessionsTable)
-    .where(inArray(brewSessionsTable.status, [...ACTIVE_STATUSES]));
+    .where(inArray(brewSessionsTable.status, [...ACTIVE_BREW_STATUSES]));
 
   for (const session of sessions) {
     try {
@@ -105,7 +89,8 @@ export async function runAlertCheck(): Promise<void> {
       const firing = new Set(
         (telemetry?.alerts ?? [])
           .map((a) => a.type)
-          .filter((t): t is AlertType => (config.types as string[]).includes(t)),
+          .filter((t): t is AlertType => (config.types as string[]).includes(t))
+          .filter((t) => alertAppliesToStatus(t, session.status)),
       );
 
       const existing = await db
@@ -123,13 +108,16 @@ export async function runAlertCheck(): Promise<void> {
         // seen count, so a recurrence is treated as a fresh incident.
         const resuming = prior && prior.resolvedAt != null;
         const seenCount = !prior || resuming ? 1 : prior.seenCount + 1;
-        const lastNotifiedAt = resuming ? null : prior?.lastNotifiedAt ?? null;
+        // A once-per-brew type keeps its send time through a recurrence, so the
+        // row remembers this brew has already been told.
+        const oncePerBrew = notifiesOncePerBrew(alert.type);
+        const lastNotifiedAt = resuming && !oncePerBrew ? null : prior?.lastNotifiedAt ?? null;
 
         // Per alert type: temperature can carry its own interval, the rest use
         // the global one.
         const repeatMs =
           resolveRepeatHours(alert.type, config.repeatHours, config.tempRepeatHours) * 60 * 60 * 1000;
-        const dueForRepeat = lastNotifiedAt != null && now.getTime() - new Date(lastNotifiedAt).getTime() >= repeatMs;
+        const dueForRepeat = !oncePerBrew && lastNotifiedAt != null && now.getTime() - new Date(lastNotifiedAt).getTime() >= repeatMs;
         // Temperature has to persist across N readings; the rest are already
         // slow enough to stand on their own (see consecutiveTempExcursions).
         const debounced = alert.type !== "temp_out_of_range" || tempStreak >= requiredTempReadings;

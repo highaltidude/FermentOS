@@ -1,6 +1,4 @@
 import { pgTable, serial, text, real, integer, boolean, timestamp, date } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 import { recipesTable } from "./recipes";
 
 // Lifecycle stages: brew_day → fermenting → conditioning → packaged.
@@ -8,6 +6,10 @@ import { recipesTable } from "./recipes";
 // rows from older schemas (planned, scheduled, brewing, complete) into the
 // new values.
 export const brewStatusEnum = ["brew_day", "fermenting", "conditioning", "packaged"] as const;
+
+// Every stage before packaged. packaged is terminal — the beer is in the keg,
+// so it no longer counts as an active brew or warrants alerts.
+export const ACTIVE_BREW_STATUSES: readonly (typeof brewStatusEnum)[number][] = ["brew_day", "fermenting", "conditioning"];
 
 // How a finished batch was packaged. Null until the batch is packaged — and
 // still null for batches packaged before this was tracked.
@@ -58,15 +60,28 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   fermentTempMin: real("ferment_temp_min"),
   fermentTempMax: real("ferment_temp_max"),
   fermentTempIdeal: real("ferment_temp_ideal"),
+  conditionTempMin: real("condition_temp_min"),
+  conditionTempMax: real("condition_temp_max"),
+  conditionTempIdeal: real("condition_temp_ideal"),
   autoAdvanceToConditioning: boolean("auto_advance_to_conditioning"),
   tastingNotes: text("tasting_notes"),
   photoPath: text("photo_path"),
+  // Boil timer. Stored as timestamps rather than a remaining count so every
+  // device, and the server-side addition alerts, derive the same countdown:
+  // remaining = boilMinutes - (now|pausedAt - startedAt - pausedMs).
+  // All null until a boil is started.
+  boilMinutes: integer("boil_minutes"),
+  boilStartedAt: timestamp("boil_started_at", { withTimezone: true }),
+  boilPausedAt: timestamp("boil_paused_at", { withTimezone: true }),
+  boilPausedMs: integer("boil_paused_ms"),
+  boilEndedAt: timestamp("boil_ended_at", { withTimezone: true }),
+  // recipe_ingredients ids ticked off during the boil. Not a foreign key: the
+  // recipe can be edited after brew day and the checklist is only a record.
+  boilDoneAdditionIds: integer("boil_done_addition_ids").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertBrewSessionSchema = createInsertSchema(brewSessionsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertBrewSession = z.infer<typeof insertBrewSessionSchema>;
 export type BrewSession = typeof brewSessionsTable.$inferSelect;
 
 export const fermentationReadingSourceEnum = ["manual", "ispindel"] as const;
@@ -82,8 +97,6 @@ export const fermentationReadingsTable = pgTable("fermentation_readings", {
   source: text("source", { enum: fermentationReadingSourceEnum }).notNull().default("manual"),
 });
 
-export const insertFermentationReadingSchema = createInsertSchema(fermentationReadingsTable).omit({ id: true });
-export type InsertFermentationReading = z.infer<typeof insertFermentationReadingSchema>;
 export type FermentationReading = typeof fermentationReadingsTable.$inferSelect;
 
 export const brewSessionStatusLogTable = pgTable("brew_session_status_log", {

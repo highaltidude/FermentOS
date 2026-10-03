@@ -1,51 +1,32 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Plus, Search, Package, Pencil, Trash2, Check, X } from "lucide-react";
-import { useListInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem, getListInventoryQueryKey } from "@workspace/api-client-react";
+import { useListInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem, getListInventoryQueryKey, useGetUnitSystem, getGetUnitSystemQueryKey, type UnitSystem } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FilterChip } from "@/components/ui/filter-chip";
 import { useToast } from "@/hooks/use-toast";
-
-const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
+import { INGREDIENT_TYPES, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
+import { parseLocalDate } from "@/lib/format";
 const MALT_TYPES = [
   { value: "lme", label: "LME" },
   { value: "dme", label: "DME" },
   { value: "all_grain", label: "All-Grain" },
 ];
-const TYPE_COLORS: Record<string, string> = {
-  malt: "bg-amber-100 text-amber-800 border-amber-200",
-  hop: "bg-green-100 text-green-800 border-green-200",
-  yeast: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  adjunct: "bg-orange-100 text-orange-800 border-orange-200",
-  water_agent: "bg-blue-100 text-blue-800 border-blue-200",
-  other: "bg-gray-100 text-gray-700 border-gray-200",
-};
-
-type UnitSystem = "imperial" | "metric" | "both";
-
 const UNITS_BY_SYSTEM: Record<UnitSystem, string[]> = {
   imperial: ["lbs", "oz", "gal", "qt", "pt", "fl oz", "tsp", "tbsp", "pkg", "each"],
   metric:   ["kg", "g", "L", "mL", "tsp", "tbsp", "pkg", "each"],
   both:     ["lbs", "oz", "kg", "g", "gal", "qt", "pt", "fl oz", "L", "mL", "tsp", "tbsp", "pkg", "each"],
 };
 
-function useUnitOptions(): { unitOptions: string[]; defaultUnit: string; loading: boolean } {
-  const [system, setSystem] = useState<UnitSystem>("imperial");
-  const [loading, setLoading] = useState(true);
-  const BASE = import.meta.env.BASE_URL as string;
-
-  useEffect(() => {
-    fetch(`${BASE}api/settings/unit-system`)
-      .then((r) => r.json())
-      .then((d: { system: UnitSystem }) => { if (d.system) setSystem(d.system); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [BASE]);
-
-  const unitOptions = UNITS_BY_SYSTEM[system];
-  return { unitOptions, defaultUnit: unitOptions[0], loading };
+function useUnitOptions(): { unitOptions: string[]; defaultUnit: string } {
+  const { data } = useGetUnitSystem({
+    query: { staleTime: 0, queryKey: getGetUnitSystemQueryKey() },
+  });
+  const unitOptions = UNITS_BY_SYSTEM[data?.system || "imperial"];
+  return { unitOptions, defaultUnit: unitOptions[0] };
 }
 
 const emptyForm = (defaultUnit = "lbs") => ({
@@ -54,12 +35,6 @@ const emptyForm = (defaultUnit = "lbs") => ({
 });
 
 type InventoryFormData = ReturnType<typeof emptyForm>;
-
-// Parse a YYYY-MM-DD date string as local midnight to prevent UTC offset shifting.
-function parseLocalDate(d: string): Date {
-  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, day ?? 1);
-}
 
 function isExpiringSoon(expiryDate: string | null | undefined) {
   if (!expiryDate) return false;
@@ -224,11 +199,11 @@ export default function Inventory() {
           <Input className="pl-8 text-sm h-9" placeholder="Search ingredients..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <button onClick={() => setTypeFilter(undefined)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${!typeFilter ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>All</button>
+          <FilterChip active={!typeFilter} onClick={() => setTypeFilter(undefined)}>All</FilterChip>
           {INGREDIENT_TYPES.map((t) => (
-            <button key={t} onClick={() => setTypeFilter(t === typeFilter ? undefined : t)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${typeFilter === t ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>
+            <FilterChip key={t} active={typeFilter === t} onClick={() => setTypeFilter(t === typeFilter ? undefined : t)}>
               {t.replace("_", " ")}
-            </button>
+            </FilterChip>
           ))}
         </div>
       </div>
@@ -268,7 +243,7 @@ export default function Inventory() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-semibold text-foreground">{item.name}</span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded border font-medium shrink-0 ${TYPE_COLORS[item.type]}`}>{item.type.replace("_", " ")}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded border font-medium shrink-0 ${INGREDIENT_TYPE_COLORS[item.type]}`}>{item.type.replace("_", " ")}</span>
                       {item.type === "malt" && maltTypeLabel(item.maltType) && (
                         <span className="text-xs px-1.5 py-0.5 rounded border font-medium shrink-0 bg-amber-50 text-amber-700 border-amber-300">
                           {maltTypeLabel(item.maltType)}

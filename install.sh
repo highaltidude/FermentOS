@@ -75,11 +75,14 @@ success "System packages updated"
 
 # ── Node.js ──────────────────────────────────
 step "Installing Node.js"
-if command -v node &>/dev/null && node -e "process.exit(parseInt(process.version.slice(1)) >= 20 ? 0 : 1)" 2>/dev/null; then
+# Node 20 is end-of-life, so re-running this on an older install upgrades it.
+# 22 is still supported and left alone; fresh installs get 24, matching CI and
+# the Docker image.
+if command -v node &>/dev/null && node -e "process.exit(parseInt(process.version.slice(1)) >= 22 ? 0 : 1)" 2>/dev/null; then
   success "Node.js $(node --version) already installed"
 else
-  info "Installing Node.js v20 via NodeSource..."
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  info "Installing Node.js v24 via NodeSource..."
+  curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
   sudo apt-get install -y nodejs
   success "Node.js $(node --version) installed"
 fi

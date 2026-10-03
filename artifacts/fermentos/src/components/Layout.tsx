@@ -44,17 +44,24 @@ const navItems = [
   { href: "/calculators", label: "Calculators", icon: Calculator },
 ];
 
-const bottomNavItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/recipes", label: "Recipes", icon: BookOpen },
-  { href: "/brew-sessions", label: "Brew Log", icon: Beer },
-  { href: "/ingredients", label: "Ingredients", icon: Package },
-  { href: "/equipment", label: "Equipment", icon: Wrench },
-];
+// The bottom bar has no room for Calculators.
+const bottomNavItems = navItems.filter((item) => item.href !== "/calculators");
+
+type Indicator = "warning" | "critical";
+
+function IndicatorDot({ indicator }: { indicator: Indicator }) {
+  return (
+    <span
+      className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-sidebar ${
+        indicator === "critical" ? "bg-destructive" : "bg-amber-500"
+      }`}
+    />
+  );
+}
 
 function NavItem({
   href, label, icon: Icon, indicator,
-}: { href: string; label: string; icon: React.ElementType; indicator?: "warning" | "critical" }) {
+}: { href: string; label: string; icon: React.ElementType; indicator?: Indicator }) {
   const [isActive] = useRoute(href === "/" ? "/" : `${href}*`);
   return (
     <Link href={href}>
@@ -67,13 +74,7 @@ function NavItem({
       >
         <span className="relative shrink-0">
           <Icon className="w-4 h-4" />
-          {indicator && (
-            <span
-              className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-sidebar ${
-                indicator === "critical" ? "bg-destructive" : "bg-amber-500"
-              }`}
-            />
-          )}
+          {indicator && <IndicatorDot indicator={indicator} />}
         </span>
         {label}
       </span>
@@ -83,7 +84,7 @@ function NavItem({
 
 function BottomNavItem({
   href, label, icon: Icon, indicator,
-}: { href: string; label: string; icon: React.ElementType; indicator?: "warning" | "critical" }) {
+}: { href: string; label: string; icon: React.ElementType; indicator?: Indicator }) {
   const [isActive] = useRoute(href === "/" ? "/" : `${href}*`);
   return (
     <Link href={href}>
@@ -92,13 +93,7 @@ function BottomNavItem({
       }`}>
         <span className="relative">
           <Icon className="w-5 h-5" />
-          {indicator && (
-            <span
-              className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-sidebar ${
-                indicator === "critical" ? "bg-destructive" : "bg-amber-500"
-              }`}
-            />
-          )}
+          {indicator && <IndicatorDot indicator={indicator} />}
         </span>
         <span className="text-[10px] font-medium leading-tight">{label}</span>
       </span>

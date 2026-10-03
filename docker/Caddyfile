@@ -1,0 +1,56 @@
+# Optional HTTPS front for FermentOS, using Caddy's built-in local CA.
+#
+# Shared by both opt-in setups:
+#   - Docker: docker-compose.https.yml mounts this file into the caddy service.
+#   - Native (install.sh / Raspberry Pi): enable-https.sh installs it as
+#     /etc/caddy/Caddyfile and sets the variables below in a systemd drop-in.
+#
+# Environment:
+#   FERMENTOS_IP         this host's LAN IP (e.g. 192.168.1.50) — required
+#   FERMENTOS_NAMES      optional extra hostnames, space-separated
+#                        (e.g. "fermentos.local")
+#   FERMENTOS_UPSTREAM   where the FermentOS app listens (app:8080 in Docker)
+#   CADDY_PKI_DIR        directory holding the local CA's root.crt
+#   HTTP_PORT/HTTPS_PORT ports Caddy itself listens on (default 80/443)
+#   PUBLIC_HTTPS_PORT    HTTPS port the browser uses, for redirects; differs
+#                        from HTTPS_PORT only when Docker remaps it
+{
+	http_port {$HTTP_PORT:80}
+	https_port {$HTTPS_PORT:443}
+	# The plain-HTTP site below does its own redirecting so the API can stay
+	# on HTTP; Caddy's automatic redirects would send iSpindel and Home
+	# Assistant to HTTPS, which the iSpindel firmware cannot follow.
+	auto_https disable_redirects
+	# Browsers send no SNI when you browse to a bare IP, and in Docker the
+	# connection's local address is the container's, not the host's — so tell
+	# Caddy which certificate to use when the client names nothing.
+	default_sni {$FERMENTOS_IP}
+	# The root is for other devices to trust; don't touch this machine's store.
+	skip_install_trust
+}
+
+{$FERMENTOS_IP} {$FERMENTOS_NAMES} {
+	tls internal
+	reverse_proxy {$FERMENTOS_UPSTREAM}
+}
+
+:{$HTTP_PORT:80} {
+	# iSpindel ingest and Home Assistant polling keep working over plain HTTP.
+	handle /api/* {
+		reverse_proxy {$FERMENTOS_UPSTREAM}
+	}
+
+	# The CA root, so a phone can fetch it before it trusts HTTPS. Exact path
+	# only — the same directory holds the CA's private key.
+	handle /root.crt {
+		root * {$CADDY_PKI_DIR}
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+
+	# Temporary redirect, so turning HTTPS back off does not leave browsers
+	# stuck on a cached permanent one.
+	handle {
+		redir https://{host}:{$PUBLIC_HTTPS_PORT:443}{uri} 302
+	}
+}

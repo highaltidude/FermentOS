@@ -9,18 +9,21 @@ import {
 
 const router = Router();
 
+// Every token column except the hash, which never leaves the server.
+const tokenColumns = {
+  id: apiTokensTable.id,
+  name: apiTokensTable.name,
+  prefix: apiTokensTable.prefix,
+  scope: apiTokensTable.scope,
+  createdAt: apiTokensTable.createdAt,
+  lastUsedAt: apiTokensTable.lastUsedAt,
+};
+
 // GET /api/admin/auth/status
 router.get("/status", async (_req, res) => {
   const required = await isAuthRequired();
   const tokens = await db
-    .select({
-      id: apiTokensTable.id,
-      name: apiTokensTable.name,
-      prefix: apiTokensTable.prefix,
-      scope: apiTokensTable.scope,
-      createdAt: apiTokensTable.createdAt,
-      lastUsedAt: apiTokensTable.lastUsedAt,
-    })
+    .select(tokenColumns)
     .from(apiTokensTable)
     .orderBy(desc(apiTokensTable.createdAt));
   res.json({ required, tokenCount: tokens.length, tokens });
@@ -55,14 +58,7 @@ router.post("/tokens", async (req, res): Promise<void> => {
   const [row] = await db
     .insert(apiTokensTable)
     .values({ name, prefix, tokenHash: hash, scope })
-    .returning({
-      id: apiTokensTable.id,
-      name: apiTokensTable.name,
-      prefix: apiTokensTable.prefix,
-      scope: apiTokensTable.scope,
-      createdAt: apiTokensTable.createdAt,
-      lastUsedAt: apiTokensTable.lastUsedAt,
-    });
+    .returning(tokenColumns);
 
   // Plaintext token is returned exactly once.
   res.status(201).json({ ...row, token });
@@ -71,7 +67,7 @@ router.post("/tokens", async (req, res): Promise<void> => {
 // DELETE /api/admin/auth/tokens/:id
 router.delete("/tokens/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
 
   await db.delete(apiTokensTable).where(eq(apiTokensTable.id, id));
 

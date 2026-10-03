@@ -55,6 +55,14 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+# psql drops an unfinished last statement at end of file and exits 0, so a
+# cut-off dump would commit a half-restored database. pg_dump always ends a
+# plain dump with this marker; refuse anything without it.
+if ! tail -c 4096 "$BACKUP_FILE" | grep -q -- "-- PostgreSQL database dump complete"; then
+  echo "Error: $BACKUP_FILE is not a complete pg_dump (it may have been cut off). Nothing was changed."
+  exit 1
+fi
+
 echo ""
 echo "About to restore the FermentOS database from:"
 echo "  $BACKUP_FILE"

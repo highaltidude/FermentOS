@@ -4,43 +4,46 @@ import { db, brewSessionsTable, fermentationReadingsTable, brewSessionStatusLogT
 import {
   ListBrewSessionsQueryParams,
   CreateBrewSessionBody,
-  GetBrewSessionParams,
-  UpdateBrewSessionParams,
   UpdateBrewSessionBody,
-  DeleteBrewSessionParams,
-  ListFermentationReadingsParams,
-  AddFermentationReadingParams,
   AddFermentationReadingBody,
-  DeleteFermentationReadingParams,
-  UpsertBrewRatingParams,
   UpsertBrewRatingBody,
-  DeleteBrewRatingParams,
+  ControlBoilBody,
 } from "@workspace/api-zod";
+import type { Request } from "express";
+import { boilPhase } from "../lib/boilTimer";
+import { parseIdParam } from "../lib/http";
+import { SESSION_UPLOADS_DIR } from "../lib/paths";
+import { scheduleBoilAlerts, clearBoilAlerts } from "../services/boilScheduler";
+import { createBrewSession } from "../services/brewSessionCreate";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import {
-  isInventoryEnforcementEnabled,
-  consumeRecipeIngredientsTx,
-  type InventoryShortage,
-} from "../services/inventoryEnforcement";
 
 function calcAbv(og: number | null | undefined, fg: number | null | undefined): number | null {
   if (og == null || fg == null) return null;
   return Math.round((og - fg) * 131.25 * 100) / 100;
 }
 
-const uploadsDir = path.resolve(process.cwd(), "data/uploads/sessions");
-fs.mkdirSync(uploadsDir, { recursive: true });
+fs.mkdirSync(SESSION_UPLOADS_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  destination: (_req, _file, cb) => cb(null, SESSION_UPLOADS_DIR),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname) || ".jpg";
     cb(null, `session-${Date.now()}${ext}`);
   },
 });
 const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
+
+/** Best-effort removal of a stored photo; a failure is logged, never thrown. */
+function unlinkSessionPhoto(req: Request, photoPath: string, failureMessage: string): void {
+  const filePath = path.join(SESSION_UPLOADS_DIR, photoPath);
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (err) {
+    req.log.warn({ err, path: filePath }, failureMessage);
+  }
+}
 
 const router = Router();
 
@@ -66,48 +69,7 @@ router.post("/brew-sessions", async (req, res) => {
   const body = CreateBrewSessionBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
 
-  const { brewDate: brewDateRaw, ...restInsert } = body.data;
-  const brewDateStr = String(brewDateRaw);
-
-  const enforce = body.data.recipeId && (await isInventoryEnforcementEnabled());
-
-  // When enforcement is on, run inventory check + deduction + session insert
-  // in a single transaction. Inventory rows are SELECT FOR UPDATE locked
-  // inside consumeRecipeIngredientsTx so two concurrent brews can't both
-  // pass the check on the same stock.
-  type Outcome =
-    | { kind: "created"; session: typeof brewSessionsTable.$inferSelect }
-    | { kind: "shortage"; shortages: InventoryShortage[] };
-
-  // Sentinel error used only to abort the transaction with a typed payload.
-  class ShortageAbort extends Error {
-    constructor(public shortages: InventoryShortage[]) { super("inventory shortage"); }
-  }
-
-  let outcome: Outcome;
-  if (enforce && body.data.recipeId) {
-    outcome = await db.transaction(async (tx) => {
-      const result = await consumeRecipeIngredientsTx(tx, body.data.recipeId!);
-      if (!result.ok) {
-        // Rolling back is required so the FOR UPDATE locks release without
-        // half-applying any deductions. Throwing aborts the transaction.
-        throw new ShortageAbort(result.shortages);
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const [session] = await tx.insert(brewSessionsTable).values({ ...restInsert, brewDate: brewDateStr } as any).returning();
-      return { kind: "created" as const, session };
-    }).catch((err: unknown) => {
-      if (err instanceof ShortageAbort) {
-        return { kind: "shortage" as const, shortages: err.shortages };
-      }
-      throw err;
-    });
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [session] = await db.insert(brewSessionsTable).values({ ...restInsert, brewDate: brewDateStr } as any).returning();
-    outcome = { kind: "created", session };
-  }
-
+  const outcome = await createBrewSession(body.data);
   if (outcome.kind === "shortage") {
     return res.status(409).json({ error: "Insufficient inventory", shortages: outcome.shortages });
   }
@@ -115,45 +77,45 @@ router.post("/brew-sessions", async (req, res) => {
 });
 
 router.get("/brew-sessions/:id", async (req, res) => {
-  const params = GetBrewSessionParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   const [session] = await db
     .select()
     .from(brewSessionsTable)
-    .where(eq(brewSessionsTable.id, params.data.id));
+    .where(eq(brewSessionsTable.id, id));
   if (!session) return res.status(404).json({ error: "Brew session not found" });
 
-  const readings = await db
-    .select()
-    .from(fermentationReadingsTable)
-    .where(eq(fermentationReadingsTable.brewSessionId, params.data.id))
-    .orderBy(fermentationReadingsTable.readingAt);
-
-  const statusLog = await db
-    .select()
-    .from(brewSessionStatusLogTable)
-    .where(eq(brewSessionStatusLogTable.brewSessionId, params.data.id))
-    .orderBy(brewSessionStatusLogTable.changedAt);
+  const [readings, statusLog] = await Promise.all([
+    db
+      .select()
+      .from(fermentationReadingsTable)
+      .where(eq(fermentationReadingsTable.brewSessionId, id))
+      .orderBy(fermentationReadingsTable.readingAt),
+    db
+      .select()
+      .from(brewSessionStatusLogTable)
+      .where(eq(brewSessionStatusLogTable.brewSessionId, id))
+      .orderBy(brewSessionStatusLogTable.changedAt),
+  ]);
 
   return res.json({ ...session, readings, statusLog });
 });
 
 router.put("/brew-sessions/:id", async (req, res) => {
-  const params = UpdateBrewSessionParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   const body = UpdateBrewSessionBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
 
-  const existing = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, params.data.id));
+  const existing = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, id));
   if (!existing[0]) return res.status(404).json({ error: "Brew session not found" });
 
   const { brewDate: brewDateRawUpd, plannedDate: plannedDateRawUpd, ...restUpdate } = body.data;
-  const brewDateUpd = brewDateRawUpd;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updatePayload: any = { ...restUpdate, updatedAt: new Date() };
-  if (brewDateUpd !== undefined) updatePayload.brewDate = brewDateUpd;
+  if (brewDateRawUpd !== undefined) updatePayload.brewDate = brewDateRawUpd;
   // plannedDate is nullable — explicit null clears it, undefined leaves untouched.
   if (plannedDateRawUpd !== undefined) updatePayload.plannedDate = plannedDateRawUpd;
 
@@ -163,25 +125,21 @@ router.put("/brew-sessions/:id", async (req, res) => {
   const resultingFg = updatePayload.finalGravityActual ?? existing[0].finalGravityActual;
 
   if (resultingStatus === "packaged" && updatePayload.abvActual === undefined) {
-    const existingAbv = existing[0].abvActual;
-    if (existingAbv == null) {
-      const calculated = calcAbv(resultingOg, resultingFg);
-      if (calculated != null) updatePayload.abvActual = calculated;
-    } else if (
+    const gravityChanged =
       updatePayload.originalGravityActual !== undefined ||
-      updatePayload.finalGravityActual !== undefined
-    ) {
+      updatePayload.finalGravityActual !== undefined;
+    if (existing[0].abvActual == null || gravityChanged) {
       const calculated = calcAbv(resultingOg, resultingFg);
       if (calculated != null) updatePayload.abvActual = calculated;
     }
   }
 
-  const [session] = await db.update(brewSessionsTable).set(updatePayload).where(eq(brewSessionsTable.id, params.data.id)).returning();
+  const [session] = await db.update(brewSessionsTable).set(updatePayload).where(eq(brewSessionsTable.id, id)).returning();
   if (!session) return res.status(404).json({ error: "Brew session not found" });
 
   if (body.data.status && body.data.status !== existing[0].status) {
     await db.insert(brewSessionStatusLogTable).values({
-      brewSessionId: params.data.id,
+      brewSessionId: id,
       status: body.data.status,
       changedAt: new Date(),
     });
@@ -195,7 +153,7 @@ router.put("/brew-sessions/:id", async (req, res) => {
       .set({ unassignedAt: new Date() })
       .where(
         and(
-          eq(sensorDeviceBrewAssignmentsTable.brewSessionId, params.data.id),
+          eq(sensorDeviceBrewAssignmentsTable.brewSessionId, id),
           isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
         )
       )
@@ -207,49 +165,50 @@ router.put("/brew-sessions/:id", async (req, res) => {
 });
 
 router.delete("/brew-sessions/:id", async (req, res) => {
-  const params = DeleteBrewSessionParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
-  await db.delete(brewSessionsTable).where(eq(brewSessionsTable.id, params.data.id));
+  await db.delete(brewSessionsTable).where(eq(brewSessionsTable.id, id));
+  clearBoilAlerts(id);
   return res.status(204).send();
 });
 
 router.get("/brew-sessions/:id/readings", async (req, res) => {
-  const params = ListFermentationReadingsParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   const readings = await db
     .select()
     .from(fermentationReadingsTable)
-    .where(eq(fermentationReadingsTable.brewSessionId, params.data.id))
+    .where(eq(fermentationReadingsTable.brewSessionId, id))
     .orderBy(fermentationReadingsTable.readingAt);
 
   return res.json(readings);
 });
 
 router.post("/brew-sessions/:id/readings", async (req, res) => {
-  const params = AddFermentationReadingParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   const body = AddFermentationReadingBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
 
   const [reading] = await db
     .insert(fermentationReadingsTable)
-    .values({ ...body.data, brewSessionId: params.data.id, readingAt: new Date(body.data.readingAt), source: "manual" })
+    .values({ ...body.data, brewSessionId: id, readingAt: new Date(body.data.readingAt), source: "manual" })
     .returning();
   return res.status(201).json(reading);
 });
 
 router.delete("/readings/:id", async (req, res) => {
-  const params = DeleteFermentationReadingParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   // Fetch the reading before deleting so we know the source and readingAt
   const [reading] = await db
     .select()
     .from(fermentationReadingsTable)
-    .where(eq(fermentationReadingsTable.id, params.data.id));
+    .where(eq(fermentationReadingsTable.id, id));
 
   if (reading?.source === "ispindel") {
     // Unlink the corresponding sensor reading from this brew session
@@ -269,13 +228,13 @@ router.delete("/readings/:id", async (req, res) => {
       );
   }
 
-  await db.delete(fermentationReadingsTable).where(eq(fermentationReadingsTable.id, params.data.id));
+  await db.delete(fermentationReadingsTable).where(eq(fermentationReadingsTable.id, id));
   return res.status(204).send();
 });
 
 router.delete("/status-log/:id", async (req, res) => {
   const id = Number(req.params.id);
-  if (!id || isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+  if (!id) return res.status(400).json({ error: "Invalid id" });
 
   await db.delete(brewSessionStatusLogTable).where(eq(brewSessionStatusLogTable.id, id));
   return res.status(204).send();
@@ -283,20 +242,13 @@ router.delete("/status-log/:id", async (req, res) => {
 
 router.post("/brew-sessions/:id/photo", upload.single("photo"), async (req, res) => {
   const id = Number(req.params.id);
-  if (!id || isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+  if (!id) return res.status(400).json({ error: "Invalid id" });
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const [existing] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, id));
   if (!existing) return res.status(404).json({ error: "Brew session not found" });
 
-  if (existing.photoPath) {
-    const old = path.join(uploadsDir, existing.photoPath);
-    try {
-      if (fs.existsSync(old)) fs.unlinkSync(old);
-    } catch (err) {
-      req.log.warn({ err, path: old }, "Failed to delete previous photo");
-    }
-  }
+  if (existing.photoPath) unlinkSessionPhoto(req, existing.photoPath, "Failed to delete previous photo");
 
   const filename = req.file.filename;
   await db.update(brewSessionsTable).set({ photoPath: filename, updatedAt: new Date() }).where(eq(brewSessionsTable.id, id));
@@ -305,22 +257,97 @@ router.post("/brew-sessions/:id/photo", upload.single("photo"), async (req, res)
 
 router.delete("/brew-sessions/:id/photo", async (req, res) => {
   const id = Number(req.params.id);
-  if (!id || isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+  if (!id) return res.status(400).json({ error: "Invalid id" });
 
   const [existing] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, id));
   if (!existing) return res.status(404).json({ error: "Brew session not found" });
 
-  if (existing.photoPath) {
-    const filePath = path.join(uploadsDir, existing.photoPath);
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (err) {
-      req.log.warn({ err, path: filePath }, "Failed to delete photo file");
-    }
-  }
+  if (existing.photoPath) unlinkSessionPhoto(req, existing.photoPath, "Failed to delete photo file");
 
   await db.update(brewSessionsTable).set({ photoPath: null, updatedAt: new Date() }).where(eq(brewSessionsTable.id, id));
   return res.status(204).send();
+});
+
+// Boil timer. Its own sub-resource for the same reason as the scorecard below:
+// the detail page re-sends the whole session on every save, which would stomp
+// on a running timer. Every change reschedules the server-side addition alerts.
+router.post("/brew-sessions/:id/boil", async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
+
+  const body = ControlBoilBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "Invalid request body" });
+
+  const [existing] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, id));
+  if (!existing) return res.status(404).json({ error: "Brew session not found" });
+
+  const { action, boilMinutes, doneAdditionIds } = body.data;
+  const phase = boilPhase(existing);
+  const now = new Date();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const update: any = { updatedAt: now };
+
+  switch (action) {
+    case "start":
+      if (boilMinutes == null) return res.status(400).json({ error: "boilMinutes is required to start" });
+      Object.assign(update, {
+        boilMinutes,
+        boilStartedAt: now,
+        boilPausedAt: null,
+        boilPausedMs: 0,
+        boilEndedAt: null,
+        boilDoneAdditionIds: doneAdditionIds ?? [],
+      });
+      break;
+    case "pause":
+      if (phase !== "running") return res.status(400).json({ error: "Boil is not running" });
+      update.boilPausedAt = now;
+      break;
+    case "resume":
+      if (phase !== "paused") return res.status(400).json({ error: "Boil is not paused" });
+      update.boilPausedMs = (existing.boilPausedMs ?? 0) + (now.getTime() - existing.boilPausedAt!.getTime());
+      update.boilPausedAt = null;
+      break;
+    case "finish":
+      if (phase !== "running" && phase !== "paused") return res.status(400).json({ error: "Boil is not in progress" });
+      // Fold an open pause in so elapsed time stays correct after the fact.
+      if (existing.boilPausedAt) {
+        update.boilPausedMs = (existing.boilPausedMs ?? 0) + (now.getTime() - existing.boilPausedAt.getTime());
+        update.boilPausedAt = null;
+      }
+      update.boilEndedAt = now;
+      break;
+    case "reset":
+      Object.assign(update, {
+        boilMinutes: null,
+        boilStartedAt: null,
+        boilPausedAt: null,
+        boilPausedMs: null,
+        boilEndedAt: null,
+        boilDoneAdditionIds: null,
+      });
+      break;
+    case "checklist":
+      break;
+  }
+
+  if (action !== "start" && action !== "reset") {
+    // Lengthening or shortening a boil already under way.
+    if (boilMinutes != null) {
+      if (phase === "idle") return res.status(400).json({ error: "Boil has not started" });
+      update.boilMinutes = boilMinutes;
+    }
+    if (doneAdditionIds !== undefined) update.boilDoneAdditionIds = doneAdditionIds;
+  }
+
+  const [session] = await db.update(brewSessionsTable).set(update).where(eq(brewSessionsTable.id, id)).returning();
+
+  // A failure to schedule must not fail the request — the timer itself is
+  // saved and the page still counts down and beeps.
+  await scheduleBoilAlerts(id).catch((err) =>
+    req.log.error({ err, brewSessionId: id }, "Failed to schedule boil alerts"));
+
+  return res.json(session);
 });
 
 // The tasting scorecard lives on its own sub-resource rather than in
@@ -328,8 +355,8 @@ router.delete("/brew-sessions/:id/photo", async (req, res) => {
 // mutation, so a scorecard field in that body would be nulled out by an
 // unrelated status or gravity save.
 router.put("/brew-sessions/:id/rating", async (req, res) => {
-  const params = UpsertBrewRatingParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   const body = UpsertBrewRatingBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
@@ -338,15 +365,15 @@ router.put("/brew-sessions/:id/rating", async (req, res) => {
     .update(brewSessionsTable)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .set({ ...body.data, ratedAt: new Date(), updatedAt: new Date() } as any)
-    .where(eq(brewSessionsTable.id, params.data.id))
+    .where(eq(brewSessionsTable.id, id))
     .returning();
   if (!session) return res.status(404).json({ error: "Brew session not found" });
   return res.json(session);
 });
 
 router.delete("/brew-sessions/:id/rating", async (req, res) => {
-  const params = DeleteBrewRatingParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   await db
     .update(brewSessionsTable)
@@ -360,7 +387,7 @@ router.delete("/brew-sessions/:id/rating", async (req, res) => {
       ratedAt: null,
       updatedAt: new Date(),
     })
-    .where(eq(brewSessionsTable.id, params.data.id));
+    .where(eq(brewSessionsTable.id, id));
   return res.status(204).send();
 });
 

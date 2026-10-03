@@ -1,6 +1,10 @@
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable, appConfigTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable } from "@workspace/db";
 import { eq, isNotNull, and, gte, lte } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
+import { batteryWarningLevel } from "../lib/batteryUtil";
+import { getConfigValue } from "./appConfig";
+import { activeTempPhase } from "../lib/alertPolicy";
+import { isGravityStalled } from "../lib/gravityStall";
 
 /**
  * Brew telemetry and alert computation.
@@ -14,7 +18,14 @@ import { calcInsights } from "../lib/fermentationInsights";
 
 export type BrewAlert = { type: string; message: string; triggeredAt: string };
 
-export type TempRange = { min: number | null; max: number | null; ideal: number | null; unit: "F" | "C" } | null;
+export type TempRange = {
+  min: number | null;
+  max: number | null;
+  ideal: number | null;
+  unit: "F" | "C";
+  /** Which stage's range this is, so the chart can label it. */
+  phase: "fermenting" | "conditioning";
+} | null;
 
 export function calcConnectionStatus(
   lastSeenAt: Date | null,
@@ -74,8 +85,8 @@ export function buildAlerts(
   }
 
   const pct = reading?.batteryPercentEstimate ?? null;
-  if (pct != null && pct < 20) {
-    const level = pct < 10 ? "critical" : "warning";
+  const level = pct != null ? batteryWarningLevel(pct) : null;
+  if (pct != null && level) {
     alerts.push({
       type: "battery_low",
       message: `Battery ${level}: ${reading!.battery != null ? `${Number(reading!.battery).toFixed(2)}V ` : ""}(~${Math.round(pct)}%)`,
@@ -97,6 +108,41 @@ export function buildAlerts(
 }
 
 type Reading = typeof sensorReadingsTable.$inferSelect;
+
+const RANGE_COLUMNS = {
+  fermenting: { min: "fermentTempMin", max: "fermentTempMax", ideal: "fermentTempIdeal" },
+  conditioning: { min: "conditionTempMin", max: "conditionTempMax", ideal: "conditionTempIdeal" },
+} as const;
+
+/**
+ * The temperature range in force for the brew's current stage: the session's
+ * own values, each falling back to the linked recipe. Null when nothing is set,
+ * which switches temperature alerts off — so a batch in conditioning with no
+ * conditioning range is simply not checked.
+ */
+async function resolveTempRange(brewId: number): Promise<TempRange> {
+  const [session] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, brewId));
+  if (!session) return null;
+
+  const phase = activeTempPhase(session.status);
+  const cols = RANGE_COLUMNS[phase];
+  let min = session[cols.min];
+  let max = session[cols.max];
+  let ideal = session[cols.ideal];
+
+  if ((min == null || max == null || ideal == null) && session.recipeId) {
+    const [recipe] = await db.select().from(recipesTable).where(eq(recipesTable.id, session.recipeId));
+    if (recipe) {
+      min = min ?? recipe[cols.min];
+      max = max ?? recipe[cols.max];
+      ideal = ideal ?? recipe[cols.ideal];
+    }
+  }
+
+  if (min == null && max == null && ideal == null) return null;
+  const unit = (await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F";
+  return { min, max, ideal, unit, phase };
+}
 
 export type BrewTelemetry = {
   brewSessionId: number;
@@ -170,53 +216,12 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
 
   const connectionStatus = calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
 
-  // Fetch temp range from session, falling back to linked recipe
-  const [brewSession] = await db
-    .select({
-      fermentTempMin: brewSessionsTable.fermentTempMin,
-      fermentTempMax: brewSessionsTable.fermentTempMax,
-      fermentTempIdeal: brewSessionsTable.fermentTempIdeal,
-      recipeId: brewSessionsTable.recipeId,
-    })
-    .from(brewSessionsTable)
-    .where(eq(brewSessionsTable.id, brewId));
-
-  let tempMin: number | null = brewSession?.fermentTempMin ?? null;
-  let tempMax: number | null = brewSession?.fermentTempMax ?? null;
-  let tempIdeal: number | null = brewSession?.fermentTempIdeal ?? null;
-
-  if ((tempMin == null || tempMax == null || tempIdeal == null) && brewSession?.recipeId) {
-    const [recipe] = await db
-      .select({ fermentTempMin: recipesTable.fermentTempMin, fermentTempMax: recipesTable.fermentTempMax, fermentTempIdeal: recipesTable.fermentTempIdeal })
-      .from(recipesTable)
-      .where(eq(recipesTable.id, brewSession.recipeId));
-    if (recipe) {
-      tempMin = tempMin ?? recipe.fermentTempMin ?? null;
-      tempMax = tempMax ?? recipe.fermentTempMax ?? null;
-      tempIdeal = tempIdeal ?? recipe.fermentTempIdeal ?? null;
-    }
-  }
-
-  const [tempUnitRow] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, "ferment_temp_unit"));
-  const tempUnit = (tempUnitRow?.value === "C" ? "C" : "F") as "F" | "C";
-
-  const tempRange: TempRange = (tempMin != null || tempMax != null || tempIdeal != null)
-    ? { min: tempMin, max: tempMax, ideal: tempIdeal, unit: tempUnit }
-    : null;
+  const tempRange = await resolveTempRange(brewId);
 
   const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
 
-  // Gravity stall alert — gravity unchanged for 24h
-  if (readings.length >= 2) {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentReadings = readings.filter((r) => r.gravity != null && new Date(r.receivedAt) >= cutoff);
-    if (recentReadings.length >= 2) {
-      const gravityValues = recentReadings.map((r) => r.gravity!);
-      const range = Math.max(...gravityValues) - Math.min(...gravityValues);
-      if (range < 0.001) {
-        alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });
-      }
-    }
+  if (isGravityStalled(readings)) {
+    alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });
   }
 
   return { brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, hasAssignments: true };

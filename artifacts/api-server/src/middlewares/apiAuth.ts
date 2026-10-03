@@ -1,35 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { eq } from "drizzle-orm";
-import { db, appConfigTable, apiTokensTable } from "@workspace/db";
+import { db, apiTokensTable } from "@workspace/db";
+import { getConfigValue, setConfigValue } from "../services/appConfig";
+import { isAlwaysAllowed } from "./authExemptions";
 
 const AUTH_REQUIRED_KEY = "api_auth_required";
-
-// Paths that must always be reachable even when API auth is enabled.
-// Note: /admin/auth/* is intentionally NOT in this list — it must still
-// require either a valid Bearer token or a same-origin browser request,
-// otherwise an external caller could mint themselves a token or disable
-// the lock entirely.
-const ALWAYS_ALLOWED_PREFIXES = [
-  "/healthz",
-  // Recovery endpoints — must be reachable from a plain `curl` on the host
-  // even when API lockdown is enabled, otherwise the user can't fix a
-  // broken sudoers state without first finding/passing an API token. Both
-  // are read-only and return public-config-grade text (the sudoers line
-  // for this install's service user, or a self-contained installer script).
-  "/api/admin/repair-script",
-  "/api/admin/sudoers-line",
-  // Home Assistant REST sensor endpoint — read-only, no secrets, must be
-  // reachable from HA without a Bearer token so polling works even when
-  // API auth is enabled.
-  "/api/ha/status",
-  // iSpindel ingest — device posts directly from the brewer's local network;
-  // it cannot send a Bearer token. Optional token validation is handled
-  // inside the route handler itself.
-  "/api/integrations/ispindel",
-  // HA-friendly iSpindel status endpoint — read-only, polled by HA.
-  "/api/integrations/ispindel/status",
-];
 
 let cachedRequired: boolean | null = null;
 let cacheExpiresAt = 0;
@@ -38,11 +14,7 @@ const CACHE_TTL_MS = 5_000;
 export async function isAuthRequired(): Promise<boolean> {
   const now = Date.now();
   if (cachedRequired !== null && now < cacheExpiresAt) return cachedRequired;
-  const [row] = await db
-    .select()
-    .from(appConfigTable)
-    .where(eq(appConfigTable.key, AUTH_REQUIRED_KEY));
-  cachedRequired = row?.value === "true";
+  cachedRequired = (await getConfigValue(AUTH_REQUIRED_KEY)) === "true";
   cacheExpiresAt = now + CACHE_TTL_MS;
   return cachedRequired;
 }
@@ -53,13 +25,7 @@ export function invalidateAuthCache(): void {
 }
 
 export async function setAuthRequired(value: boolean): Promise<void> {
-  await db
-    .insert(appConfigTable)
-    .values({ key: AUTH_REQUIRED_KEY, value: value ? "true" : "false" })
-    .onConflictDoUpdate({
-      target: appConfigTable.key,
-      set: { value: value ? "true" : "false", updatedAt: new Date() },
-    });
+  await setConfigValue(AUTH_REQUIRED_KEY, value ? "true" : "false");
   invalidateAuthCache();
 }
 
@@ -107,11 +73,8 @@ function extractBearer(req: Request): string | null {
 }
 
 export async function apiAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  // Allow paths needed for the user to recover / view auth status.
-  const url = req.url || "";
-  if (ALWAYS_ALLOWED_PREFIXES.some((p) => url === p || url.startsWith(p + "/") || url.startsWith(p + "?"))) {
-    return next();
-  }
+  // Device, polling and recovery endpoints that must work without a token.
+  if (isAlwaysAllowed(req.method, req.path)) return next();
 
   let required: boolean;
   try {

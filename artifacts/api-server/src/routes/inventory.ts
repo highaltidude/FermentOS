@@ -4,10 +4,9 @@ import { db, inventoryTable } from "@workspace/db";
 import {
   ListInventoryQueryParams,
   CreateInventoryItemBody,
-  UpdateInventoryItemParams,
   UpdateInventoryItemBody,
-  DeleteInventoryItemParams,
 } from "@workspace/api-zod";
+import { parseIdParam } from "../lib/http";
 
 const router = Router();
 
@@ -41,8 +40,8 @@ router.post("/inventory", async (req, res) => {
 });
 
 router.put("/inventory/:id", async (req, res) => {
-  const params = UpdateInventoryItemParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
   const body = UpdateInventoryItemBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
@@ -50,17 +49,17 @@ router.put("/inventory/:id", async (req, res) => {
   const [item] = await db
     .update(inventoryTable)
     .set({ ...body.data, updatedAt: new Date() })
-    .where(eq(inventoryTable.id, params.data.id))
+    .where(eq(inventoryTable.id, id))
     .returning();
   if (!item) return res.status(404).json({ error: "Inventory item not found" });
   return res.json(item);
 });
 
 router.delete("/inventory/:id", async (req, res) => {
-  const params = DeleteInventoryItemParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
 
-  await db.delete(inventoryTable).where(eq(inventoryTable.id, params.data.id));
+  await db.delete(inventoryTable).where(eq(inventoryTable.id, id));
   return res.status(204).send();
 });
 

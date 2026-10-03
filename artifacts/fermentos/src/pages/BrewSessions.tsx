@@ -5,32 +5,10 @@ import { useListBrewSessions } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/ui/score-picker";
-
-const STATUS_COLORS: Record<string, string> = {
-  brew_day: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/40",
-  fermenting: "bg-green-100 text-green-800 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800/40",
-  conditioning: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/40",
-  packaged: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/40",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  brew_day: "Brew Day",
-  fermenting: "Fermenting",
-  conditioning: "Conditioning",
-  packaged: "Packaged",
-};
-
-const PACKAGING_LABELS: Record<string, string> = {
-  keg: "Keg",
-  bottle: "Bottle",
-};
-
-const STATUS_ORDER = ["brew_day", "fermenting", "conditioning", "packaged"];
-
-function formatDate(d: string) {
-  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, day ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+import { FilterChip } from "@/components/ui/filter-chip";
+import { BrewStatusBadge } from "@/components/BrewStatusBadge";
+import { BREW_STATUSES, STATUS_LABELS, PACKAGING_LABELS } from "@/lib/brewStatus";
+import { formatDate } from "@/lib/format";
 
 export default function BrewSessions() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
@@ -52,16 +30,13 @@ export default function BrewSessions() {
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap">
-        <button
-          onClick={() => setStatusFilter(undefined)}
-          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${!statusFilter ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}
-        >All</button>
-        {STATUS_ORDER.map((s) => (
-          <button
+        <FilterChip active={!statusFilter} onClick={() => setStatusFilter(undefined)}>All</FilterChip>
+        {BREW_STATUSES.map((s) => (
+          <FilterChip
             key={s}
+            active={statusFilter === s}
             onClick={() => setStatusFilter(s === statusFilter ? undefined : s)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}
-          >{STATUS_LABELS[s] ?? s}</button>
+          >{STATUS_LABELS[s] ?? s}</FilterChip>
         ))}
       </div>
 
@@ -78,9 +53,7 @@ export default function BrewSessions() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-foreground truncate">{session.recipeName}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${STATUS_COLORS[session.status] ?? ""}`}>
-                      {STATUS_LABELS[session.status] ?? session.status}
-                    </span>
+                    <BrewStatusBadge status={session.status} className="shrink-0" />
                     {session.overallScore != null && (
                       <span className="ml-auto shrink-0"><ScoreBadge value={session.overallScore} /></span>
                     )}

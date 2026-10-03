@@ -71,15 +71,32 @@ jobs:
           BETA_VERSION=$(jq -r '."."' "$MANIFEST")
           BETA_BASE=$(echo "$BETA_VERSION" | sed -E 's/-beta[0-9]+$//')
 
-          if [ "$MAIN_VERSION" != "$BETA_BASE" ] && \
-             [ "$(printf '%s\n%s\n' "$MAIN_VERSION" "$BETA_BASE" | sort -V | tail -n1)" = "$MAIN_VERSION" ]; then
-            echo "Anchoring beta ($BETA_VERSION) to main's v$MAIN_VERSION"
-            jq --arg v "${MAIN_VERSION}-beta1" '."." = $v' "$MANIFEST" > "$MANIFEST.tmp"
+          # Two cases need a new anchor:
+          #  - main is ahead of beta's base (a hotfix shipped straight from
+          #    main): anchor to <main>-beta1, as a prerelease of main's version.
+          #  - main has caught up with beta's base, i.e. this beta cycle was
+          #    just promoted and released. Beta's version (say 1.6.0-beta1) now
+          #    sorts *below* the shipped 1.6.0, and since prerelease versioning
+          #    only bumps the counter, the next beta would be 1.6.0-beta2, a
+          #    prerelease of something already released. Anchor one patch past
+          #    it instead (1.6.1-beta1), and release-please bumps from there:
+          #    a feat gives 1.7.0-beta1, a fix 1.6.1-beta2.
+          ANCHOR=""
+          if [ "$MAIN_VERSION" = "$BETA_BASE" ]; then
+            IFS=. read -r MAJ MIN PAT <<< "$MAIN_VERSION"
+            ANCHOR="${MAJ}.${MIN}.$((PAT + 1))-beta1"
+          elif [ "$(printf '%s\n%s\n' "$MAIN_VERSION" "$BETA_BASE" | sort -V | tail -n1)" = "$MAIN_VERSION" ]; then
+            ANCHOR="${MAIN_VERSION}-beta1"
+          fi
+
+          if [ -n "$ANCHOR" ]; then
+            echo "Anchoring beta ($BETA_VERSION) to $ANCHOR after main's v$MAIN_VERSION"
+            jq --arg v "$ANCHOR" '."." = $v' "$MANIFEST" > "$MANIFEST.tmp"
             mv "$MANIFEST.tmp" "$MANIFEST"
             git add "$MANIFEST"
-            git commit -m "chore(beta): anchor prerelease version to v${MAIN_VERSION}"
+            git commit -m "chore(beta): anchor prerelease version to v${ANCHOR}"
             echo "anchored=true" >> "$GITHUB_OUTPUT"
-            echo "version=${MAIN_VERSION}-beta1" >> "$GITHUB_OUTPUT"
+            echo "version=${ANCHOR}" >> "$GITHUB_OUTPUT"
           else
             echo "anchored=false" >> "$GITHUB_OUTPUT"
             echo "Beta ($BETA_VERSION) already anchored at or ahead of main's v$MAIN_VERSION — nothing to do"

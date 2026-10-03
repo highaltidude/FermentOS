@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable } from "@workspace/db";
-import { eq, desc, isNull, and, gte } from "drizzle-orm";
+import { db, sensorDevicesTable, sensorReadingsTable } from "@workspace/db";
+import { eq, and, gte } from "drizzle-orm";
 import { calcConnectionStatus, buildAlerts } from "../services/brewAlerts";
+import { getLatestReading, getActiveAssignment, getBrewName } from "../services/sensorDevices";
 import { calcInsights } from "../lib/fermentationInsights";
 
 const router = Router();
@@ -15,32 +16,9 @@ router.get("/status", async (req, res) => {
 
   const results = await Promise.all(
     devices.map(async (device) => {
-      const [latestReading] = await db
-        .select()
-        .from(sensorReadingsTable)
-        .where(eq(sensorReadingsTable.deviceId, device.id))
-        .orderBy(desc(sensorReadingsTable.receivedAt))
-        .limit(1);
-
-      const [activeAssignment] = await db
-        .select()
-        .from(sensorDeviceBrewAssignmentsTable)
-        .where(
-          and(
-            eq(sensorDeviceBrewAssignmentsTable.deviceId, device.id),
-            isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
-          ),
-        )
-        .limit(1);
-
-      let assignedBrewName: string | null = null;
-      if (activeAssignment) {
-        const [session] = await db
-          .select({ recipeName: brewSessionsTable.recipeName })
-          .from(brewSessionsTable)
-          .where(eq(brewSessionsTable.id, activeAssignment.brewSessionId));
-        assignedBrewName = session?.recipeName ?? null;
-      }
+      const latestReading = await getLatestReading(device.id);
+      const activeAssignment = await getActiveAssignment(device.id);
+      const assignedBrewName = activeAssignment ? await getBrewName(activeAssignment.brewSessionId) : null;
 
       let insights = null;
       if (activeAssignment) {
@@ -58,7 +36,7 @@ router.get("/status", async (req, res) => {
       }
 
       const connectionStatus = calcConnectionStatus(device.lastSeenAt, latestReading?.reportedInterval ?? null);
-      const alerts = buildAlerts(device, latestReading ?? null, connectionStatus);
+      const alerts = buildAlerts(device, latestReading, connectionStatus);
 
       return {
         deviceId: device.id,

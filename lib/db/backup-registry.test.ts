@@ -47,6 +47,19 @@ describe("backup registry coverage", () => {
     ).toHaveLength(0);
   });
 
+  it("every EXCLUDED_TABLES entry matches a real schema table", () => {
+    const known = new Set(SCHEMA_TABLES);
+    const orphans = [...EXCLUDED_TABLES].filter((t) => !known.has(t));
+    expect(
+      orphans,
+      [
+        "These EXCLUDED_TABLES entries have no matching schema table (stale?).",
+        "Remove them from lib/db/src/backup-registry.ts:",
+        ...orphans.map((t) => `  - ${t}`),
+      ].join("\n"),
+    ).toHaveLength(0);
+  });
+
   it("EXCLUDED_TABLES has no overlap with BACKUP_REGISTRY", () => {
     const registrySet = new Set(BACKUP_REGISTRY as readonly string[]);
     const overlap = [...EXCLUDED_TABLES].filter((t) => registrySet.has(t));

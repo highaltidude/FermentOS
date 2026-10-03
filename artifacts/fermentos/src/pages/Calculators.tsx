@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Calculator, Droplets, Scale, DollarSign, FlaskConical } from "lucide-react";
+import { estimateAbv } from "@/lib/brewMath";
 
 const comingSoon = [
   {
@@ -20,7 +21,7 @@ const comingSoon = [
 ];
 
 function calcAbv(og: number, fg: number) {
-  const abv = (og - fg) * 131.25;
+  const abv = estimateAbv(og, fg);
   const attenuation = ((og - fg) / (og - 1.0)) * 100;
   // ASBC calorie method (Brewer's Friend / Reiss 1994)
   const ogP = (og - 1) * 250;

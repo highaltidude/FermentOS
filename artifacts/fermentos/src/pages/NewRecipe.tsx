@@ -1,58 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Plus, X } from "lucide-react";
-import { useCreateRecipe, useAddRecipeIngredient, useAddRecipeStep, useDeleteRecipe, useListBeerStyles, useListInventory, getGetRecipeQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCreateRecipe, useAddRecipeIngredient, useAddRecipeStep, useDeleteRecipe, useListInventory, type IngredientType, type IngredientUse, type StepPhase } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
-import { fetchFermentTempUnit } from "@/lib/utils";
-
-function StyleSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { data: styles } = useListBeerStyles();
-  const [useCustom, setUseCustom] = useState(false);
-
-  if (!styles || styles.length === 0) {
-    return (
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g., American IPA (add styles in Settings)"
-      />
-    );
-  }
-
-  const knownNames = styles.map((s) => s.name);
-  const valueInList = knownNames.includes(value);
-
-  if (useCustom || (!valueInList && value)) {
-    return (
-      <div className="flex gap-2">
-        <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Type a style" className="flex-1" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => { setUseCustom(false); onChange(""); }}>
-          <X className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <Select value={value} onValueChange={(v) => { if (v === "__custom__") { setUseCustom(true); onChange(""); } else onChange(v); }}>
-      <SelectTrigger><SelectValue placeholder="Select a style…" /></SelectTrigger>
-      <SelectContent>
-        {styles.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-        <SelectItem value="__custom__">Other (type manually)…</SelectItem>
-      </SelectContent>
-    </Select>
-  );
-}
-
-const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
-const INGREDIENT_USES = ["mash", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"];
-const STEP_PHASES = ["mash", "boil", "fermentation", "conditioning", "packaging", "other"];
+import { StyleSelect } from "@/components/StyleSelect";
+import { TempRangeFields } from "@/components/TempRangeFields";
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
+import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlaceholder } from "@/lib/ingredients";
 
 interface PendingIngredient {
   name: string;
@@ -60,6 +19,8 @@ interface PendingIngredient {
   amount: string;
   unit: string;
   use: string;
+  /** Minutes left in the boil when it goes in. Only used for boil and whirlpool. */
+  timingMinutes: string;
   notes: string;
 }
 
@@ -69,23 +30,21 @@ interface PendingStep {
   durationMinutes: string;
 }
 
-const emptyIngredient = (): PendingIngredient => ({ name: "", type: "malt", amount: "", unit: "lbs", use: "", notes: "" });
+const emptyIngredient = (): PendingIngredient => ({ name: "", type: "malt", amount: "", unit: "lbs", use: "", timingMinutes: "", notes: "" });
 const emptyStep = (): PendingStep => ({ body: "", phase: "", durationMinutes: "" });
 
 export default function NewRecipe() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const qc = useQueryClient();
 
   const [form, setForm] = useState({
     name: "", style: "", batchSizeGallons: "5.5", originalGravity: "", finalGravity: "", abv: "", ibu: "",
     colorSrm: "", estimatedBrewTimeMinutes: "", efficiencyPercent: "", caloriesPerServing: "", notes: "",
     daysPlanned: "", daysBrewing: "", daysFermenting: "", daysConditioning: "", daysPackaged: "",
     fermentTempMin: "", fermentTempMax: "", fermentTempIdeal: "",
+    conditionTempMin: "", conditionTempMax: "", conditionTempIdeal: "",
   });
-  const [tempUnit, setTempUnit] = useState<"F" | "C">("F");
-
-  useEffect(() => { fetchFermentTempUnit().then(setTempUnit); }, []);
+  const tempUnit = useFermentTempUnit();
 
   const [ingredients, setIngredients] = useState<PendingIngredient[]>([emptyIngredient()]);
   const [steps, setSteps] = useState<PendingStep[]>([emptyStep()]);
@@ -137,6 +96,9 @@ export default function NewRecipe() {
         fermentTempMin: form.fermentTempMin ? Number(form.fermentTempMin) : undefined,
         fermentTempMax: form.fermentTempMax ? Number(form.fermentTempMax) : undefined,
         fermentTempIdeal: form.fermentTempIdeal ? Number(form.fermentTempIdeal) : undefined,
+        conditionTempMin: form.conditionTempMin ? Number(form.conditionTempMin) : undefined,
+        conditionTempMax: form.conditionTempMax ? Number(form.conditionTempMax) : undefined,
+        conditionTempIdeal: form.conditionTempIdeal ? Number(form.conditionTempIdeal) : undefined,
         daysPlanned: form.daysPlanned ? Number(form.daysPlanned) : undefined,
         daysBrewing: form.daysBrewing ? Number(form.daysBrewing) : undefined,
         daysFermenting: form.daysFermenting ? Number(form.daysFermenting) : undefined,
@@ -153,10 +115,11 @@ export default function NewRecipe() {
           id: recipe.id,
           data: {
             name: ing.name,
-            type: ing.type as any,
+            type: ing.type as IngredientType,
             amount: Number(ing.amount),
             unit: ing.unit,
-            use: (ing.use || undefined) as any,
+            use: (ing.use || undefined) as IngredientUse | undefined,
+            timingMinutes: TIMED_USES.includes(ing.use) && ing.timingMinutes !== "" ? Number(ing.timingMinutes) : undefined,
             notes: ing.notes || undefined,
           },
         });
@@ -167,7 +130,7 @@ export default function NewRecipe() {
           id: recipe.id,
           data: {
             body: step.body.trim(),
-            phase: (step.phase || undefined) as any,
+            phase: (step.phase || undefined) as StepPhase | undefined,
             durationMinutes: step.durationMinutes ? Number(step.durationMinutes) : undefined,
             position: i + 1,
           },
@@ -208,7 +171,7 @@ export default function NewRecipe() {
             <div className="col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Recipe Name *</label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Pacific IPA" /></div>
             <div className="col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Style *</label>
-              <StyleSelect value={form.style} onChange={(v) => setForm({ ...form, style: v })} /></div>
+              <StyleSelect value={form.style} onChange={(v) => setForm({ ...form, style: v })} fallbackPlaceholder="e.g., American IPA (add styles in Settings)" /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Batch Size (gal) *</label>
               <Input type="number" step="0.1" value={form.batchSizeGallons} onChange={(e) => setForm({ ...form, batchSizeGallons: e.target.value })} /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Color (SRM)</label>
@@ -258,20 +221,15 @@ export default function NewRecipe() {
             <h2 className="text-sm font-semibold text-foreground">Fermentation Temperature</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Optional — used for alerts and deviation tracking</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Min (°{tempUnit})</label>
-              <Input type="number" step="0.1" value={form.fermentTempMin} onChange={(e) => setForm({ ...form, fermentTempMin: e.target.value })} placeholder="e.g., 65" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Ideal (°{tempUnit})</label>
-              <Input type="number" step="0.1" value={form.fermentTempIdeal} onChange={(e) => setForm({ ...form, fermentTempIdeal: e.target.value })} placeholder="e.g., 68" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Max (°{tempUnit})</label>
-              <Input type="number" step="0.1" value={form.fermentTempMax} onChange={(e) => setForm({ ...form, fermentTempMax: e.target.value })} placeholder="e.g., 72" />
-            </div>
+          <TempRangeFields prefix="fermentTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
+        </div>
+
+        <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Conditioning Temperature</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Optional — used for alerts while conditioning. Leave blank for no temperature alerts in that stage.</p>
           </div>
+          <TempRangeFields prefix="conditionTemp" values={form} unit={tempUnit} onChange={(p) => setForm({ ...form, ...p })} />
         </div>
 
         <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
@@ -306,6 +264,13 @@ export default function NewRecipe() {
                   <SelectContent>{INGREDIENT_USES.map((u) => <SelectItem key={u} value={u}>{u.replace("_", " ")}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              {TIMED_USES.includes(ing.use) && (
+                <Input
+                  className="text-sm" type="number" min="0" step="1" inputMode="numeric"
+                  placeholder={timingPlaceholder(ing.use)}
+                  value={ing.timingMinutes} onChange={(e) => updateIngredient(i, "timingMinutes", e.target.value)}
+                />
+              )}
               <Input className="text-sm" placeholder="Notes (optional)" value={ing.notes} onChange={(e) => updateIngredient(i, "notes", e.target.value)} />
             </div>
           ))}

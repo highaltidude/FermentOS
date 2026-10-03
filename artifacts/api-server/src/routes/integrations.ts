@@ -1,27 +1,14 @@
 import { Router } from "express";
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, appConfigTable, fermentationReadingsTable, brewSessionsTable } from "@workspace/db";
-import { eq, desc, isNull, and, count, gte, lte } from "drizzle-orm";
-import { calcConnectionStatus, buildAlerts } from "../services/brewAlerts";
+import { db, sensorDevicesTable, sensorReadingsTable, fermentationReadingsTable, brewSessionsTable } from "@workspace/db";
+import { eq, desc, and, count, gte, lte } from "drizzle-orm";
 import { estimateBatteryPercent } from "../lib/batteryUtil";
+import { getConfigValue, setConfigValue, deleteConfigValue } from "../services/appConfig";
+import { buildDeviceSnapshot, getActiveAssignment } from "../services/sensorDevices";
 
 const router = Router();
 
 const CONFIG_ISPINDEL_ENABLED = "ispindel_enabled";
 const CONFIG_ISPINDEL_TOKEN = "ispindel_token";
-
-// ── Config helpers ─────────────────────────────────────────────────────────
-
-async function getConfig(key: string): Promise<string | null> {
-  const [row] = await db.select().from(appConfigTable).where(eq(appConfigTable.key, key));
-  return row?.value ?? null;
-}
-
-async function setConfig(key: string, value: string): Promise<void> {
-  await db
-    .insert(appConfigTable)
-    .values({ key, value })
-    .onConflictDoUpdate({ target: appConfigTable.key, set: { value, updatedAt: new Date() } });
-}
 
 // ── Core ingest logic (reused by both POST /integrations/ispindel and simulate) ──
 
@@ -65,16 +52,7 @@ async function ingestReading(opts: {
   // Resolve active brew assignment
   let brewSessionId = opts.brewSessionId ?? null;
   if (brewSessionId == null) {
-    const [activeAssignment] = await db
-      .select()
-      .from(sensorDeviceBrewAssignmentsTable)
-      .where(
-        and(
-          eq(sensorDeviceBrewAssignmentsTable.deviceId, device!.id),
-          isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
-        ),
-      )
-      .limit(1);
+    const activeAssignment = await getActiveAssignment(device!.id);
     brewSessionId = activeAssignment?.brewSessionId ?? null;
   }
 
@@ -138,13 +116,13 @@ async function ingestReading(opts: {
 // Whitelisted from apiAuth so real devices can POST without a Bearer token.
 router.post("/ispindel", async (req, res) => {
   // Check if integration is enabled
-  const enabled = await getConfig(CONFIG_ISPINDEL_ENABLED);
+  const enabled = await getConfigValue(CONFIG_ISPINDEL_ENABLED);
   if (enabled === "false") {
     return res.status(403).json({ error: "iSpindel integration is disabled" });
   }
 
   // Optional token validation
-  const storedToken = await getConfig(CONFIG_ISPINDEL_TOKEN);
+  const storedToken = await getConfigValue(CONFIG_ISPINDEL_TOKEN);
   if (storedToken) {
     const payloadToken = req.body?.token ?? req.body?.Token;
     if (payloadToken !== storedToken) {
@@ -181,8 +159,8 @@ router.post("/ispindel", async (req, res) => {
 // ── GET /integrations/ispindel/settings ───────────────────────────────────
 router.get("/ispindel/settings", async (_req, res) => {
   const [enabled, token] = await Promise.all([
-    getConfig(CONFIG_ISPINDEL_ENABLED),
-    getConfig(CONFIG_ISPINDEL_TOKEN),
+    getConfigValue(CONFIG_ISPINDEL_ENABLED),
+    getConfigValue(CONFIG_ISPINDEL_TOKEN),
   ]);
   return res.json({
     enabled: enabled !== "false",
@@ -194,18 +172,18 @@ router.get("/ispindel/settings", async (_req, res) => {
 router.put("/ispindel/settings", async (req, res) => {
   const { enabled, token } = req.body as { enabled?: boolean; token?: string | null };
   if (enabled !== undefined) {
-    await setConfig(CONFIG_ISPINDEL_ENABLED, enabled ? "true" : "false");
+    await setConfigValue(CONFIG_ISPINDEL_ENABLED, enabled ? "true" : "false");
   }
   if (token !== undefined) {
     if (token === null || token === "") {
-      await db.delete(appConfigTable).where(eq(appConfigTable.key, CONFIG_ISPINDEL_TOKEN));
+      await deleteConfigValue(CONFIG_ISPINDEL_TOKEN);
     } else {
-      await setConfig(CONFIG_ISPINDEL_TOKEN, token);
+      await setConfigValue(CONFIG_ISPINDEL_TOKEN, token);
     }
   }
   const [newEnabled, newToken] = await Promise.all([
-    getConfig(CONFIG_ISPINDEL_ENABLED),
-    getConfig(CONFIG_ISPINDEL_TOKEN),
+    getConfigValue(CONFIG_ISPINDEL_ENABLED),
+    getConfigValue(CONFIG_ISPINDEL_TOKEN),
   ]);
   return res.json({ enabled: newEnabled !== "false", token: newToken ?? null });
 });
@@ -263,38 +241,9 @@ router.post("/ispindel/simulate", async (req, res) => {
 router.get("/ispindel/status", async (_req, res) => {
   const devices = await db.select().from(sensorDevicesTable).where(eq(sensorDevicesTable.enabled, true));
 
+  // Brew names are not resolved here; assignedBrewName is always null.
   const results = await Promise.all(
-    devices.map(async (device) => {
-      const [latestReading] = await db
-        .select()
-        .from(sensorReadingsTable)
-        .where(eq(sensorReadingsTable.deviceId, device.id))
-        .orderBy(desc(sensorReadingsTable.receivedAt))
-        .limit(1);
-
-      const [activeAssignment] = await db
-        .select()
-        .from(sensorDeviceBrewAssignmentsTable)
-        .where(
-          and(
-            eq(sensorDeviceBrewAssignmentsTable.deviceId, device.id),
-            isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
-          ),
-        )
-        .limit(1);
-
-      const connectionStatus = calcConnectionStatus(device.lastSeenAt, latestReading?.reportedInterval ?? null);
-      const alerts = buildAlerts(device, latestReading ?? null, connectionStatus);
-
-      return {
-        device,
-        latestReading: latestReading ?? null,
-        assignedBrewSessionId: activeAssignment?.brewSessionId ?? null,
-        assignedBrewName: null,
-        connectionStatus,
-        alerts,
-      };
-    }),
+    devices.map((device) => buildDeviceSnapshot(device, { withBrewName: false })),
   );
 
   return res.json({ devices: results });

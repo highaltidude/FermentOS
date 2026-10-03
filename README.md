@@ -55,10 +55,12 @@ install to a tracked first batch.
 
 - **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
+- **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
 - **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
-- **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. See [Get alerts on your phone](#get-alerts-on-your-phone)
+- **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. Temperature is checked against the fermentation range while fermenting and an optional separate conditioning range (for a cold crash or lagering) while conditioning. See [Get alerts on your phone](#get-alerts-on-your-phone)
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
+- **Optional HTTPS** — One command puts FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
 - **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something
 - **Auto-advance to Conditioning** — Move a batch on automatically once fermentation looks finished, so a forgotten status does not leave it sitting in Fermenting for weeks
@@ -169,7 +171,21 @@ steps.
 
 Set the **fermentation temperature range** while you are here. It is optional,
 but it is what lets FermentOS tell you later that a batch is running hot — see
-step 6.
+step 7.
+
+If the beer spends conditioning at a different temperature — a cold crash, a
+lager, warm bottle conditioning — also set the **conditioning temperature
+range**. Leave it blank and FermentOS stops checking temperature once the batch
+moves to Conditioning.
+
+For the boil timer, set each boil hop's **Use** to **Boil**. A field appears for
+the **minutes left in the boil** when it goes in: 60 for bittering, 15 for
+flavor, 0 for flameout. Set whirlpool hops to **Whirlpool**; they are called at
+flameout. On a recipe you have already saved, click **+ time** (or the
+existing **@ 15 min**) next to a boil or whirlpool ingredient to set or change it.
+An addition with no time goes in at the start of the boil. A boil step with a
+duration sets the boil length; without one, FermentOS uses your longest boil
+addition, or 60 minutes.
 
 **3. Stock your ingredients** *(optional)*
 
@@ -183,7 +199,7 @@ something and tells you exactly what is missing.
 **4. Start a brew session**
 
 **Brew Log → New Session.** Choose your recipe from the dropdown and FermentOS
-fills in the name, batch size, and fermentation temperature range for you.
+fills in the name, batch size, and fermentation and conditioning temperature ranges for you.
 
 You do not need a recipe to log a batch — a **name and a brew date are the only
 required fields**, so a spur-of-the-moment brew can be recorded now and tidied
@@ -192,7 +208,24 @@ session itself if you want temperature alerts.
 
 The session starts at **Brew Day**.
 
-**5. Attach an iSpindel** *(optional)*
+**5. Run the boil**
+
+On a Brew Day session, tap **Start Boil** — on the session page, on the
+Dashboard, or from the Boil icon described in
+[Install it on your phone](#install-it-on-your-phone). Check the boil length,
+then **Start boil**. You get:
+
+- a large countdown that keeps running if you close the app, lock the phone, or reload — and shows the same time on every device
+- **Add now** and **Next** cards, and a checklist of every boil and whirlpool addition to tick off as they go in
+- a beep, vibration (Android), and on-screen message at each addition and at flameout while the page is open
+- a message to your phone at each addition and at flameout even when it is locked, if you have set up [alerts](#get-alerts-on-your-phone)
+
+**Pause** holds the clock (a boil-over, a stuck valve), and **Finish** ends the
+boil; then record your OG on the session. Keeping the screen awake needs
+FermentOS on HTTPS, so on a plain home-network install your phone may lock
+during the boil. The timer and the alerts carry on regardless.
+
+**6. Attach an iSpindel** *(optional)*
 
 If you have one, drop it in the fermenter and assign it to this session — see
 [Connect an iSpindel](#connect-an-ispindel). From then on every reading it
@@ -201,7 +234,7 @@ sends is logged against this batch automatically.
 No iSpindel? Add readings by hand on the session page. Everything below still
 works, just with the readings you enter yourself.
 
-**6. Watch it ferment**
+**7. Watch it ferment**
 
 Move the session to **Fermenting** using the stage bar at the top of the page.
 You now get:
@@ -214,7 +247,7 @@ This is also the point where alerts start earning their keep. Set them up once
 and your phone tells you about a stall or a temperature swing without you
 opening anything — see [Get alerts on your phone](#get-alerts-on-your-phone).
 
-**7. Package it and rate it**
+**8. Package it and rate it**
 
 When fermentation finishes, advance to **Conditioning**, then **Packaged**.
 (FermentOS can make the Conditioning step for you — see **Settings → Brewing →
@@ -239,10 +272,15 @@ something needs attention:
 
 | Alert | Fires when |
 |-------|-----------|
-| Temperature out of range | A reading falls outside the batch's fermentation temperature range |
-| Fermentation stalled | Gravity has not moved for 24 hours |
+| Temperature out of range | A reading falls outside the batch's fermentation temperature range — or, while conditioning, its conditioning range if one is set |
+| Fermentation stalled | Gravity has not moved for 24 hours while the batch is Fermenting — sent once per batch |
 | Sensor offline | Your iSpindel has stopped reporting |
 | Sensor battery low | The iSpindel battery drops below 20% |
+| Boil additions | A boil timer is running and a hop addition, or flameout, is due |
+
+Boil additions are the exception to the five-minute check: each one is sent at
+the moment it is due, and anything you have already ticked off on the checklist
+is skipped. They have their own **Boil additions** checkbox, on by default.
 
 Both delivery methods are **outbound** — FermentOS makes the request, nothing
 connects in to it. That is what makes this work on an ordinary home network with
@@ -279,6 +317,12 @@ compare a reading against, and temperature alerts will never fire. The other
 three alerts still work fine. Set the range on the session, or on the recipe so
 future batches inherit it.
 
+Conditioning has its own optional range. While a batch is in Conditioning,
+temperature is checked against that instead, and if neither the session nor the
+recipe has one, temperature alerts are off for that stage. The brew page's chart
+lines follow the same rule and are labelled **Cond.** when they show the
+conditioning range.
+
 You can also tune how jumpy temperature alerts are with **Settings → Brewing →
 Fermentation Temperature → Temperature Alert Threshold**. It is the number of consecutive
 out-of-range readings needed before you get told, so opening the fermenter for a
@@ -286,6 +330,10 @@ minute does not wake you at 3am. **Re-notify at most every** controls how often
 a problem that is still ongoing nags you again. Temperature can have its own,
 shorter interval — it is the one alert you can act on the moment you hear it, so
 an hourly nudge is useful where an hourly battery warning would just be noise.
+
+The stall alert is the exception: it is sent once per batch and never repeats,
+and it stops being checked when you move the batch to Conditioning, where flat
+gravity is exactly what you want.
 
 ---
 
@@ -301,16 +349,123 @@ bar, like a normal app.
 **Add to Home screen**. You get an icon and it opens quickly, though Chrome
 reserves its proper "Install app" prompt for sites served over HTTPS.
 
-**What you do not get yet:** offline access and web push notifications. Both
-require HTTPS, which a plain home-network install does not have. This is why
-phone alerts go through ntfy or a webhook instead — those work over plain HTTP
-today. If you want to put FermentOS behind HTTPS, see issues
-[#144](https://github.com/highaltidude/FermentOS/issues/144),
-[#145](https://github.com/highaltidude/FermentOS/issues/145), and
-[#146](https://github.com/highaltidude/FermentOS/issues/146).
+**Jump straight to the boil timer:** open `http://<host-ip>:<port>/boil` and
+add *that* page to your home screen as well, named something like "Boil". It
+opens the timer for the batch on Brew Day, or lets you pick if there is more than
+one. If FermentOS is served over HTTPS and installed as an app, you also get a
+**Start Boil** shortcut by long-pressing the app icon (Android) or right-clicking
+it (desktop Chrome and Edge). iPhone does not support app-icon shortcuts, so use
+the separate Boil icon there.
+
+**What you do not get yet:** offline access and web push notifications
+([#145](https://github.com/highaltidude/FermentOS/issues/145),
+[#146](https://github.com/highaltidude/FermentOS/issues/146)). Both will need
+HTTPS, which is why phone alerts go through ntfy or a webhook — those work over
+plain HTTP today. The Chrome install prompt, the Start Boil shortcut, and keeping
+the screen awake during the boil already work once FermentOS is on HTTPS; see
+[Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional).
 
 Repeat visits are quick either way: the app's assets are cached by your browser,
 so day-to-day use is not waiting on the Pi.
+
+---
+
+### Serve FermentOS over HTTPS (optional)
+
+Everything in FermentOS works over plain HTTP, and you can skip this section. Turn
+HTTPS on if you want what browsers keep for secure sites:
+
+- Chrome's proper **Install app** prompt, and the long-press **Start Boil** shortcut
+- the screen staying awake on the boil timer
+- later, offline access and web push ([#145](https://github.com/highaltidude/FermentOS/issues/145), [#146](https://github.com/highaltidude/FermentOS/issues/146))
+
+**Why not a self-signed certificate?** Clicking past the browser warning does not
+help: Chrome still refuses to install the app or run a service worker on a page
+with a certificate error. What works is a small certificate authority of your
+own, which each device trusts once. FermentOS sets one up for you with
+[Caddy](https://caddyserver.com): it creates a root certificate that lasts ten
+years, issues and renews the site certificate from it automatically, and sits in
+front of FermentOS on ports 443 (HTTPS) and 80 (HTTP).
+
+iSpindel and Home Assistant keep using plain HTTP — Caddy passes `/api/...` on
+port 80 straight through, so an iSpindel set to port 80 needs no changes (if
+yours posts to the app's own port, e.g. 3000, that keeps working too). Your old
+`http://<pi-ip>:3000` address also keeps working. Every other page on port 80
+redirects to HTTPS.
+
+**1. Turn it on**
+
+*Installed with `install.sh` (the usual Raspberry Pi install):* from the
+FermentOS folder, run
+
+```bash
+sudo bash enable-https.sh
+```
+
+It installs Caddy, points it at FermentOS, and prints the addresses to use. It
+issues the certificate for the Pi's IP and for `<hostname>.local`; to choose
+them yourself, set `FERMENTOS_IP` and `FERMENTOS_NAMES` (space-separated) when
+running it. If ports 80 or 443 are taken by something else, it stops and says
+so — set `HTTP_PORT` / `HTTPS_PORT` to use others.
+
+*Installed with Docker (on a Pi or anything else):* add these lines to `.env` in
+the FermentOS folder, then run `docker compose up -d`:
+
+```bash
+COMPOSE_PATH_SEPARATOR=:          # lets the next line work on Windows too
+COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
+FERMENTOS_IP=192.168.1.50        # this machine's LAN IP
+FERMENTOS_NAMES=fermentos.local  # optional extra names, space-separated
+```
+
+`COMPOSE_FILE` makes every later `docker compose` command, including
+`docker-install.sh` and updates, include Caddy. `HTTP_PORT` / `HTTPS_PORT` move
+it off 80/443 if those are taken.
+
+**2. Reserve the IP address.** The certificate names the Pi's IP, so give the Pi
+a fixed address in your router's DHCP settings. If the IP ever changes, re-run
+`enable-https.sh` (or update `FERMENTOS_IP`) — devices keep trusting the same
+root, so there's nothing to redo on them. `<hostname>.local` names work on
+iPhone, Mac, Windows and Linux, and on Android 12 or later; use the IP on older
+Android phones.
+
+**3. Trust the root certificate on each device.** Download it from
+`http://<pi-ip>/root.crt`, then:
+
+- **iPhone / iPad:** open the download and allow the profile, install it under
+  **Settings → General → VPN & Device Management**, *then* turn it on under
+  **Settings → General → About → Certificate Trust Settings**. Skipping that
+  last switch is the usual reason it "doesn't work".
+- **Android:** **Settings → Security → More security settings → Encryption &
+  credentials → Install a certificate → CA certificate**, and pick the
+  downloaded file. (Menu names vary a little by phone maker; search Settings for
+  "CA certificate".)
+- **Windows:** double-click the file → **Install Certificate** → **Local
+  Machine** → **Trusted Root Certification Authorities**.
+- **Mac:** double-click to add it to Keychain Access, open it, and set
+  **When using this certificate** to **Always Trust**.
+- **Firefox (desktop):** uses its own list — **Settings → Privacy & Security →
+  View Certificates → Authorities → Import**.
+
+Now open `https://<pi-ip>` and install FermentOS from there as described
+[above](#install-it-on-your-phone).
+
+**Keep the CA private.** The root's private key lives on the Pi (Docker: the
+`caddy_data` volume; native: `/var/lib/caddy`). Anyone holding it could
+impersonate *any* website to the devices that trust your root, so never copy it
+anywhere shared. To undo everything, run `sudo bash enable-https.sh --disable`
+(or remove the `COMPOSE_FILE` line and run `docker compose up -d
+--remove-orphans`), and remove the certificate from each device.
+
+**Other ways to get HTTPS**, if they suit you better:
+
+- **Tailscale** — if every device you use already runs Tailscale, `tailscale
+  serve` can put FermentOS on your tailnet name with a publicly-trusted
+  certificate, so there's no root to install. Devices without Tailscale can't
+  reach that address.
+- **Chrome flag (one device, for testing)** — `chrome://flags` → *Insecure
+  origins treated as secure* → add `http://<pi-ip>:3000`. Chrome on that device
+  then treats FermentOS as secure. Handy for a quick try; not something to rely on.
 
 ---
 
@@ -329,7 +484,7 @@ Open the iSpindel's built-in web UI (connect it to your network in hotspot mode 
 | Field | Value |
 |-------|-------|
 | Server Address | your FermentOS host IP (e.g. `192.168.1.100`) |
-| Port | `80` |
+| Port | the port you open FermentOS on (e.g. `3000`), or `80` if you [serve it over HTTPS](#serve-fermentos-over-https-optional) |
 | URL | `/api/integrations/ispindel` |
 | Protocol | HTTP |
 
@@ -371,7 +526,7 @@ which is not always the day you got round to logging it.
 
 Day to day, that means:
 
-- **Dashboard** shows what is fermenting now and what you finished recently
+- **Dashboard** shows what is fermenting now and what you finished recently, plus a live boil countdown on brew day
 - **Brew Log** is the full history of every batch
 - **Recipes** carries the average score of every batch brewed from it, so your best recipes surface themselves over time
 - **Ingredients** tracks what you have and flags what is about to expire
@@ -431,6 +586,12 @@ FermentOS takes a `pg_dump` of the whole database. You can run one on demand,
 download it, or schedule daily or weekly runs that push to an SFTP server, keep
 a copy on the local disk, or both. Restores work from an uploaded file or from
 any backup still in local history.
+
+A restore replaces the whole database in one step: if the file turns out to be
+damaged part-way through, nothing changes. A file that was cut off during a
+download or upload is refused before anything is touched. A backup taken on an
+older version of FermentOS is brought up to the current one's tables and
+columns as it is restored.
 
 Local backups land in `data/backups` inside the install directory. On Docker that
 is bind-mounted to `./data/backups` on the host, so a dump is still there after a
@@ -498,11 +659,17 @@ Response is an array, one entry per device:
   "webhookUrl": "",
   "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
   "repeatHours": 6,
-  "tempRepeatHours": null
+  "tempRepeatHours": null,
+  "boilAlerts": true
 }
 ```
 
-`channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168.
+`channel`: `none` | `ntfy` | `webhook`. `repeatHours` is 1–168. An empty
+`types` array turns every monitored alert off.
+
+`boilAlerts` turns boil-addition and flameout messages on or off. It is separate
+from `types` because it is a one-off schedule rather than a monitored condition.
+It defaults to `true`, and leaving it out of a `PUT` keeps the current value.
 
 `tempRepeatHours` overrides `repeatHours` for `temp_out_of_range` only, and is
 also 1–168. `null` — the default — inherits `repeatHours`, so upgrading never
@@ -528,6 +695,28 @@ Webhook payload shape:
   "alertType": "temp_out_of_range"
 }
 ```
+
+Boil alerts use the same envelope. Instead of `alertType` they carry `event`
+(`boil_addition` or `boil_flameout`), the minutes left in the boil, and the
+additions that are due:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Pacific Haze IPA: 15 min addition",
+  "message": "Add 1 oz Cascade, 0.5 oz Citra",
+  "priority": "high",
+  "triggeredAt": "2026-09-22T19:45:00.000Z",
+  "brewSessionId": 7,
+  "recipeName": "Pacific Haze IPA",
+  "event": "boil_addition",
+  "minutesRemaining": 15,
+  "additions": [
+    { "id": 12, "name": "Cascade", "amount": 1, "unit": "oz" },
+    { "id": 13, "name": "Citra", "amount": 0.5, "unit": "oz" }
+  ]
+}
+```
 ---
 
 ## Security & API tokens
@@ -546,7 +735,7 @@ Authorization: Bearer <token>
 ```
 
 **Always-exempt endpoints** (reachable with no token, even under lockdown):
-- `GET /healthz`
+- `GET /api/healthz`
 - `GET /api/admin/repair-script`, `GET /api/admin/sudoers-line` — recovery scripts, must stay reachable from a plain `curl` on the host even if you lock yourself out
 - `GET /api/ha/status` — read-only Home Assistant polling target
 - `POST /api/integrations/ispindel`, `GET /api/integrations/ispindel/status` — the iSpindel device itself can't send a bearer token
@@ -578,9 +767,9 @@ sensor:
 sudo apt update && sudo apt upgrade -y
 ```
 
-**2. Install Node.js v20**
+**2. Install Node.js v24**
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 
@@ -698,6 +887,9 @@ All endpoints are prefixed with `/api`. Replace `<host>` with your host's addres
   "fermentTempMin": 64,
   "fermentTempMax": 70,
   "fermentTempIdeal": 67,
+  "conditionTempMin": 32,
+  "conditionTempMax": 38,
+  "conditionTempIdeal": 34,
   "notes": "Optional brew notes"
 }
 ```
@@ -764,6 +956,7 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 | DELETE | `/api/brew-sessions/:id/photo` | Remove the session photo |
 | PUT | `/api/brew-sessions/:id/rating` | Save the tasting scorecard |
 | DELETE | `/api/brew-sessions/:id/rating` | Clear the tasting scorecard |
+| POST | `/api/brew-sessions/:id/boil` | Start, pause, resume, finish, or reset the boil timer, or save its checklist |
 
 **POST /api/brew-sessions** body:
 ```json
@@ -782,6 +975,9 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
   "fermentTempMin": 64,
   "fermentTempMax": 70,
   "fermentTempIdeal": 67,
+  "conditionTempMin": 32,
+  "conditionTempMax": 38,
+  "conditionTempIdeal": 34,
   "notes": "Optional"
 }
 ```
@@ -821,6 +1017,26 @@ detected. Saving stamps `ratedAt`, which is what marks a batch as rated.
 
 **DELETE /api/brew-sessions/:id/rating** clears the scorecard. Tasting notes
 are kept.
+
+**POST /api/brew-sessions/:id/boil** body:
+```json
+{ "action": "start", "boilMinutes": 60, "doneAdditionIds": [] }
+```
+`action`: `start` | `pause` | `resume` | `finish` | `reset` | `checklist`.
+`boilMinutes` (1–600) is required for `start`; sent with `pause`, `resume`,
+`finish`, or `checklist` it changes the length of a boil already under way.
+`doneAdditionIds` replaces the checklist of recipe ingredient ids that have gone
+in, and is accepted with any action. An action that does not fit the timer's
+state — resuming a boil that is not paused, say — is rejected with a 400.
+Returns the updated brew session.
+
+The timer is stored as timestamps on the brew session (`boilMinutes`,
+`boilStartedAt`, `boilPausedAt`, `boilPausedMs`, `boilEndedAt`,
+`boilDoneAdditionIds`, all `null` until a boil is started), which
+`GET /api/brew-sessions/:id` returns. Time remaining is `boilMinutes` minus the
+time since `boilStartedAt`, less `boilPausedMs` and any pause in progress. Every
+change reschedules the boil-addition alerts, and they are rebuilt from these
+fields when the server restarts.
 
 ---
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/ui/score-picker";
+import { FilterChip } from "@/components/ui/filter-chip";
 
 const STYLE_COLORS: Record<string, string> = {
   "American IPA": "bg-amber-100 text-amber-800",
@@ -50,24 +51,17 @@ export default function Recipes() {
           />
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            onClick={() => setSelectedStyle(undefined)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              !selectedStyle ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-            }`}
-          >
+          <FilterChip active={!selectedStyle} onClick={() => setSelectedStyle(undefined)}>
             All
-          </button>
+          </FilterChip>
           {styles?.map((s) => (
-            <button
+            <FilterChip
               key={s.style}
+              active={selectedStyle === s.style}
               onClick={() => setSelectedStyle(s.style === selectedStyle ? undefined : s.style)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                selectedStyle === s.style ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-              }`}
             >
               {s.style} ({s.count})
-            </button>
+            </FilterChip>
           ))}
         </div>
       </div>

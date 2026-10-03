@@ -6,6 +6,7 @@ import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { isStaticAssetPath } from "./lib/staticPaths";
+import { SESSION_UPLOADS_DIR } from "./lib/paths";
 import errorHandler from "./middlewares/errorHandler";
 
 const app: Express = express();
@@ -36,9 +37,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 // Serve uploaded brew session photos
-const uploadsDir = path.resolve(process.cwd(), "data/uploads/sessions");
-fs.mkdirSync(uploadsDir, { recursive: true });
-app.use("/api/uploads/sessions", express.static(uploadsDir));
+fs.mkdirSync(SESSION_UPLOADS_DIR, { recursive: true });
+app.use("/api/uploads/sessions", express.static(SESSION_UPLOADS_DIR));
 
 // Anything under /api that no route matched. Without this, Express's built-in
 // handler answers with an HTML 404 while every other API response is JSON, so a

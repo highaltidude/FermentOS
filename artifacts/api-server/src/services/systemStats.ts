@@ -1,8 +1,7 @@
 import os from "os";
 import fs from "fs";
 import { execSync } from "child_process";
-
-const IS_DOCKER = fs.existsSync("/.dockerenv");
+import { IS_DOCKER } from "../lib/runtime";
 
 export type SystemStats = {
   hostname: string;

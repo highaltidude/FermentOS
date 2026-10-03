@@ -1,5 +1,5 @@
 # Stage 1 — base
-FROM node:20-slim AS base
+FROM node:24-slim AS base
 RUN npm install -g pnpm@10
 WORKDIR /app
 
@@ -32,7 +32,7 @@ RUN pnpm --filter @workspace/api-server run build
 RUN BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 
 # Stage 4 — runner: lean production image
-FROM node:20-slim AS runner
+FROM node:24-slim AS runner
 # pg_dump refuses to dump a server newer than itself, and Debian bookworm ships
 # postgresql-client 15 while the compose stack runs postgres 16 — which silently
 # broke every scheduled backup. Pull the matching major from PGDG instead, and

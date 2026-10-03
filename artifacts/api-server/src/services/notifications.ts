@@ -1,6 +1,8 @@
 import { db, appConfigTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { parseNotifyTypes } from "../lib/notifyTypes";
+import { setConfigValue } from "./appConfig";
 
 /**
  * Outbound notification delivery.
@@ -13,7 +15,7 @@ import { logger } from "../lib/logger";
  * Node 20 has global fetch, so neither channel needs a dependency.
  */
 
-export const NOTIFY_KEYS = {
+const NOTIFY_KEYS = {
   channel: "notify_channel",
   ntfyServer: "notify_ntfy_server",
   ntfyTopic: "notify_ntfy_topic",
@@ -21,14 +23,15 @@ export const NOTIFY_KEYS = {
   types: "notify_types",
   repeatHours: "notify_repeat_hours",
   tempRepeatHours: "notify_temp_repeat_hours",
+  boilAlerts: "notify_boil",
 } as const;
 
 export const ALERT_TYPES = ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"] as const;
 export type AlertType = (typeof ALERT_TYPES)[number];
 
 export const DEFAULT_NOTIFY_TYPES: AlertType[] = [...ALERT_TYPES];
-export const DEFAULT_REPEAT_HOURS = 6;
-export const DEFAULT_NTFY_SERVER = "https://ntfy.sh";
+const DEFAULT_REPEAT_HOURS = 6;
+const DEFAULT_NTFY_SERVER = "https://ntfy.sh";
 
 export type NotifyChannel = "none" | "ntfy" | "webhook";
 
@@ -44,6 +47,13 @@ export type NotifyConfig = {
    * the default — so an upgrade never changes an existing interval.
    */
   tempRepeatHours: number | null;
+  /**
+   * Hop-addition and flameout alerts from a running boil timer. Not an
+   * AlertType: those are monitored conditions with repeat intervals, this is a
+   * one-shot schedule. Keeping it separate also means a types list saved
+   * before boil alerts existed does not leave them switched off.
+   */
+  boilAlerts: boolean;
 };
 
 export async function getNotifyConfig(): Promise<NotifyConfig> {
@@ -57,11 +67,7 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
   const channel: NotifyChannel =
     rawChannel === "ntfy" || rawChannel === "webhook" ? rawChannel : "none";
 
-  const rawTypes = map.get(NOTIFY_KEYS.types);
-  const types = rawTypes
-    ? (rawTypes.split(",").map((t) => t.trim()).filter((t): t is AlertType =>
-        (ALERT_TYPES as readonly string[]).includes(t)))
-    : DEFAULT_NOTIFY_TYPES;
+  const types = parseNotifyTypes(map.get(NOTIFY_KEYS.types), ALERT_TYPES, DEFAULT_NOTIFY_TYPES);
 
   const inRange = (n: number) => Number.isFinite(n) && n >= 1 && n <= 168;
 
@@ -80,6 +86,8 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
     types,
     repeatHours,
     tempRepeatHours,
+    // On unless explicitly switched off, so an existing install gets them.
+    boilAlerts: map.get(NOTIFY_KEYS.boilAlerts) !== "false",
   };
 }
 
@@ -93,12 +101,10 @@ export async function setNotifyConfig(cfg: NotifyConfig): Promise<void> {
     [NOTIFY_KEYS.repeatHours, String(cfg.repeatHours)],
     // Empty string for null so clearing the override round-trips.
     [NOTIFY_KEYS.tempRepeatHours, cfg.tempRepeatHours == null ? "" : String(cfg.tempRepeatHours)],
+    [NOTIFY_KEYS.boilAlerts, String(cfg.boilAlerts)],
   ];
   for (const [key, value] of pairs) {
-    await db
-      .insert(appConfigTable)
-      .values({ key, value })
-      .onConflictDoUpdate({ target: appConfigTable.key, set: { value, updatedAt: new Date() } });
+    await setConfigValue(key, value);
   }
 }
 

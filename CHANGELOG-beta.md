@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.7.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.6.1-beta1...fermentos-v1.7.0-beta1) (2026-10-03)
+
+
+### Features
+
+* **boil:** boil timer with hop-addition alerts and a Start Boil launch shortcut ([ea03b95](https://github.com/highaltidude/FermentOS/commit/ea03b95e43b82236794e58a15964e3f2cacde952))
+* **https:** optional Caddy overlay with a local CA for HTTPS ([9a8c22c](https://github.com/highaltidude/FermentOS/commit/9a8c22c6686355ba9e52a06166052b549572e200))
+* **recipes:** optional conditioning temperature range for alerts ([2a71ca0](https://github.com/highaltidude/FermentOS/commit/2a71ca0c8ca0c5f5932c93da62a87cbfc24a5ca6))
+
+
+### Bug Fixes
+
+* **alerts:** only flag a stall after 24 hours of flat readings ([e620d87](https://github.com/highaltidude/FermentOS/commit/e620d8786733672554754892049aba0883ae1896))
+* **alerts:** send the stall alert once per batch, only while fermenting ([2d247ea](https://github.com/highaltidude/FermentOS/commit/2d247ea3eebd21e2d07c52007ef7ddd0442fb614))
+* **auth:** exempt HA, iSpindel and recovery endpoints under API lockdown ([4c8f087](https://github.com/highaltidude/FermentOS/commit/4c8f087de47bf24392da0e94b31fc32aac09300f))
+* **backup:** make restore work again, atomically, and keep the database password out of errors ([c9d6cbc](https://github.com/highaltidude/FermentOS/commit/c9d6cbcd40079dbe3d51afeb2afbd3e825a8481e))
+* **deps:** update dependencies to clear security alerts ([6b3154a](https://github.com/highaltidude/FermentOS/commit/6b3154a52d3bb89388cf719488e79715e2c46e1b))
+* **https:** let the Docker COMPOSE_FILE setting work on Windows ([9fa827e](https://github.com/highaltidude/FermentOS/commit/9fa827e7dc2a689e669874cb1addbc1d5b1ba508))
+* move the Docker image and installer to Node 24, as Node 20 is end-of-life ([1606bd2](https://github.com/highaltidude/FermentOS/commit/1606bd2cb07491cfb7b02023bb0a3df804a41290))
+* **notifications:** keep alert types off when all are unchecked ([f86d3bf](https://github.com/highaltidude/FermentOS/commit/f86d3bfc1ee08d621f18d3809ab02030dc81f85f))
+* **recipes:** let boil and whirlpool additions have a time ([efa7e49](https://github.com/highaltidude/FermentOS/commit/efa7e4979c8999a1be02bb4c825156bc074415f1))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

@@ -329,7 +329,7 @@ importers:
   lib/api-spec:
     devDependencies:
       orval:
-        specifier: ^8.22.0
+        specifier: ^8.39.0
         version: 8.39.0(@tanstack/react-query@5.90.21(react@19.1.0))(prettier@3.8.1)(typescript@5.9.3)(zod@4.6.5)
 
   lib/api-zod:

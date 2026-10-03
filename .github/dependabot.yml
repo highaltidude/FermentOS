@@ -25,6 +25,11 @@ updates:
       # can be tested on its own.
       npm-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # zod 4 is a migration, not a bump: the generated schemas are zod 3 code
+      # (orval.config.ts pins version: 3). Remove this once that is done.
+      - dependency-name: zod
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: "/"

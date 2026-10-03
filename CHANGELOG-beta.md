@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.8.0-beta1...fermentos-v1.8.0-beta2) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ha:** include temperature and stall alerts in /api/ha/status ([e639f46](https://github.com/highaltidude/FermentOS/commit/e639f4629211a8ea60f9b1da1e1bb7f03c5e707a))
+* **settings:** make copy buttons work over plain HTTP ([4a19c87](https://github.com/highaltidude/FermentOS/commit/4a19c8723cf1da81dc08a0325838ca713a08a639))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

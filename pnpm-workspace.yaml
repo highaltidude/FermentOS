@@ -42,7 +42,7 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   drizzle-orm: ^0.45.3
-  lucide-react: ^0.545.0
+  lucide-react: ^1.48.0
   # Exact, and always moved together: react and react-dom must be the same
   # release, and Dependabot's grouped minor/patch PR bumps both at once.
   react: 19.3.0

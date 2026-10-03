@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.7.0...fermentos-v1.8.0) (2026-10-03)
+
+
+### Features
+
+* **https:** turn HTTPS on from Settings ([bb48a1f](https://github.com/highaltidude/FermentOS/commit/bb48a1f88e4a4de70e1a0e65e6ee8b48618ebe91))
+
 ## [1.7.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.6.0...fermentos-v1.7.0) (2026-10-03)
 
 

@@ -78,9 +78,13 @@ fi
 # ── Sync latest code ─────────────────────────
 step "Syncing latest code from GitHub"
 if git rev-parse --git-dir &>/dev/null; then
-  git clean -fd
+  # data/ holds brew photos and local backups. It is ignored now, but name it
+  # here too: an install updating from before that still has it untracked.
+  git clean -fd -e data
   git fetch origin
-  git reset --hard origin/main
+  # Stay on the channel this install follows (main or beta).
+  BRANCH="$(git symbolic-ref --short -q HEAD || echo main)"
+  git reset --hard "origin/${BRANCH}"
   success "Code synced to latest"
 else
   warn "Not a git repo — skipping sync"

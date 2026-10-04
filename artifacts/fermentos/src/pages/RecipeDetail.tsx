@@ -6,6 +6,7 @@ import {
   useUpdateRecipe,
   useDeleteRecipe,
   useAddRecipeIngredient,
+  useUpdateRecipeIngredient,
   useDeleteRecipeIngredient,
   useAddRecipeStep,
   useUpdateRecipeStep,
@@ -16,6 +17,7 @@ import {
   getGetRecipeQueryKey,
   type IngredientType,
   type IngredientUse,
+  type RecipeIngredient,
   type StepPhase,
 } from "@workspace/api-client-react";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
@@ -344,14 +346,15 @@ function StepList({ recipeId, steps }: { recipeId: number; steps: StepLike[] }) 
   );
 }
 
-function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () => void }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState("malt");
-  const [amount, setAmount] = useState("");
-  const [unit, setUnit] = useState("lbs");
-  const [use, setUse] = useState("");
-  const [timingMinutes, setTimingMinutes] = useState("");
-  const [notes, setNotes] = useState("");
+/** Adds an ingredient, or edits `ingredient` when one is passed. */
+function IngredientForm({ recipeId, ingredient, onDone }: { recipeId: number; ingredient?: RecipeIngredient; onDone: () => void }) {
+  const [name, setName] = useState(ingredient?.name ?? "");
+  const [type, setType] = useState<string>(ingredient?.type ?? "malt");
+  const [amount, setAmount] = useState(ingredient ? String(ingredient.amount) : "");
+  const [unit, setUnit] = useState(ingredient?.unit ?? "lbs");
+  const [use, setUse] = useState<string>(ingredient?.use ?? "");
+  const [timingMinutes, setTimingMinutes] = useState(ingredient?.timingMinutes != null ? String(ingredient.timingMinutes) : "");
+  const [notes, setNotes] = useState(ingredient?.notes ?? "");
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: inventoryItems = [] } = useListInventory({});
@@ -368,9 +371,35 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
     },
   });
 
+  const updateMutation = useUpdateRecipeIngredient({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(recipeId) });
+        onDone();
+      },
+      onError: (err: unknown) => {
+        toast({ title: "Failed to update ingredient", description: getErrorMessage(err), variant: "destructive" });
+      },
+    },
+  });
+  const isPending = addMutation.isPending || updateMutation.isPending;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !amount) return;
+    if (ingredient) {
+      // Nulls, not undefined: a cleared note or a use that is no longer timed
+      // has to overwrite what was saved.
+      updateMutation.mutate({
+        id: ingredient.id,
+        data: {
+          name, type: type as IngredientType, amount: Number(amount), unit, use: (use || null) as IngredientUse | null,
+          timingMinutes: TIMED_USES.includes(use) && timingMinutes !== "" ? Number(timingMinutes) : null,
+          notes: notes || null,
+        },
+      });
+      return;
+    }
     addMutation.mutate({
       id: recipeId,
       data: {
@@ -419,11 +448,43 @@ function AddIngredientForm({ recipeId, onDone }: { recipeId: number; onDone: () 
       <Input placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="text-sm" />
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="ghost" size="sm" onClick={onDone}><X className="w-3.5 h-3.5" /></Button>
-        <Button type="submit" size="sm" disabled={addMutation.isPending}>
-          <Check className="w-3.5 h-3.5 mr-1" /> Add
+        <Button type="submit" size="sm" disabled={isPending}>
+          <Check className="w-3.5 h-3.5 mr-1" /> {ingredient ? "Save" : "Add"}
         </Button>
       </div>
     </form>
+  );
+}
+
+function IngredientRow({ recipeId, ing, onDelete }: { recipeId: number; ing: RecipeIngredient; onDelete: () => void }) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return <IngredientForm recipeId={recipeId} ingredient={ing} onDone={() => setEditing(false)} />;
+  }
+
+  return (
+    <div className="flex items-center justify-between text-sm py-1.5 px-2 rounded hover:bg-muted group">
+      <div className="flex-1 min-w-0">
+        <span className="font-medium">{ing.name}</span>
+        <span className="text-muted-foreground ml-2">{ing.amount} {ing.unit}</span>
+        {ing.use && <span className="text-muted-foreground ml-1">• {ing.use.replace("_", " ")}</span>}
+        {ing.use && TIMED_USES.includes(ing.use) ? (
+          <IngredientTiming recipeId={recipeId} ingredientId={ing.id} use={ing.use} timingMinutes={ing.timingMinutes} />
+        ) : (
+          ing.timingMinutes != null && <span className="text-muted-foreground ml-1">@ {ing.timingMinutes} min</span>
+        )}
+        {ing.notes && <p className="text-xs text-muted-foreground break-words">{ing.notes}</p>}
+      </div>
+      <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+        <button onClick={() => setEditing(true)} className="text-muted-foreground hover:text-foreground p-1" aria-label="Edit ingredient">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={onDelete} className="text-destructive hover:text-destructive/80 p-1" aria-label="Delete ingredient">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -761,7 +822,7 @@ export default function RecipeDetail() {
           </Button>
         </div>
         <div className="p-4 space-y-4">
-          {showAddIngredient && <AddIngredientForm recipeId={id} onDone={() => setShowAddIngredient(false)} />}
+          {showAddIngredient && <IngredientForm recipeId={id} onDone={() => setShowAddIngredient(false)} />}
           {Object.entries(grouped).length === 0 && !showAddIngredient ? (
             <p className="text-sm text-muted-foreground text-center py-4">No ingredients yet</p>
           ) : (
@@ -772,24 +833,7 @@ export default function RecipeDetail() {
                 </div>
                 <div className="space-y-1">
                   {ings.map((ing) => (
-                    <div key={ing.id} className="flex items-center justify-between text-sm py-1.5 px-2 rounded hover:bg-muted group">
-                      <div className="flex-1">
-                        <span className="font-medium">{ing.name}</span>
-                        <span className="text-muted-foreground ml-2">{ing.amount} {ing.unit}</span>
-                        {ing.use && <span className="text-muted-foreground ml-1">• {ing.use.replace("_", " ")}</span>}
-                        {ing.use && TIMED_USES.includes(ing.use) ? (
-                          <IngredientTiming recipeId={id} ingredientId={ing.id} use={ing.use} timingMinutes={ing.timingMinutes} />
-                        ) : (
-                          ing.timingMinutes != null && <span className="text-muted-foreground ml-1">@ {ing.timingMinutes} min</span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => deleteIngredientMutation.mutate({ id: ing.id })}
-                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <IngredientRow key={ing.id} recipeId={id} ing={ing} onDelete={() => deleteIngredientMutation.mutate({ id: ing.id })} />
                   ))}
                 </div>
               </div>

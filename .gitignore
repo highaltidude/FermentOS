@@ -57,6 +57,8 @@ artifacts/api-server/update-history.json
 /update.lock
 /https.log
 .env.backup
+# Brew photos and local backups (bind-mounted into the container).
+/data/
 
 # Database dumps. pg_dump output carries api_tokens and app_config (ntfy topic,
 # webhook URL) alongside every brew record, so it must never be committed.

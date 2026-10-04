@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IngredientTiming } from "@/components/IngredientTiming";
 import { useToast } from "@/hooks/use-toast";
 import { useNow } from "@/hooks/useNow";
 import { getErrorMessage } from "@/lib/utils";
@@ -24,6 +25,7 @@ import {
   boilPhase,
   boilRemainingMs,
   boilAlertGroups,
+  untimedBoilAdditions,
   suggestedBoilMinutes,
   formatCountdown,
   type BoilAlertGroup,
@@ -129,6 +131,7 @@ export default function BoilSession() {
 
   const boilMinutes = session?.boilMinutes ?? (Number(minutesInput) || suggested);
   const groups = useMemo(() => boilAlertGroups(boilMinutes, ingredients), [boilMinutes, ingredients]);
+  const untimed = useMemo(() => untimedBoilAdditions(ingredients), [ingredients]);
   const remaining = session ? (phase === "idle" ? boilMinutes * 60_000 : boilRemainingMs(session, now)) : 0;
   const done = useMemo(() => new Set(session?.boilDoneAdditionIds ?? []), [session?.boilDoneAdditionIds]);
 
@@ -297,7 +300,14 @@ export default function BoilSession() {
         <div className="px-4 py-3 border-b border-card-border">
           <h2 className="text-sm font-semibold text-foreground">Additions</h2>
         </div>
-        {groups.every((g) => g.additions.length === 0) ? (
+        {untimed.length > 0 && phase === "idle" && (
+          <p className="px-4 py-2.5 text-xs text-muted-foreground border-b border-card-border">
+            {untimed.length === 1 ? "1 addition has" : `${untimed.length} additions have`} no time set, so the timer
+            can't alert for {untimed.length === 1 ? "it" : "them"}. Tap <span className="text-primary">+ time</span> to
+            enter the minutes left in the boil.
+          </p>
+        )}
+        {groups.every((g) => g.additions.length === 0) && untimed.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
             {session.recipeId
               ? "This recipe has no boil or whirlpool additions. Set an ingredient's use to Boil with a time to see it here."
@@ -334,6 +344,33 @@ export default function BoilSession() {
                 </div>
               );
             })}
+            {untimed.length > 0 && (
+              <div className="px-4 py-2.5 flex gap-3">
+                <span className="w-16 shrink-0 text-xs font-semibold pt-1.5 text-muted-foreground">No time</span>
+                <div className="flex-1 space-y-1">
+                  {untimed.map((a) => {
+                    const on = done.has(a.id);
+                    return (
+                      <div key={a.id} className="flex items-center gap-1 py-1">
+                        <button
+                          type="button" disabled={phase === "idle" || control.isPending}
+                          onClick={() => toggleDone(a.id)}
+                          className="flex items-center gap-2.5 text-left disabled:cursor-default"
+                        >
+                          <span className={`h-5 w-5 rounded border-2 shrink-0 flex items-center justify-center ${on ? "border-primary bg-primary" : "border-muted-foreground/30"}`}>
+                            {on && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
+                          </span>
+                          <span className={`text-sm ${on ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                            {a.amount} {a.unit} {a.name}
+                          </span>
+                        </button>
+                        <IngredientTiming recipeId={recipeId} ingredientId={a.id} use="boil" timingMinutes={a.timingMinutes} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -53,17 +53,18 @@ install to a tracked first batch.
 
 ## Features
 
-- **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color
+- **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color. Ingredients and steps are editable in place, and a recipe starts its own brew session in one click
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
 - **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
-- **Fermentation tracker** — Temperature, gravity, and pH over time on an interactive chart, filled in automatically if you have an iSpindel
-- **Alerts to your phone** — FermentOS watches every active batch and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. Temperature is checked against the fermentation range while fermenting and an optional separate conditioning range (for a cold crash or lagering) while conditioning. See [Get alerts on your phone](#get-alerts-on-your-phone)
+- **Fermentation tracker** — Temperature and gravity over time on an interactive chart, filled in automatically if you have an iSpindel. Readings you enter by hand can also carry pH and notes
+- **Alerts to your phone** — FermentOS watches every active batch that has a sensor assigned and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. Temperature is checked against the fermentation range while fermenting and an optional separate conditioning range (for a cold crash or lagering) while conditioning. See [Get alerts on your phone](#get-alerts-on-your-phone)
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
 - **Optional HTTPS** — Turn it on from Settings (or with one command) to put FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
-- **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something
-- **Auto-advance to Conditioning** — Move a batch on automatically once fermentation looks finished, so a forgotten status does not leave it sitting in Fermenting for weeks
+- **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something, and deduct what the recipe uses from stock when you start one
+- **Equipment** — A register of your kit: category, condition, brand and model, serial number, purchase date and price
+- **Auto-advance to Conditioning** — Move a sensor-monitored batch on once its gravity has stopped moving. It is applied when you open the batch's page, not in the background, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
@@ -71,6 +72,7 @@ install to a tracked first batch.
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
 - **Calculators** — ABV and attenuation from OG and FG today; water chemistry, recipe scaling, and batch cost are planned
 - **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
+- **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
 - **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
 - **Updates and rollback** — Update from inside the app with a live progress bar, read the release notes in place, and roll back to a previous deploy in one click (bare-metal installs; Docker updates by rebuilding the image)
 - **API tokens** — Optionally lock the API so only clients you approve can reach it, with per-token read or write scopes. The browser UI keeps working either way
@@ -87,7 +89,7 @@ not apply to you.
 
 #### Requirements
 
-- Any Debian-based 64-bit Linux host (Raspberry Pi OS, Ubuntu, Debian, etc.)
+- A 64-bit Linux host. The quick install needs a Debian-based one (Raspberry Pi OS, Ubuntu, Debian) with `sudo`, `git` and `curl`; the Docker install runs anywhere with Docker Engine and the Compose v2 plugin
 - Raspberry Pi 3B+ or newer (Pi 4 recommended) works great, but a mini PC, NAS, or VM works just as well
 - At least 8 GB SD card
 - Internet connection
@@ -105,7 +107,7 @@ bash install.sh
 During the install you'll be prompted for the **web port** the app should listen on (default `3000`). Pick any free port between 1–65535; this is the port you'll open in the browser. To skip the prompt (e.g. for unattended installs), set `FERMENTOS_PORT` first: `FERMENTOS_PORT=8080 bash install.sh`.
 
 The script will:
-- Install Node.js, pnpm, and PostgreSQL (if not already installed)
+- Install Node.js, pnpm, and PostgreSQL (if not already installed; a Node.js older than 22 is replaced with 24)
 - Create the database and generate a random secure password
 - Create your `.env` file automatically (including the port you chose)
 - Install dependencies, run migrations, and build the app
@@ -123,10 +125,11 @@ cd FermentOS
 bash docker-install.sh
 ```
 
-The script will prompt for a web port (default 3000), generate secure random credentials, write `.env`, and start the stack. Open the URL it prints when done.
+The script will prompt for a web port (default 3000), generate secure random credentials, write `.env`, and start the stack. It prints `http://localhost:<port>` when done; from another device use the host's IP instead.
 
-- Data is persisted in a Docker volume (`postgres_data`); uploaded photos are stored in `./data/uploads`
-- To update: `git pull && bash docker-install.sh`
+- Data is persisted in a Docker volume (`postgres_data`); uploaded photos are stored in `./data/uploads` and local backups in `./data/backups`
+- To update: `bash docker-install.sh`. It fetches the latest code for the branch you are on (`main` or `beta`), rebuilds, and restarts. It resets the checkout to match GitHub, so local edits to tracked files are discarded; `.env` and `./data` are kept
+- Always start the stack through the script rather than `docker compose up` directly: it creates `.env` and the `./data` directories with the right ownership, and stamps the build with its version
 - The in-app update/rollback system (Settings → System → Updates) is a bare-metal/systemd feature — Docker installs update by pulling and rebuilding the image instead
 
 **Non-interactive / unattended install:**
@@ -134,15 +137,18 @@ The script will prompt for a web port (default 3000), generate secure random cre
 FERMENTOS_PORT=7070 bash docker-install.sh
 ```
 
-**Raspberry Pi / ARM:**
+**Raspberry Pi / ARM:** the same `bash docker-install.sh`. The image builds for whatever architecture the host is.
+
+**Useful commands:**
 ```bash
-docker compose build --build-arg BUILD_TARGET=linux/arm64
-docker compose up -d
+docker compose logs -f app   # stream logs
+docker compose ps            # check health status
+docker compose down          # stop (data preserved)
 ```
 
 #### Accessing on your local network
 
-The installer prints your host's IP when it finishes. You can also find it any time with:
+The quick installer prints your host's IP when it finishes. You can also find it any time with:
 
 ```bash
 hostname -I
@@ -161,7 +167,12 @@ ferment. It takes about ten minutes.
 
 Go to **Settings → Brewing → Beer Styles** and add the styles you actually
 brew. Recipes pick their style from this list, so adding one or two first saves
-a detour later.
+a detour later. (You can also type a style by hand on the recipe.)
+
+While you are in **Settings → Brewing**, **Brewery Name** sets the heading on
+the Dashboard, and **Fermentation Temperature → Temperature Unit** switches the
+temperature ranges and alerts between °F and °C. Readings you type in by hand
+are still entered in °F.
 
 **2. Create a recipe**
 
@@ -183,7 +194,10 @@ the **minutes left in the boil** when it goes in: 60 for bittering, 15 for
 flavor, 0 for flameout. Set whirlpool hops to **Whirlpool**; they are called at
 flameout. On a recipe you have already saved, click **+ time** (or the
 existing **@ 15 min**) next to a boil or whirlpool ingredient to set or change it.
-An addition with no time goes in at the start of the boil. A boil step with a
+The pencil beside any ingredient edits the rest: name, amount, unit, type, use
+and notes.
+A boil addition with no time is listed on the boil page under **No time** and
+gets no alert; set its time there or on the recipe to schedule it. A boil step with a
 duration sets the boil length; without one, FermentOS uses your longest boil
 addition, or 60 minutes.
 
@@ -194,19 +208,24 @@ suppliers, and expiry dates. You can skip this entirely and come back to it.
 
 It becomes required only if you turn on **Settings → Brewing → Ingredient
 Enforcement**, which stops you starting a brew day when you are short of
-something and tells you exactly what is missing.
+something and tells you exactly what is missing. When the brew does start, the
+recipe's ingredients are deducted from stock, oldest purchase first. It applies
+only to sessions started from a recipe, and an ingredient matches stock only
+when the name, type and unit are all the same — there is no unit conversion.
 
 **4. Start a brew session**
 
-**Brew Log → New Session.** Choose your recipe from the dropdown and FermentOS
-fills in the name, batch size, and fermentation and conditioning temperature ranges for you.
+Open the recipe and click **Start Brew Session**, or go to **Brew Log → New
+Session** and choose the recipe from the dropdown. Either way FermentOS fills in
+the name, batch size, and fermentation and conditioning temperature ranges for you.
 
 You do not need a recipe to log a batch — a **name and a brew date are the only
 required fields**, so a spur-of-the-moment brew can be recorded now and tidied
 up later. If you skip the recipe, set the fermentation temperature range on the
 session itself if you want temperature alerts.
 
-The session starts at **Brew Day**.
+The session starts at **Brew Day** unless you pick another status on the form,
+which is how you log a batch that is already fermenting or finished.
 
 **5. Run the boil**
 
@@ -231,8 +250,9 @@ If you have one, drop it in the fermenter and assign it to this session — see
 [Connect an iSpindel](#connect-an-ispindel). From then on every reading it
 sends is logged against this batch automatically.
 
-No iSpindel? Add readings by hand on the session page. Everything below still
-works, just with the readings you enter yourself.
+No iSpindel? Add readings by hand on the session page. The chart and the
+readings list work from what you enter. Fermentation insights, the live
+telemetry card, alerts, and auto-advance all need an assigned sensor.
 
 **7. Watch it ferment**
 
@@ -240,8 +260,7 @@ Move the session to **Fermenting** using the stage bar at the top of the page.
 You now get:
 
 - a chart of gravity and temperature over time
-- **fermentation insights** — attenuation so far, how fast it is moving, and whether it looks finished
-- a live telemetry card, if a sensor is assigned
+- with a sensor assigned, **fermentation insights** — attenuation so far, how fast it is moving, and whether it looks finished — and a live telemetry card
 
 This is also the point where alerts start earning their keep. Set them up once
 and your phone tells you about a stall or a temperature swing without you
@@ -251,13 +270,18 @@ opening anything — see [Get alerts on your phone](#get-alerts-on-your-phone).
 
 When fermentation finishes, advance to **Conditioning**, then **Packaged**.
 (FermentOS can make the Conditioning step for you — see **Settings → Brewing →
-Fermentation Temperature → Auto-advance to Conditioning**.)
+Fermentation Temperature → Auto-advance to Conditioning**. It needs an assigned
+sensor, and it acts when the batch's page is open and the sensor's gravity has
+stopped moving, so it will not move a batch nobody is looking at. A single batch
+can override the global setting from **Edit → Auto-advance to Conditioning**.)
 
 Marking a batch Packaged asks whether it went into a keg or into bottles, and
 the answer is shown on the batch afterwards. You can change it any time from
-**Edit → Packaged In**.
+**Edit → Packaged In**. Any iSpindel assigned to the batch is unassigned at this
+point, ready for the next one.
 
-On a packaged batch you can fill in the tasting scorecard: appearance and aroma,
+**Rate this Batch** opens the tasting scorecard at any stage, though it is meant
+for the finished beer: appearance and aroma,
 flavor and balance, mouthfeel and carbonation, an overall score out of ten, any
 off-flavors, and whether you would brew it again. Those scores roll up to an
 average on the recipe, so over time each recipe carries the record of every
@@ -267,8 +291,10 @@ batch you have made from it.
 
 ### Get alerts on your phone
 
-FermentOS checks every active batch every five minutes and can message you when
-something needs attention:
+FermentOS checks every active batch that has a sensor assigned every five
+minutes and can message you when something needs attention. A batch with only
+hand-entered readings is not monitored; the boil alerts are the one kind that
+needs no sensor.
 
 | Alert | Fires when |
 |-------|-----------|
@@ -293,7 +319,7 @@ no certificates, no reverse proxy, and no VPN on your phone.
 1. Install **ntfy** from the App Store or Play Store
 2. Pick a topic name nobody could guess — treat it like a password, because anyone who knows it can read your alerts. Something like `fermentos-a8f3k2q1` rather than `brewing`
 3. In the app, subscribe to that topic
-4. In FermentOS, go to **Settings → Brewing → Notifications**, set **Channel** to **ntfy**, and paste the same topic
+4. In FermentOS, go to **Settings → Brewing → Notifications**, set **Channel** to **ntfy**, and paste the same topic. If you run your own ntfy, change **Server** from the default `https://ntfy.sh`
 5. Click **Save**, then **Send test**
 
 Your phone should buzz within a second or two.
@@ -314,7 +340,7 @@ away, you are testing the old one.
 **Temperature alerts need a temperature range.** If neither the session nor its
 recipe has a fermentation temperature range set, FermentOS has nothing to
 compare a reading against, and temperature alerts will never fire. The other
-three alerts still work fine. Set the range on the session, or on the recipe so
+alerts still work fine. Set the range on the session, or on the recipe so
 future batches inherit it.
 
 Conditioning has its own optional range. While a batch is in Conditioning,
@@ -326,7 +352,8 @@ conditioning range.
 You can also tune how jumpy temperature alerts are with **Settings → Brewing →
 Fermentation Temperature → Temperature Alert Threshold**. It is the number of consecutive
 out-of-range readings needed before you get told, so opening the fermenter for a
-minute does not wake you at 3am. **Re-notify at most every** controls how often
+minute does not wake you at 3am. **Re-notify at most every**, in the
+Notifications panel, controls how often
 a problem that is still ongoing nags you again. Temperature can have its own,
 shorter interval — it is the one alert you can act on the moment you hear it, so
 an hourly nudge is useful where an hourly battery warning would just be noise.
@@ -507,11 +534,11 @@ Leave all other fields at their defaults. The iSpindel's **Name** field becomes 
 
 #### 3. First reading
 
-On the next wake cycle the iSpindel will POST to FermentOS. If no device with that `deviceKey` exists yet, one is **auto-created** — you will see it appear in the Integrations panel immediately after the first reading.
+On the next wake cycle the iSpindel will POST to FermentOS. If no device with that `deviceKey` exists yet, one is **auto-created** — you will see it appear in the Integrations panel immediately after the first reading. You can also add one ahead of time with **Register**, and rename or remove a device from the same panel. Opening a device shows its own history: gravity, temperature and battery charts, filterable by time span or by brew.
 
 #### 4. Assign to a brew session
 
-In the Integrations panel (or on the brew session page), select an active brew from the **Assign to brew…** dropdown. From that point on, every incoming reading is also mirrored into the session's fermentation chart and a live telemetry card appears at the top of the brew session page.
+In the Integrations panel, select an active brew from the **Assign to brew…** dropdown; on the brew session page, use **Assign iSpindel**. From that point on, every incoming reading is also mirrored into the session's fermentation chart and a live telemetry card appears on the brew session page. The device is unassigned automatically when the batch is marked Packaged.
 
 #### 5. Optional: secure with a token
 
@@ -533,7 +560,7 @@ Brew sessions move through four stages, in order:
 Brew Day  ──▶  Fermenting  ──▶  Conditioning  ──▶  Packaged
 ```
 
-Every new session starts at **Brew Day**. The stage bar at the top of the
+A new session starts at **Brew Day** by default. The stage bar at the top of the
 session page moves a batch forward — or back, if you jumped the gun — in one
 click, and every change is written to a timestamped history you can see further
 down the page. The brew date records the day grain actually hit the kettle,
@@ -545,10 +572,20 @@ Day to day, that means:
 - **Brew Log** is the full history of every batch
 - **Recipes** carries the average score of every batch brewed from it, so your best recipes surface themselves over time
 - **Ingredients** tracks what you have and flags what is about to expire
+- **Equipment** is a register of your kit, searchable and filtered by category
 
-Only Brew Day, Fermenting, and Conditioning batches are monitored for alerts.
-Once a batch is **Packaged** it is finished, and a stale probe reading will
-never wake you up about it.
+Only Brew Day, Fermenting, and Conditioning batches with a sensor assigned are
+monitored for alerts. Once a batch is **Packaged** it is finished, and a stale
+probe reading will never wake you up about it.
+
+Two housekeeping settings under **Settings → Brewing**: **Reading Retention**
+deletes readings older than the age you choose from packaged batches, along
+with old sensor readings that belong to no batch, every night. It is off until
+you turn it on, and what it deletes is gone. The default
+number of readings shown on a session page is set there too.
+
+**Settings → System → Power** has **Restart App** and, on a bare-metal install,
+**Reboot Host**.
 
 ---
 
@@ -562,7 +599,13 @@ building against its API.*
 
 ## Updating & rollback
 
-The easiest way to update is from the app itself: **Settings → System → App Update → Update now**. It pulls the latest commit, runs migrations, rebuilds, and restarts the services automatically, with a live progress bar. Release notes are shown in-app, and every deploy is recorded in a history log with a one-click rollback if something goes wrong.
+This section is for bare-metal (systemd) installs. Docker installs update with `bash docker-install.sh` — see [Docker Installation](#docker-installation).
+
+The easiest way to update is from the app itself: **Settings → System → Updates**. **Check for updates** looks for a newer commit; when there is one, **Update now** pulls it, runs migrations, rebuilds, and restarts the services automatically, with a live progress bar. Release notes are shown in-app, and every deploy is recorded in a history log with a one-click rollback if something goes wrong. If a build fails, the update rolls itself back.
+
+An update is refused while the [backup coverage audit](#backups--restore) is below 100%. If an update is interrupted and leaves the page stuck, the same panel offers **Force-clear lock** and **Repair install**.
+
+**Channels.** An install follows whichever branch its checkout is on: `main` for stable releases, `beta` for prereleases. To switch, `git checkout beta` (or `main`) in the install directory, then update.
 
 To update manually from the command line instead:
 
@@ -571,13 +614,16 @@ cd FermentOS
 bash update.sh
 ```
 
+To go back to an earlier deploy from the command line, `bash rollback.sh <commit-hash>`. A rollback restores the code, not the database schema, so restore a backup as well if the newer version changed the tables.
+
 Or step by step:
 
 ```bash
 cd FermentOS
 git pull
 pnpm install
-source .env && pnpm --filter @workspace/db run push
+set -a; source .env; set +a   # export DATABASE_URL for the next step
+pnpm --filter @workspace/db run push
 pnpm --filter @workspace/api-server run build
 BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 sudo systemctl restart fermentos
@@ -598,9 +644,14 @@ sudo systemctl restart fermentos        # restart the app
 Managed from **Settings → System → Backups**.
 
 FermentOS takes a `pg_dump` of the whole database. You can run one on demand,
-download it, or schedule daily or weekly runs that push to an SFTP server, keep
-a copy on the local disk, or both. Restores work from an uploaded file or from
+download it, or schedule a run every day at 2 AM or every Sunday at 2 AM. A
+scheduled run pushes to your SFTP server if one is configured, and writes to the
+local disk if it is not, or if the SFTP push fails. Local backups can be deleted
+automatically after 5 to 60 days. Restores work from an uploaded file or from
 any backup still in local history.
+
+Backups hold the database only. Brew photos are files in `data/uploads`; copy
+that folder yourself if you want them backed up.
 
 A restore replaces the whole database in one step: if the file turns out to be
 damaged part-way through, nothing changes. A file that was cut off during a
@@ -614,16 +665,21 @@ rebuild — and still reachable if the container itself will not start.
 
 Two things worth setting up before you need them:
 
-- **Back up before updating.** `backupBeforeUpdate` takes a snapshot
-  automatically before an in-app update runs, so a bad deploy is recoverable.
+- **Back up before updating.** Under **Configure Backup Destinations**, set
+  **Pre-Update Backup** to **Save Local** or **Push to SFTP** and a snapshot is
+  taken automatically before an in-app update runs, so a bad deploy is
+  recoverable. It is off by default.
 - **Check the coverage audit.** It compares the tables actually in your database
   against the list FermentOS knows about, and reports a percentage. Anything
   unclassified shows up as missing coverage, which is the signal that a new
-  table shipped without being accounted for. You can optionally block in-app
-  updates while coverage is below 100%.
+  table shipped without being accounted for. In-app updates are refused while
+  coverage is below 100%.
 
-Restoring is destructive — it wipes and replays the public schema. The endpoint
-reference is under [Backups](#backups) in the API section.
+Restoring is destructive — it wipes and replays the public schema. On a
+bare-metal install you can also restore from the command line with
+`./restore.sh backup.sql`; it reads `DATABASE_URL` from `.env` and restarts the
+service, so it does not work for Docker. The endpoint reference is under
+[Backups](#backups) in the API section.
 
 ---
 
@@ -747,9 +803,9 @@ additions that are due:
 
 By default no authentication is required — the API is designed for trusted local network use.
 
-You can optionally enable **API token lockdown** under **Settings → Security → API Access**. When enabled, all external clients (scripts, Home Assistant, integrations) must supply a token. Browser requests from the FermentOS UI itself continue to work without a token (same-origin requests are always allowed).
+You can optionally enable **API token lockdown** under **Settings → System → Integrations → API Access** with the **Require API token for external clients** switch, which becomes available once at least one token exists. When enabled, all external clients (scripts, Home Assistant, integrations) must supply a token. Browser requests from the FermentOS UI itself continue to work without a token (same-origin requests are always allowed).
 
-**Generating a token:** Settings → Security → API Access → enter a name → choose a scope → Create Token. Copy the token immediately — it is only shown once.
+**Generating a token:** Settings → System → Integrations → API Access → enter a name → choose a scope → **Generate**. Copy the token immediately — it is only shown once.
 
 - **Scope**: tokens are `read` or `write` (default `write`). A `read`-scoped token gets `403` on any `POST`/`PUT`/`PATCH`/`DELETE` request.
 
@@ -797,9 +853,9 @@ curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 
-**3. Install pnpm and serve**
+**3. Install pnpm**
 ```bash
-npm install -g pnpm serve
+npm install -g pnpm
 ```
 
 **4. Install PostgreSQL and create the database**
@@ -816,12 +872,13 @@ EOF
 **5. Configure environment**
 ```bash
 cp .env.example .env
-nano .env   # fill in DATABASE_URL and SESSION_SECRET
+nano .env   # fill in DATABASE_URL, and set PORT to the port to browse to
 ```
 
 **6. Install, migrate, build**
 ```bash
 pnpm install
+set -a; source .env; set +a   # export DATABASE_URL and PORT
 pnpm --filter @workspace/db run push
 pnpm --filter @workspace/api-server run build
 BASE_PATH=/ pnpm --filter @workspace/fermentos run build
@@ -829,11 +886,39 @@ BASE_PATH=/ pnpm --filter @workspace/fermentos run build
 
 **7. Start**
 ```bash
-node --enable-source-maps artifacts/api-server/dist/index.mjs &
-serve -s artifacts/fermentos/dist/public -l 3000
+node --enable-source-maps artifacts/api-server/dist/index.mjs
 ```
 
+One process serves both the API and the built frontend, on `PORT`. It needs
+`PORT` and `DATABASE_URL` in its environment, which the `set -a` line above
+provides for this shell.
+
+This runs the app in the foreground only. `install.sh` additionally creates the
+`fermentos` systemd service, and the sudo permissions behind the in-app update,
+restart, reboot and HTTPS buttons; without them those buttons and the
+`systemctl` commands in this README do not work.
+
 </details>
+
+---
+
+## Environment variables
+
+`install.sh` and `docker-install.sh` write `.env` for you; this is what the
+values mean.
+
+| Variable | Used by | Meaning |
+|----------|---------|---------|
+| `PORT` | bare metal, dev | Port the app listens on. Required; the server will not start without it |
+| `DATABASE_URL` | bare metal, dev | PostgreSQL connection string. Required. Docker builds it from `DB_PASSWORD` |
+| `HOST_PORT` | Docker | Port published on the host. Default `3000` |
+| `DB_PASSWORD` | Docker | Password for the bundled PostgreSQL. Default `fermentos`; the installer generates a random one |
+| `LOG_LEVEL` | all | Server log level. Default `info` |
+| `NODE_ENV` | all | `production` for an install; `development` gives readable logs and fuller error messages |
+| `BASE_PATH` | build time | URL path the frontend is served under. Default `/` |
+
+`FERMENTOS_PORT` and the HTTPS variables are installer inputs, described in the
+install and [HTTPS](#serve-fermentos-over-https-optional) sections.
 
 ---
 
@@ -853,13 +938,20 @@ serve -s artifacts/fermentos/dist/public -l 3000
 ```bash
 pnpm install
 
-pnpm --filter @workspace/api-server run dev   # API on :8080
-pnpm --filter @workspace/fermentos run dev    # Frontend on :23975
+export DATABASE_URL=postgresql://fermentos:fermentos@localhost:5432/fermentos
+
+PORT=8080 pnpm --filter @workspace/api-server run dev   # API on :8080 (builds, then starts)
+pnpm --filter @workspace/fermentos run dev              # Vite frontend on :5173, or PORT if set
 
 pnpm run typecheck   # tsc across every workspace package (no ESLint in this repo)
 pnpm run test        # vitest, where a package has a test suite
 pnpm run build       # typecheck, then build every workspace package
+
+pnpm --filter @workspace/db run push            # apply schema changes (no migration files)
+pnpm --filter @workspace/api-spec run codegen   # regenerate the API client after editing openapi.yaml
 ```
+
+The API server needs both `PORT` and `DATABASE_URL` and does not read `.env` itself.
 
 Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack (Postgres + both dev servers, live-reloading against a bind-mounted repo) in one command.
 
@@ -869,11 +961,16 @@ Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev s
 
 All endpoints are prefixed with `/api`. Replace `<host>` with your host's address (e.g. `http://192.168.1.239:8080`).
 
+This reference covers the common fields. The complete contract, including every
+response shape, is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
+
+`GET /api/healthz` returns `{ "status": "ok" }` and is always reachable without a token.
+
 ### Dashboard
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/dashboard/summary` | Counts of active brews, total recipes, and inventory items |
+| GET | `/api/dashboard/summary` | Brewery name, counts of active brews, sessions, recipes and inventory items, the five most recent sessions, and the three top-rated brews |
 | GET | `/api/dashboard/active-brews` | List of currently active brew sessions |
 | GET | `/api/dashboard/upcoming-brews` | Deprecated compatibility stub — the "scheduled" status no longer exists; always returns `[]` |
 
@@ -883,9 +980,9 @@ All endpoints are prefixed with `/api`. Replace `<host>` with your host's addres
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/recipes` | List all recipes |
+| GET | `/api/recipes` | List all recipes — optional query params `style`, `search` |
 | POST | `/api/recipes` | Create a recipe |
-| GET | `/api/recipes/:id` | Get a recipe with its ingredients |
+| GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, and batch rating summary |
 | PUT | `/api/recipes/:id` | Update a recipe |
 | DELETE | `/api/recipes/:id` | Delete a recipe |
 | GET | `/api/recipes/styles` | Recipe counts grouped by style |
@@ -914,9 +1011,16 @@ All endpoints are prefixed with `/api`. Replace `<host>` with your host's addres
   "conditionTempMin": 32,
   "conditionTempMax": 38,
   "conditionTempIdeal": 34,
+  "daysPlanned": 21,
+  "daysBrewing": 1,
+  "daysFermenting": 10,
+  "daysConditioning": 7,
+  "daysPackaged": null,
   "notes": "Optional brew notes"
 }
 ```
+Only `name`, `style` and `batchSizeGallons` are required. The `days*` fields are
+the recipe's estimated time in each stage.
 
 **POST /api/recipes/:id/ingredients** body:
 ```json
@@ -932,6 +1036,9 @@ All endpoints are prefixed with `/api`. Replace `<host>` with your host's addres
 ```
 `type`: `malt` | `hop` | `yeast` | `adjunct` | `water_agent` | `other`
 `use`: `mash` | `boil` | `dry_hop` | `whirlpool` | `primary` | `secondary` | `packaging` | `other`
+
+`PUT /api/ingredients/:id` accepts the same fields, all optional; send `null` to
+clear `use`, `timingMinutes` or `notes`.
 
 ---
 
@@ -967,7 +1074,7 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/brew-sessions` | List all brew sessions |
+| GET | `/api/brew-sessions` | List all brew sessions — optional query params `status`, `recipeId` |
 | POST | `/api/brew-sessions` | Create a brew session |
 | GET | `/api/brew-sessions/:id` | Get a brew session with status log |
 | PUT | `/api/brew-sessions/:id` | Update a brew session |
@@ -1007,7 +1114,16 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 ```
 `status`: `brew_day` | `fermenting` | `conditioning` | `packaged`.
 `packagingMethod`: `keg` | `bottle` — null until the batch is packaged, and
-optional on create.
+optional on create. `recipeName`, `status`, `brewDate` and `batchSizeGallons`
+are required.
+
+With Ingredient Enforcement on, creating a session from a recipe you are short
+on returns `409` with `{ "error": "Insufficient inventory", "shortages": [...] }`.
+
+`PUT /api/brew-sessions/:id` accepts the same fields, plus
+`autoAdvanceToConditioning` (`true` | `false` | `null` to follow the global
+setting) and `tastingNotes`. Setting `status` to `packaged` unassigns any sensor
+on the session.
 
 **POST /api/brew-sessions/:id/readings** body:
 ```json
@@ -1015,7 +1131,8 @@ optional on create.
   "readingAt": "2024-03-16T10:00:00Z",
   "temperatureFahrenheit": 68.5,
   "gravity": 1.045,
-  "ph": 4.2
+  "ph": 4.2,
+  "notes": "Optional"
 }
 ```
 `readingAt` is required (ISO 8601 datetime); everything else is optional.
@@ -1050,7 +1167,8 @@ are kept.
 `boilMinutes` (1–600) is required for `start`; sent with `pause`, `resume`,
 `finish`, or `checklist` it changes the length of a boil already under way.
 `doneAdditionIds` replaces the checklist of recipe ingredient ids that have gone
-in, and is accepted with any action. An action that does not fit the timer's
+in, and is accepted with any action except `reset`, which clears the checklist
+along with the timer. An action that does not fit the timer's
 state — resuming a boil that is not paused, say — is rejected with a 400.
 Returns the updated brew session.
 
@@ -1068,7 +1186,7 @@ fields when the server restarts.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/inventory` | List all inventory items |
+| GET | `/api/inventory` | List all inventory items — optional query params `type`, `search` |
 | POST | `/api/inventory` | Add an inventory item |
 | PUT | `/api/inventory/:id` | Update an inventory item |
 | DELETE | `/api/inventory/:id` | Delete an inventory item |
@@ -1083,10 +1201,13 @@ fields when the server restarts.
   "supplier": "MoreBeer",
   "purchasedDate": "2024-03-01",
   "expiryDate": "2025-03-01",
+  "maltType": null,
+  "cost": 12.5,
   "notes": "Optional"
 }
 ```
 `type`: `malt` | `hop` | `yeast` | `adjunct` | `water_agent` | `other`
+`maltType`: `lme` | `dme` | `all_grain` | `null`
 
 ---
 
@@ -1094,7 +1215,7 @@ fields when the server restarts.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/equipment` | List all equipment |
+| GET | `/api/equipment` | List all equipment — optional query params `category`, `search` |
 | POST | `/api/equipment` | Add a piece of equipment |
 | PUT | `/api/equipment/:id` | Update equipment |
 | DELETE | `/api/equipment/:id` | Delete equipment |
@@ -1166,12 +1287,15 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | Endpoint | Body | Notes |
 |----------|------|-------|
 | `/api/settings/inventory-enforcement` | `{ "enabled": boolean }` | Blocks starting a brew day if required ingredients aren't in stock |
-| `/api/settings/reading-retention` | `{ "days": 0 \| 90 \| 180 \| 365 \| 730 \| null }` | Auto-deletes fermentation readings older than N days; `0`/`null` keeps forever |
+| `/api/settings/reading-retention` | `{ "days": 0 \| 90 \| 180 \| 365 \| 730 \| null }` | Nightly, deletes readings older than N days that belong to packaged sessions, and sensor readings not tied to any session; `0`/`null` keeps forever |
 | `/api/settings/brewery-name` | `{ "name": string \| null }` | Shown in the UI header |
 | `/api/settings/default-readings-shown` | `{ "count": 5 \| 10 \| 25 \| 50 \| 100 }` | Default number of readings shown on a fresh fermentation chart |
 | `/api/settings/ferment-temp-unit` | `{ "unit": "F" \| "C" }` | Unit used for fermentation temperature thresholds/readings |
 | `/api/settings/temp-alert-readings` | `{ "count": 2..10 }` | Consecutive out-of-range readings required before a temperature alert fires |
-| `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Auto-advance a brew session to Conditioning once fermentation looks complete |
+| `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Global default for auto-advancing a session to Conditioning. The server only stores it; the brew session page applies it |
+
+`GET`/`PUT /api/settings/notifications` and `POST /api/settings/notifications/test`
+are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 
 ---
 
@@ -1182,12 +1306,22 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | GET | `/api/sensors/devices` | List all registered sensor devices with latest reading, assignment, and connection status |
 | POST | `/api/sensors/devices` | Manually register a device |
 | GET | `/api/sensors/devices/:id` | Get a single device |
-| PUT | `/api/sensors/devices/:id` | Rename a device |
+| PUT | `/api/sensors/devices/:id` | Update a device — any of `deviceName`, `deviceKey`, `enabled`, `notes` |
 | DELETE | `/api/sensors/devices/:id` | Delete a device and all its readings |
 | POST | `/api/sensors/devices/:id/assign` | Assign a device to a brew session |
 | DELETE | `/api/sensors/devices/:id/assign` | Unassign a device from its current brew session |
-| GET | `/api/sensors/devices/:id/readings` | List raw readings for a device |
+| GET | `/api/sensors/devices/:id/readings` | List raw readings for a device — query param `limit` (default 100, max 500) |
 | GET | `/api/brew-sessions/:id/sensor-telemetry` | Live telemetry for a brew: device info, latest reading, fermentation insights, alerts |
+
+**POST /api/sensors/devices** body — `deviceName` and `deviceKey` are required:
+```json
+{ "deviceName": "Fermenter 1", "deviceKey": "ispindel-001", "deviceType": "ispindel", "notes": "Optional" }
+```
+
+**POST /api/sensors/devices/:id/assign** body:
+```json
+{ "brewSessionId": 12 }
+```
 
 ---
 
@@ -1195,11 +1329,11 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/integrations/ispindel` | iSpindel ingest — receives the device's JSON payload; no auth token required |
+| POST | `/api/integrations/ispindel` | iSpindel ingest — receives the device's JSON payload; no auth token required. Returns `403` when the integration is disabled or the security token does not match |
 | GET | `/api/integrations/ispindel/settings` | Get integration settings (enabled flag, token) |
-| PUT | `/api/integrations/ispindel/settings` | Update integration settings |
-| POST | `/api/integrations/ispindel/simulate` | Send a synthetic reading for development/testing |
-| GET | `/api/integrations/ispindel/status` | HA-friendly status endpoint — returns latest reading from each device |
+| PUT | `/api/integrations/ispindel/settings` | Update integration settings — body `{ "enabled": boolean, "token": string \| null }` |
+| POST | `/api/integrations/ispindel/simulate` | Send a synthetic reading for development/testing — body needs `gravity` and `temperature`; optional `deviceId`, `brewSessionId`, `deviceName`, `temperatureUnit`, `battery`, `angle`, `rssi` |
+| GET | `/api/integrations/ispindel/status` | Status endpoint — `{ "devices": [...] }` with the latest reading from each enabled device |
 | GET | `/api/integrations/ispindel/devices/:deviceId/readings` | Paginated raw readings for a device — query params `limit`, `offset`, `sort` (`asc`/`desc`), `start`, `end`, `brewId` |
 
 ---
@@ -1213,13 +1347,15 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 
 Backs the Settings → System → Health panel, which auto-refreshes every 5 seconds.
 
+`GET /api/ha/status` is described under [Home Assistant](#home-assistant).
+
 ---
 
 ### Backups
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/backup/config` | Get backup configuration (SFTP credentials are masked) and last-run status |
+| GET | `/api/backup/config` | Get backup configuration (SFTP credentials are masked) and last-run status, as `{ "config": {...}, "status": {...} }` |
 | PUT | `/api/backup/config` | Update backup configuration |
 | POST | `/api/backup/test` | Test the configured SFTP connection |
 | POST | `/api/backup/run` | Run a backup now — body `{ "target": "sftp" \| "local" }` (default `sftp`) |
@@ -1260,19 +1396,21 @@ longer the default, so point `localPath` back at it if you want them in one plac
 
 ### Admin — Software Update
 
-Bare-metal/systemd installs only (Docker updates by rebuilding the image).
+Update and rollback are for bare-metal/systemd installs (Docker updates by
+rebuilding the image). In Docker, `version` and `restart-service` still work,
+and `rollback` and `reboot` return `409`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/admin/version` | Current commit hash/branch/message, whether an update is available, and update-lock state |
-| POST | `/api/admin/update` | Start an in-app update (pull, install, migrate, build, restart) |
-| GET | `/api/admin/update-log` | Tail the running update's log |
+| POST | `/api/admin/update` | Start an in-app update (pull, install, migrate, build, restart). Returns `409` while backup coverage is below 100% or another update, rollback or HTTPS job is running |
+| GET | `/api/admin/update-log` | The last 200 lines of the update log, as `{ "log": string }` |
 | GET | `/api/admin/release-notes` | GitHub release notes, annotated with whether each release is newer than what's currently running |
 | GET | `/api/admin/update-history` | Last 10 deploys, newest first, flagging which one is currently running |
 | POST | `/api/admin/rollback` | Roll back to a prior deploy — body `{ "hash": "<7-40 char git SHA>" }` |
 | POST | `/api/admin/restart-service` | Restart just the app service (~15s) |
 | POST | `/api/admin/reboot` | Reboot the host (~30-90s) |
-| POST | `/api/admin/update-lock/clear` | Force-clear a stuck update/rollback lock |
+| POST | `/api/admin/update-lock/clear` | Force-clear a stuck update/rollback lock. Returns `409` if the lock is not yet stale |
 | GET | `/api/admin/repair-script` | A copy-pasteable `sudo bash` script that fixes missing sudoers permissions — always exempt from auth |
 | GET | `/api/admin/sudoers-line` | The raw sudoers line the repair script installs — always exempt from auth |
 | GET | `/api/admin/https` | HTTPS status: install type, whether Caddy is running and serving the root certificate, the certificate's address, names and ports, this host's LAN addresses, whether the root helper is installed, and the progress of any turn-on/turn-off job |

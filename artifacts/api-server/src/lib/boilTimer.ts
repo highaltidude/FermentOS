@@ -62,8 +62,9 @@ export function boilRemainingMs(s: BoilState, now: number): number {
  * rather than three.
  *
  * Boil additions use timingMinutes as "minutes left in the boil", the usual
- * homebrew convention. One with no time, or a time longer than the boil, goes
- * in at the start. Whirlpool additions go in at flameout, which always gets a
+ * homebrew convention. One with a time longer than the boil goes in at the
+ * start. One with no time is left out: guessing "start" told the brewer to add
+ * every untimed hop the moment the timer began. Whirlpool additions go in at flameout, which always gets a
  * group of its own, even an empty one, because "boil's done" is the alert that
  * matters most.
  */
@@ -77,8 +78,8 @@ export function boilAlertGroups(boilMinutes: number, ingredients: BoilIngredient
 
   for (const ing of ingredients) {
     if (ing.use === "boil") {
-      const t = ing.timingMinutes == null ? boilMinutes : Math.min(Math.max(ing.timingMinutes, 0), boilMinutes);
-      add(t, ing);
+      if (ing.timingMinutes == null) continue;
+      add(Math.min(Math.max(ing.timingMinutes, 0), boilMinutes), ing);
     } else if (ing.use === "whirlpool") {
       add(0, ing);
     }

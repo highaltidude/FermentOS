@@ -49,8 +49,8 @@ export function boilAlertGroups(boilMinutes: number, ingredients: RecipeIngredie
 
   for (const ing of ingredients) {
     if (ing.use === "boil") {
-      const t = ing.timingMinutes == null ? boilMinutes : Math.min(Math.max(ing.timingMinutes, 0), boilMinutes);
-      add(t, ing);
+      if (ing.timingMinutes == null) continue;
+      add(Math.min(Math.max(ing.timingMinutes, 0), boilMinutes), ing);
     } else if (ing.use === "whirlpool") {
       add(0, ing);
     }
@@ -60,6 +60,11 @@ export function boilAlertGroups(boilMinutes: number, ingredients: RecipeIngredie
   return [...byMinute.entries()]
     .sort(([a], [b]) => b - a)
     .map(([minute, additions]) => ({ atMinutesRemaining: minute, additions, flameout: minute === 0 }));
+}
+
+/** Boil additions with no time set: listed, but never scheduled or alerted. */
+export function untimedBoilAdditions(ingredients: RecipeIngredient[]): RecipeIngredient[] {
+  return ingredients.filter((i) => i.use === "boil" && i.timingMinutes == null);
 }
 
 /**

@@ -183,7 +183,8 @@ the **minutes left in the boil** when it goes in: 60 for bittering, 15 for
 flavor, 0 for flameout. Set whirlpool hops to **Whirlpool**; they are called at
 flameout. On a recipe you have already saved, click **+ time** (or the
 existing **@ 15 min**) next to a boil or whirlpool ingredient to set or change it.
-An addition with no time goes in at the start of the boil. A boil step with a
+A boil addition with no time is listed on the boil page under **No time** and
+gets no alert; set its time there or on the recipe to schedule it. A boil step with a
 duration sets the boil length; without one, FermentOS uses your longest boil
 addition, or 60 minutes.
 

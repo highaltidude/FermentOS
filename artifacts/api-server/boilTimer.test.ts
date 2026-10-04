@@ -73,10 +73,16 @@ describe("boilAlertGroups", () => {
     expect(groups[0]!.additions.map((a) => a.id)).toEqual([1]);
   });
 
-  it("starts additions with no time or one longer than the boil at the start", () => {
-    const groups = boilAlertGroups(60, [hop(1, null), hop(2, 90)]);
+  it("starts an addition longer than the boil at the start", () => {
+    const groups = boilAlertGroups(60, [hop(1, 90)]);
     expect(groups[0]).toMatchObject({ atMinutesRemaining: 60 });
-    expect(groups[0]!.additions.map((a) => a.id)).toEqual([1, 2]);
+    expect(groups[0]!.additions.map((a) => a.id)).toEqual([1]);
+  });
+
+  it("leaves out boil additions with no time", () => {
+    const groups = boilAlertGroups(60, [hop(1, null), hop(2, 15)]);
+    expect(groups.map((g) => g.atMinutesRemaining)).toEqual([15, 0]);
+    expect(groups.flatMap((g) => g.additions.map((a) => a.id))).toEqual([2]);
   });
 });
 

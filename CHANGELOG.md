@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.8.1...fermentos-v1.9.0) (2026-10-04)
+
+
+### Features
+
+* **recipes:** edit recipe ingredients in place ([20a1296](https://github.com/highaltidude/FermentOS/commit/20a1296d5dec2da324fd07dce60cfdd2d3386c11))
+
+
+### Bug Fixes
+
+* **boil:** stop treating untimed additions as start-of-boil ([335c4d7](https://github.com/highaltidude/FermentOS/commit/335c4d79c7d4a4522f99e134025e1768d9334f55))
+* **docker:** keep uploads and the current branch when updating ([52e9dc2](https://github.com/highaltidude/FermentOS/commit/52e9dc23d0ae271a4531359ef69d88adda96efcd))
+
 ## [1.8.1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.8.0...fermentos-v1.8.1) (2026-10-03)
 
 

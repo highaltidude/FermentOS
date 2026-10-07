@@ -192,6 +192,12 @@ export default function BrewSessionDetail() {
   // already-recorded method intact when the stage is corrected afterwards.
   const applyStatus = (newStatus: BrewStatus, packagingMethod?: PackagingMethod) => {
     if (!session) return;
+    // Pulling a batch back from Conditioning is the brewer overruling
+    // auto-advance. Switch it off for this batch, or the very next telemetry
+    // poll would advance it again.
+    const autoAdvanceOn = session.autoAdvanceToConditioning ?? globalAutoConditioning;
+    const overruled = session.status === "conditioning" && newStatus === "fermenting" && autoAdvanceOn;
+    if (overruled) toast({ title: "Auto-advance turned off for this batch", description: "Turn it back on from Edit." });
     quickStatusMutation.mutate({
       id,
       data: {
@@ -204,6 +210,7 @@ export default function BrewSessionDetail() {
         abvActual: session.abvActual ?? undefined,
         notes: session.notes ?? undefined,
         packagingMethod: packagingMethod ?? session.packagingMethod ?? undefined,
+        ...(overruled ? { autoAdvanceToConditioning: false } : {}),
       },
     });
   };

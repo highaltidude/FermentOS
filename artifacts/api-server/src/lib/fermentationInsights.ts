@@ -1,5 +1,20 @@
+/**
+ * Apparent attenuation a batch must reach before flat gravity can mean
+ * "finished". Below it, flat gravity is a lag phase or a stall: a batch that
+ * took a day to get going was otherwise called complete at the 48-hour mark,
+ * and auto-advance moved it to Conditioning. Finished beer sits well above this.
+ */
+export const MIN_COMPLETE_ATTENUATION = 50;
+
+/**
+ * `originalGravity` is the brewer's measured OG, when there is one. It only
+ * anchors the completion check, so a sensor assigned part-way through the
+ * ferment is measured from the real start rather than from its first reading.
+ */
 export function calcInsights(
   readings: { gravity?: number | null; receivedAt: Date }[],
+  originalGravity?: number | null,
+  now: Date = new Date(),
 ): {
   startingGravity: number | null;
   currentGravity: number | null;
@@ -27,7 +42,7 @@ export function calcInsights(
   const gravityDrop = startingGravity - currentGravity;
   const attenuationPercent = startingGravity > 1 ? (gravityDrop / (startingGravity - 1)) * 100 : null;
 
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const recent = gravityReadings.filter((r) => new Date(r.receivedAt) >= cutoff);
   let velocityLast24h: number | null = null;
   if (recent.length >= 2) {
@@ -51,7 +66,9 @@ export function calcInsights(
   } else {
     const hoursSinceStart =
       (new Date(last.receivedAt).getTime() - new Date(first.receivedAt).getTime()) / 3_600_000;
-    fermentationStatus = hoursSinceStart > 48 ? "possibly_complete" : "stable";
+    const og = originalGravity != null && Number(originalGravity) > 1 ? Number(originalGravity) : startingGravity;
+    const attenuated = og > 1 && ((og - currentGravity) / (og - 1)) * 100 >= MIN_COMPLETE_ATTENUATION;
+    fermentationStatus = hoursSinceStart > 48 && attenuated ? "possibly_complete" : "stable";
   }
 
   return { startingGravity, currentGravity, gravityDrop, attenuationPercent, fermentationStatus, velocityLast24h };

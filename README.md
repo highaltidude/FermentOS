@@ -64,7 +64,7 @@ install to a tracked first batch.
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
 - **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something, and deduct what the recipe uses from stock when you start one
 - **Equipment** — A register of your kit: category, condition, brand and model, serial number, purchase date and price
-- **Auto-advance to Conditioning** — Move a sensor-monitored batch on once its gravity has stopped moving. It is applied when you open the batch's page, not in the background, and can be set globally or per batch
+- **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is applied when you open the batch's page, not in the background, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
@@ -272,8 +272,11 @@ When fermentation finishes, advance to **Conditioning**, then **Packaged**.
 (FermentOS can make the Conditioning step for you — see **Settings → Brewing →
 Fermentation Temperature → Auto-advance to Conditioning**. It needs an assigned
 sensor, and it acts when the batch's page is open and the sensor's gravity has
-stopped moving, so it will not move a batch nobody is looking at. A single batch
-can override the global setting from **Edit → Auto-advance to Conditioning**.)
+stopped moving, so it will not move a batch nobody is looking at. Flat gravity
+only counts as finished once the beer has attenuated at least 50%, so a slow
+start or a stall is left in Fermenting. A single batch can override the global
+setting from **Edit → Auto-advance to Conditioning**, and moving a batch back to
+Fermenting by hand turns auto-advance off for that batch.)
 
 Marking a batch Packaged asks whether it went into a keg or into bottles, and
 the answer is shown on the batch afterwards. You can change it any time from

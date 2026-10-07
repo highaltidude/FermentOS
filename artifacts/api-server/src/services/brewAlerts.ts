@@ -121,9 +121,10 @@ const RANGE_COLUMNS = {
  * which switches temperature alerts off — so a batch in conditioning with no
  * conditioning range is simply not checked.
  */
-async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | null; range: TempRange }> {
+async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | null; range: TempRange; originalGravity: number | null }> {
   const [session] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, brewId));
-  if (!session) return { status: null, range: null };
+  if (!session) return { status: null, range: null, originalGravity: null };
+  const originalGravity = session.originalGravityActual ?? null;
 
   const phase = activeTempPhase(session.status);
   const cols = RANGE_COLUMNS[phase];
@@ -140,9 +141,9 @@ async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | 
     }
   }
 
-  if (min == null && max == null && ideal == null) return { status: session.status, range: null };
+  if (min == null && max == null && ideal == null) return { status: session.status, range: null, originalGravity };
   const unit = (await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F";
-  return { status: session.status, range: { min, max, ideal, unit, phase } };
+  return { status: session.status, range: { min, max, ideal, unit, phase }, originalGravity };
 }
 
 export type BrewTelemetry = {
@@ -215,11 +216,10 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
     .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
 
   const latestReading = readings[readings.length - 1] ?? null;
-  const insights = calcInsights(readings);
+  const { status, range: tempRange, originalGravity } = await resolveTempRange(brewId);
+  const insights = calcInsights(readings, originalGravity);
 
   const connectionStatus = calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
-
-  const { status, range: tempRange } = await resolveTempRange(brewId);
 
   const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
 

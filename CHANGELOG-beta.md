@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.9.0-beta1...fermentos-v1.9.0-beta2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **fermentation:** require attenuation before auto-advancing and honour a manual move back ([1408c16](https://github.com/highaltidude/FermentOS/commit/1408c16e10212f4709cfa38ae98af8441a9f3447))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

@@ -1117,7 +1117,7 @@ export default function BrewSessionDetail() {
 
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
+                <CartesianGrid yAxisId={showTemp ? "temp" : "gravity"} strokeDasharray="3 3" className="opacity-20" />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
@@ -1158,6 +1158,7 @@ export default function BrewSessionDetail() {
                     padding: "8px 12px",
                   }}
                   labelStyle={{ color: "var(--color-muted-foreground)", marginBottom: 4 }}
+                  itemSorter={(item) => (item.dataKey === "temp" ? 0 : 1)}
                   formatter={(value: number, name: string) =>
                     name === "temp"
                       ? [`${value.toFixed(1)}°F`, "Temperature"]
@@ -1166,6 +1167,7 @@ export default function BrewSessionDetail() {
                 />
                 <Legend
                   wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                  itemSorter={(item) => (item.value === "temp" ? 0 : 1)}
                   formatter={(v) => (
                     <span style={{ color: v === "temp" ? "#d97706" : "#2563eb" }}>
                       {v === "temp" ? "Temperature" : "Gravity"}

@@ -113,11 +113,11 @@ export function ISpindelDeviceDetail({
               <p className="text-xs font-medium text-muted-foreground mb-2">Gravity &amp; Temperature</p>
               <ResponsiveContainer width="100%" height={150}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
+                  <CartesianGrid yAxisId="g" strokeDasharray="3 3" className="opacity-20" />
                   <XAxis dataKey="t" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
                   <YAxis yAxisId="g" orientation="right" domain={["auto", "auto"]} tick={{ fontSize: 9 }} tickFormatter={(v: number) => v.toFixed(3)} width={48} />
                   <YAxis yAxisId="t" orientation="left" domain={["auto", "auto"]} tick={{ fontSize: 9 }} unit="°" width={30} />
-                  <Tooltip labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 10 }} formatter={(v: number, n: string) => n === "gravity" ? [v.toFixed(3), "Gravity"] : [`${v.toFixed(1)}°`, "Temp"]} />
+                  <Tooltip labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 10 }} itemSorter={(item) => (item.dataKey === "temp" ? 0 : 1)} formatter={(v: number, n: string) => n === "gravity" ? [v.toFixed(3), "Gravity"] : [`${v.toFixed(1)}°`, "Temp"]} />
                   {chartData.some((d: any) => d.temp != null) && <Line yAxisId="t" type="monotone" dataKey="temp" stroke="#d97706" strokeWidth={1.5} dot={false} connectNulls />}
                   <Line yAxisId="g" type="monotone" dataKey="gravity" stroke="#2563eb" strokeWidth={1.5} dot={false} connectNulls />
                 </LineChart>
@@ -131,7 +131,7 @@ export function ISpindelDeviceDetail({
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
                   <XAxis dataKey="t" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                  <YAxis domain={[0, 5]} tick={{ fontSize: 9 }} unit="V" width={32} />
+                  <YAxis domain={[0, 5]} ticks={[0, 2, 5]} interval={0} tick={{ fontSize: 9 }} unit="V" width={32} />
                   <Tooltip labelStyle={{ fontSize: 10 }} contentStyle={{ fontSize: 10 }} formatter={(v: number, _name: string, entry: any) => {
                     const pct = entry?.payload?.batteryPct;
                     return [`${v.toFixed(2)}V${pct != null ? ` (~${Math.round(pct)}%)` : ""}`, "Battery"];

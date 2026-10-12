@@ -40,7 +40,7 @@ catalog:
   '@types/node': ^22.19.0
   '@types/react': ^19.3.0
   '@types/react-dom': ^19.3.0
-  '@vitejs/plugin-react': ^5.2.0
+  '@vitejs/plugin-react': ^6.1.1
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   drizzle-orm: ^0.45.3
@@ -159,12 +159,9 @@ overrides:
   "lodash@<4.18.0": "^4.18.0"
   "postcss@<8.5.10": "^8.5.10"
   "qs@<6.15.2": "^6.15.2"
-  "@babel/core@<7.29.6": "^7.29.6"
   "body-parser@>=2 <2.3.0": "^2.3.0"
   "fast-uri@<3.1.8": "^3.1.8"
   "nanoid@>=3 <3.3.18": "^3.3.18"
-  "browserslist@<4.28.7": "^4.28.7"
-  "baseline-browser-mapping@<2.11.0": "^2.11.0"
   "undici@>=7 <7.29.1": "^7.29.1"
 
 allowBuilds:

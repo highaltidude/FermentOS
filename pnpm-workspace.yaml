@@ -34,7 +34,7 @@ packages:
 
 catalog:
   '@tailwindcss/vite': ^4.3.3
-  '@tanstack/react-query': ^5.103.3
+  '@tanstack/react-query': ^5.104.1
   # Matches the oldest Node FermentOS runs on (install.sh still accepts 22), so
   # nothing typechecks against an API the runtime lacks. Raise with that floor.
   '@types/node': ^22.19.0
@@ -44,7 +44,7 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   drizzle-orm: ^0.45.3
-  lucide-react: ^1.48.0
+  lucide-react: ^1.52.0
   # Exact, and always moved together: react and react-dom must be the same
   # release, and Dependabot's grouped minor/patch PR bumps both at once.
   react: 19.3.0
@@ -52,8 +52,8 @@ catalog:
   tailwind-merge: ^3.7.0
   tailwindcss: ^4.3.3
   tsx: ^4.21.0
-  vite: ^8.3.1
-  wouter: ^3.11.1
+  vite: ^8.3.2
+  wouter: ^3.13.0
   zod: ^3.25.76
 
 autoInstallPeers: false

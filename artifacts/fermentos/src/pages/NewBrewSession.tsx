@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { useCreateBrewSession, useListRecipes, type BrewStatus, type PackagingMethod } from "@workspace/api-client-react";
+import { useCreateBrewSession, useListRecipes, type BrewStatus, type PackagingMethod, type RecipeVariant } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,12 +10,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { TempRangeFields } from "@/components/TempRangeFields";
 import { BREW_STATUSES, STATUS_LABELS, PACKAGING_METHODS, PACKAGING_LABELS } from "@/lib/brewStatus";
+import { apiErrorMessage, shortageLines } from "@/lib/inventoryShortage";
+import { isMultiVariant, VARIANT_LABELS } from "@/lib/recipeVariants";
 
 export default function NewBrewSession() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { data: recipes } = useListRecipes({});
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("none");
+  const [recipeVariant, setRecipeVariant] = useState<RecipeVariant | "">("");
+  const selectedRecipe = recipes?.find((r) => String(r.id) === selectedRecipeId);
+  const recipeVariants = isMultiVariant(selectedRecipe?.variants) ? selectedRecipe.variants : null;
   const [form, setForm] = useState({
     recipeName: "", status: "brew_day" as BrewStatus, brewDate: new Date().toISOString().split("T")[0],
     batchSizeGallons: "5.5", originalGravityActual: "", finalGravityActual: "", notes: "",
@@ -32,29 +37,21 @@ export default function NewBrewSession() {
         navigate(`/brew-sessions/${session.id}`);
       },
       onError: (err: unknown) => {
-        // The generated client throws an `ApiError` with `.status` and `.data`
-        // directly on the error (see lib/api-client-react/src/custom-fetch.ts).
-        // The server returns 409 + shortages[] when inventory enforcement
-        // is on and ingredients are missing — surface that to the user.
-        type Shortage = { name: string; required: number; available: number; unit: string; reason: string };
-        const e = err as { status?: number; data?: { error?: string; shortages?: Shortage[] } };
-        if (e?.status === 409 && e.data?.shortages) {
-          const lines = e.data.shortages.slice(0, 5).map((s) => {
-            if (s.reason === "missing") return `${s.name}: not in inventory (need ${s.required} ${s.unit})`;
-            if (s.reason === "unit_mismatch") return `${s.name}: unit mismatch (need ${s.unit})`;
-            return `${s.name}: have ${s.available} ${s.unit}, need ${s.required} ${s.unit}`;
-          });
-          const more = e.data.shortages.length > 5 ? `\n…and ${e.data.shortages.length - 5} more` : "";
-          toast({ title: "Insufficient inventory", description: lines.join("\n") + more, variant: "destructive" });
+        // 409 + shortages[] when inventory enforcement is on and stock is short.
+        const shortages = shortageLines(err);
+        if (shortages) {
+          toast({ title: "Insufficient inventory", description: shortages.join("\n"), variant: "destructive" });
           return;
         }
-        toast({ title: "Failed to create session", description: e?.data?.error ?? "Please try again", variant: "destructive" });
+        toast({ title: "Failed to create session", description: apiErrorMessage(err) ?? "Please try again", variant: "destructive" });
       },
     },
   });
 
   const handleRecipeSelect = (recipeId: string) => {
     setSelectedRecipeId(recipeId);
+    // A version belongs to one recipe; it means nothing against another.
+    setRecipeVariant("");
     if (recipeId && recipeId !== "none") {
       const recipe = recipes?.find((r) => String(r.id) === recipeId);
       if (recipe) {
@@ -79,10 +76,15 @@ export default function NewBrewSession() {
       toast({ title: "Recipe name and brew date are required", variant: "destructive" });
       return;
     }
+    if (recipeVariants && !recipeVariant) {
+      toast({ title: "Choose which version of the recipe you're brewing", variant: "destructive" });
+      return;
+    }
     createMutation.mutate({
       data: {
         recipeId: selectedRecipeId && selectedRecipeId !== "none" ? Number(selectedRecipeId) : undefined,
         recipeName: form.recipeName,
+        recipeVariant: recipeVariants && recipeVariant ? recipeVariant : undefined,
         status: form.status,
         brewDate: form.brewDate,
         batchSizeGallons: Number(form.batchSizeGallons),
@@ -120,6 +122,19 @@ export default function NewBrewSession() {
             </SelectContent>
           </Select>
         </div>
+
+        {recipeVariants && (
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Version *</label>
+            <Select value={recipeVariant} onValueChange={(v) => setRecipeVariant(v as RecipeVariant)}>
+              <SelectTrigger><SelectValue placeholder="Which version are you brewing?" /></SelectTrigger>
+              <SelectContent>
+                {recipeVariants.map((v) => <SelectItem key={v} value={v}>{VARIANT_LABELS[v]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Decides which ingredients come out of inventory and show on the boil timer.</p>
+          </div>
+        )}
 
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Recipe Name *</label>

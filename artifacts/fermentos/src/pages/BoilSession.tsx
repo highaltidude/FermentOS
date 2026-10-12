@@ -30,6 +30,7 @@ import {
   formatCountdown,
   type BoilAlertGroup,
 } from "@/lib/boil";
+import { ingredientsForVariant, resolveSessionVariant, VARIANT_LABELS } from "@/lib/recipeVariants";
 import { unlockBoilAudio, boilBeep, boilVibrate, useWakeLock, wakeLockSupported } from "@/lib/boilAlerts";
 
 function groupLabel(g: BoilAlertGroup): string {
@@ -122,8 +123,13 @@ export default function BoilSession() {
   const now = useNow(phase === "running", 250);
   const wakeLockHeld = useWakeLock(phase === "running" || phase === "paused");
 
-  const ingredients = recipe?.ingredients ?? [];
-  const suggested = recipe ? suggestedBoilMinutes(recipe.steps, recipe.ingredients) : 60;
+  // Only the additions for the version of the recipe this batch is brewing.
+  const variant = resolveSessionVariant(recipe?.variants, session?.recipeVariant);
+  const ingredients = useMemo(
+    () => ingredientsForVariant(recipe?.ingredients ?? [], variant),
+    [recipe?.ingredients, variant],
+  );
+  const suggested = recipe ? suggestedBoilMinutes(recipe.steps, ingredients) : 60;
   const [minutesInput, setMinutesInput] = useState<string>("");
   useEffect(() => {
     if (!minutesInput && recipe) setMinutesInput(String(suggested));
@@ -199,7 +205,10 @@ export default function BoilSession() {
           <Button variant="ghost" size="sm" className="-ml-2"><ArrowLeft className="w-4 h-4" /></Button>
         </Link>
         <div className="min-w-0">
-          <h1 className="text-lg font-bold text-foreground truncate">{session.recipeName}</h1>
+          <h1 className="text-lg font-bold text-foreground truncate">
+            {session.recipeName}
+            {variant && <span className="ml-2 text-xs font-medium text-muted-foreground">{VARIANT_LABELS[variant]}</span>}
+          </h1>
           <p className="text-xs text-muted-foreground flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500" />Boil</p>
         </div>
       </div>

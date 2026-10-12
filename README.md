@@ -54,6 +54,7 @@ install to a tracked first batch.
 ## Features
 
 - **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color. Ingredients and steps are editable in place, and a recipe starts its own brew session in one click
+- **Kit import** — Upload the recipe PDF from a MoreBeer kit and FermentOS reads the ingredients, hop schedule, stats and suggested yeasts into a recipe for you to check before it is saved. A sheet that covers the LME, DME and All-Grain kits becomes one recipe with three versions; you pick the version each time you brew, and only that version's ingredients are deducted from stock and called on the boil timer
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
 - **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
@@ -180,6 +181,26 @@ are still entered in °F.
 size. Add the grain bill, hops, and yeast, and optionally the mash and boil
 steps.
 
+Brewing a MoreBeer kit? **Recipes → Import** reads the kit's recipe PDF
+instead. Download the PDF from the kit's product page (a scan of the printed
+sheet will not work — it has no text to read), upload it, and check what was
+read before saving:
+
+- **Style** is not printed on the sheet, so pick one.
+- Anything the sheet leaves out is flagged at the top — usually an amount, such
+  as the clarifier's — and has to be filled in or removed before you can save.
+- The sheet suggests several yeasts. Pick the one you will use and it is added
+  as an ingredient; the full list stays in the notes.
+- Kit names rarely match what you call things. If you track stock, change each
+  name to the matching item from **Ingredients** — start typing and pick it from
+  the list.
+
+When the sheet covers the LME, DME and All-Grain kits, all three are saved as
+**one recipe with three versions**. Shared ingredients appear once; the ones
+that differ are marked with the versions they belong to. The recipe page shows
+one version at a time, and each ingredient's **Used in** setting can be changed
+when you edit it. MoreBeer kits are 5 gallons, which is what the import assumes.
+
 Set the **fermentation temperature range** while you are here. It is optional,
 but it is what lets FermentOS tell you later that a batch is running hot — see
 step 7.
@@ -212,12 +233,22 @@ something and tells you exactly what is missing. When the brew does start, the
 recipe's ingredients are deducted from stock, oldest purchase first. It applies
 only to sessions started from a recipe, and an ingredient matches stock only
 when the name, type and unit are all the same — there is no unit conversion.
+An ingredient listed more than once — a hop at 45 minutes, at flameout and as a
+dry hop — is added up first, so the check is against the total. For a recipe
+with several versions, only the version you are brewing is checked and
+deducted.
 
 **4. Start a brew session**
 
 Open the recipe and click **Start Brew Session**, or go to **Brew Log → New
 Session** and choose the recipe from the dropdown. Either way FermentOS fills in
 the name, batch size, and fermentation and conditioning temperature ranges for you.
+
+If the recipe has several versions (an imported kit), you are asked **which
+version you are brewing**. That choice decides what is taken from stock and
+what the boil timer lists, and it is shown beside the session's name. If you are
+short on ingredients for one version, the dialog says what is missing and lets
+you switch to another.
 
 You do not need a recipe to log a batch — a **name and a brew date are the only
 required fields**, so a spur-of-the-moment brew can be recorded now and tidied
@@ -985,6 +1016,8 @@ response shape, is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
 |--------|----------|-------------|
 | GET | `/api/recipes` | List all recipes — optional query params `style`, `search` |
 | POST | `/api/recipes` | Create a recipe |
+| POST | `/api/recipes/import` | Create a recipe with its ingredients and steps in one call |
+| POST | `/api/recipes/import/morebeer/parse` | Read a MoreBeer kit-sheet PDF into a draft (saves nothing) |
 | GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, and batch rating summary |
 | PUT | `/api/recipes/:id` | Update a recipe |
 | DELETE | `/api/recipes/:id` | Delete a recipe |
@@ -1038,10 +1071,54 @@ the recipe's estimated time in each stage.
 }
 ```
 `type`: `malt` | `hop` | `yeast` | `adjunct` | `water_agent` | `other`
-`use`: `mash` | `boil` | `dry_hop` | `whirlpool` | `primary` | `secondary` | `packaging` | `other`
+`use`: `mash` | `steep` | `boil` | `dry_hop` | `whirlpool` | `primary` | `secondary` | `packaging` | `other`
+
+On a recipe with several versions, an ingredient may also carry
+`"variants": ["lme", "dme"]` to limit it to those versions; omit it or send
+`null` for an ingredient every version uses. Naming a version the recipe does
+not have returns `400`.
 
 `PUT /api/ingredients/:id` accepts the same fields, all optional; send `null` to
-clear `use`, `timingMinutes` or `notes`.
+clear `use`, `timingMinutes`, `notes` or `variants`.
+
+Ingredients are returned in the order they were added.
+
+**Recipe versions.** A recipe's `variants` is `null` for an ordinary recipe, or
+a list drawn from `lme` | `dme` | `all_grain` when it can be brewed more than
+one way. It is set only by `POST /api/recipes/import`; `POST` and `PUT
+/api/recipes` ignore it.
+
+**POST /api/recipes/import** body:
+```json
+{
+  "recipe": { "name": "Pliny the Elder", "style": "Double IPA", "batchSizeGallons": 5 },
+  "variants": ["lme", "dme", "all_grain"],
+  "ingredients": [
+    { "name": "Light Dry Extract", "type": "malt", "amount": 7.5, "unit": "lbs", "use": "boil", "variants": ["dme"] },
+    { "name": "2-Row", "type": "malt", "amount": 13, "unit": "lbs", "use": "mash", "variants": ["all_grain"] },
+    { "name": "Magnum", "type": "hop", "amount": 2, "unit": "oz", "use": "boil", "timingMinutes": 90 }
+  ],
+  "steps": [{ "body": "Boil for 90 minutes", "phase": "boil", "durationMinutes": 90 }]
+}
+```
+`recipe` takes the same fields as `POST /api/recipes`, `ingredients` the same as
+`POST /api/recipes/:id/ingredients`, and `steps` the same as `POST
+/api/recipes/:id/steps`. `variants` and `steps` are optional. Everything is
+saved in one transaction: if any part is rejected, nothing is created.
+
+**POST /api/recipes/import/morebeer/parse** takes the PDF itself as the request
+body, not a form upload, up to 10 MB:
+```bash
+curl -X POST http://localhost:8080/api/recipes/import/morebeer/parse \
+  -H "Content-Type: application/pdf" --data-binary @kit-sheet.pdf
+```
+It returns a draft — `name`, `variants`, `batchSizeGallons`, `stats`, `hints`,
+`suggestedYeasts`, `ingredients`, `tips` and `warnings` — and saves nothing.
+Draft ingredients may have a `null` `amount`, `unit` or `use` where the sheet
+does not state one; fill those in before posting to `/api/recipes/import`.
+`400` means the body is not a PDF or is too large. `422` means it is a PDF that
+could not be read as a kit sheet, with a `code` of `no_text` (a scan),
+`unrecognized_sheet` or `unreadable_pdf`.
 
 ---
 
@@ -1097,6 +1174,7 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 {
   "recipeId": 1,
   "recipeName": "Pacific IPA",
+  "recipeVariant": null,
   "status": "brew_day",
   "brewDate": "2024-03-15",
   "plannedDate": null,
@@ -1120,12 +1198,19 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 optional on create. `recipeName`, `status`, `brewDate` and `batchSizeGallons`
 are required.
 
+`recipeVariant`: `lme` | `dme` | `all_grain`. Required when the recipe has
+several versions, and must be one of them, or the request returns `400`; for
+any other recipe it is ignored and stored as `null`.
+
 With Ingredient Enforcement on, creating a session from a recipe you are short
 on returns `409` with `{ "error": "Insufficient inventory", "shortages": [...] }`.
+Each shortage is the total needed of one ingredient, and only the chosen
+version's ingredients are counted.
 
 `PUT /api/brew-sessions/:id` accepts the same fields, plus
 `autoAdvanceToConditioning` (`true` | `false` | `null` to follow the global
-setting) and `tastingNotes`. Setting `status` to `packaged` unassigns any sensor
+setting) and `tastingNotes`. Changing `recipeVariant` afterwards changes what
+the boil timer lists but does not return or re-deduct stock. Setting `status` to `packaged` unassigns any sensor
 on the session.
 
 **POST /api/brew-sessions/:id/readings** body:

@@ -1,5 +1,7 @@
-import { db, brewSessionsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { db, brewSessionsTable, recipesTable } from "@workspace/db";
 import type { CreateBrewSessionBody } from "@workspace/api-zod";
+import { isMultiVariant, type RecipeVariant } from "../lib/recipeVariants";
 import {
   isInventoryEnforcementEnabled,
   consumeRecipeIngredientsTx,
@@ -10,7 +12,18 @@ type CreateBrewSessionInput = ReturnType<typeof CreateBrewSessionBody.parse>;
 
 export type CreateBrewSessionOutcome =
   | { kind: "created"; session: typeof brewSessionsTable.$inferSelect }
-  | { kind: "shortage"; shortages: InventoryShortage[] };
+  | { kind: "shortage"; shortages: InventoryShortage[] }
+  | { kind: "invalid_variant"; variants: RecipeVariant[] };
+
+/** The versions a recipe can be brewed as, or null for an ordinary recipe. */
+export async function recipeVariantsOf(recipeId: number | null | undefined): Promise<RecipeVariant[] | null> {
+  if (recipeId == null) return null;
+  const [recipe] = await db
+    .select({ variants: recipesTable.variants })
+    .from(recipesTable)
+    .where(eq(recipesTable.id, recipeId));
+  return isMultiVariant(recipe?.variants) ? [...recipe.variants] : null;
+}
 
 // Sentinel error used only to abort the transaction with a typed payload.
 class ShortageAbort extends Error {
@@ -34,15 +47,27 @@ async function insertSession(
  * single transaction. Inventory rows are SELECT FOR UPDATE locked inside
  * consumeRecipeIngredientsTx so two concurrent brews can't both pass the
  * check on the same stock.
+ *
+ * A recipe with several versions has to be told which one is being brewed.
+ * Guessing would deduct the wrong version's stock, silently, with no undo.
  */
 export async function createBrewSession(data: CreateBrewSessionInput): Promise<CreateBrewSessionOutcome> {
   const { brewDate, ...rest } = data;
-  const values = { ...rest, brewDate: String(brewDate) };
   const { recipeId } = data;
+
+  const variants = await recipeVariantsOf(recipeId);
+  let recipeVariant: RecipeVariant | null = null;
+  if (variants) {
+    if (!data.recipeVariant || !variants.includes(data.recipeVariant)) {
+      return { kind: "invalid_variant", variants };
+    }
+    recipeVariant = data.recipeVariant;
+  }
+  const values = { ...rest, recipeVariant, brewDate: String(brewDate) };
 
   if (recipeId && (await isInventoryEnforcementEnabled())) {
     return db.transaction(async (tx) => {
-      const result = await consumeRecipeIngredientsTx(tx, recipeId);
+      const result = await consumeRecipeIngredientsTx(tx, recipeId, recipeVariant);
       if (!result.ok) {
         // Rolling back is required so the FOR UPDATE locks release without
         // half-applying any deductions. Throwing aborts the transaction.

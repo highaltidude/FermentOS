@@ -1,7 +1,8 @@
-import { db, brewSessionsTable, recipeIngredientsTable } from "@workspace/db";
-import { and, eq, isNull, isNotNull } from "drizzle-orm";
+import { db, brewSessionsTable, recipeIngredientsTable, recipesTable } from "@workspace/db";
+import { and, asc, eq, isNull, isNotNull } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { upcomingBoilAlerts, boilPhase, type BoilAlertGroup, type BoilIngredient } from "../lib/boilTimer.js";
+import { ingredientsForVariant, resolveSessionVariant } from "../lib/recipeVariants.js";
 import { getNotifyConfig, sendNotification } from "./notifications.js";
 
 /**
@@ -25,9 +26,14 @@ export function clearBoilAlerts(brewSessionId: number): void {
   timers.delete(brewSessionId);
 }
 
-async function loadBoilIngredients(recipeId: number | null): Promise<BoilIngredient[]> {
+/** The additions for the version of the recipe this session is brewing. */
+async function loadBoilIngredients(recipeId: number | null, sessionVariant: string | null): Promise<BoilIngredient[]> {
   if (recipeId == null) return [];
-  return db
+  const [recipe] = await db
+    .select({ variants: recipesTable.variants })
+    .from(recipesTable)
+    .where(eq(recipesTable.id, recipeId));
+  const ingredients = await db
     .select({
       id: recipeIngredientsTable.id,
       name: recipeIngredientsTable.name,
@@ -35,9 +41,12 @@ async function loadBoilIngredients(recipeId: number | null): Promise<BoilIngredi
       unit: recipeIngredientsTable.unit,
       use: recipeIngredientsTable.use,
       timingMinutes: recipeIngredientsTable.timingMinutes,
+      variants: recipeIngredientsTable.variants,
     })
     .from(recipeIngredientsTable)
-    .where(eq(recipeIngredientsTable.recipeId, recipeId));
+    .where(eq(recipeIngredientsTable.recipeId, recipeId))
+    .orderBy(asc(recipeIngredientsTable.id));
+  return ingredientsForVariant(ingredients, resolveSessionVariant(recipe?.variants, sessionVariant));
 }
 
 function describe(ing: BoilIngredient): string {
@@ -89,7 +98,7 @@ export async function scheduleBoilAlerts(brewSessionId: number): Promise<void> {
   const [session] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, brewSessionId));
   if (!session || boilPhase(session) !== "running") return;
 
-  const ingredients = await loadBoilIngredients(session.recipeId);
+  const ingredients = await loadBoilIngredients(session.recipeId, session.recipeVariant);
   const now = Date.now();
   const handles = upcomingBoilAlerts(session, ingredients, now).map(({ group, fireAt }) =>
     setTimeout(() => {

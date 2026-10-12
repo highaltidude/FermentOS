@@ -36,6 +36,17 @@ export const GetDashboardSummaryResponse = zod.object({
       id: zod.number().int(),
       recipeId: zod.number().int().nullish(),
       recipeName: zod.string(),
+      recipeVariant: zod
+        .union([
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "Which version of a multi-version recipe this batch was brewed as.",
+        ),
       status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
       brewDate: zod.string().date(),
       plannedDate: zod
@@ -250,6 +261,16 @@ export const ListRecipesResponseItem = zod.object({
   id: zod.number().int(),
   name: zod.string(),
   style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -360,6 +381,16 @@ export const CreateRecipeResponse = zod.object({
   id: zod.number().int(),
   name: zod.string(),
   style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -426,6 +457,320 @@ export const GetRecipeStylesResponseItem = zod.object({
 export const GetRecipeStylesResponse = zod.array(GetRecipeStylesResponseItem);
 
 /**
+ * Everything is inserted in one transaction, so a rejected ingredient leaves no half-built recipe behind. This is also the only way to create a recipe with several versions (LME / DME / all-grain).
+ * @summary Create a recipe together with its ingredients and steps
+ */
+export const ImportRecipeBody = zod.object({
+  recipe: zod.object({
+    name: zod.string(),
+    style: zod.string(),
+    batchSizeGallons: zod.number(),
+    originalGravity: zod.number().nullish(),
+    finalGravity: zod.number().nullish(),
+    abv: zod.number().nullish(),
+    ibu: zod.number().nullish(),
+    colorSrm: zod.number().nullish(),
+    estimatedBrewTimeMinutes: zod.number().int().nullish(),
+    efficiencyPercent: zod.number().nullish(),
+    caloriesPerServing: zod.number().int().nullish(),
+    notes: zod.string().nullish(),
+    fermentTempMin: zod
+      .number()
+      .nullish()
+      .describe("Minimum fermentation temperature threshold"),
+    fermentTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum fermentation temperature threshold"),
+    fermentTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal fermentation temperature target"),
+    conditionTempMin: zod
+      .number()
+      .nullish()
+      .describe(
+        "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+      ),
+    conditionTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum conditioning temperature threshold"),
+    conditionTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal conditioning temperature target"),
+    daysPlanned: zod.number().int().nullish(),
+    daysBrewing: zod.number().int().nullish(),
+    daysFermenting: zod.number().int().nullish(),
+    daysConditioning: zod.number().int().nullish(),
+    daysPackaged: zod.number().int().nullish(),
+  }),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions the recipe can be brewed as. Omit or null for a single-version recipe.",
+    ),
+  ingredients: zod.array(
+    zod.object({
+      name: zod.string(),
+      type: zod.enum([
+        "malt",
+        "hop",
+        "yeast",
+        "adjunct",
+        "water_agent",
+        "other",
+      ]),
+      amount: zod.number(),
+      unit: zod.string(),
+      use: zod
+        .union([
+          zod.enum([
+            "mash",
+            "steep",
+            "boil",
+            "dry_hop",
+            "whirlpool",
+            "primary",
+            "secondary",
+            "packaging",
+            "other",
+          ]),
+          zod.null(),
+        ])
+        .optional(),
+      timingMinutes: zod.number().int().nullish(),
+      notes: zod.string().nullish(),
+      variants: zod
+        .array(
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+        )
+        .nullish()
+        .describe(
+          "Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.",
+        ),
+    }),
+  ),
+  steps: zod
+    .array(
+      zod.object({
+        body: zod.string(),
+        phase: zod
+          .union([
+            zod.enum([
+              "mash",
+              "boil",
+              "fermentation",
+              "conditioning",
+              "packaging",
+              "other",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        durationMinutes: zod.number().int().nullish(),
+        position: zod
+          .number()
+          .int()
+          .nullish()
+          .describe(
+            "Optional explicit position; if omitted, the step is appended.",
+          ),
+      }),
+    )
+    .optional(),
+});
+
+export const ImportRecipeResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
+  batchSizeGallons: zod.number(),
+  originalGravity: zod.number().nullish(),
+  finalGravity: zod.number().nullish(),
+  abv: zod.number().nullish(),
+  ibu: zod.number().nullish(),
+  colorSrm: zod.number().nullish(),
+  estimatedBrewTimeMinutes: zod.number().int().nullish(),
+  efficiencyPercent: zod.number().nullish(),
+  caloriesPerServing: zod.number().int().nullish(),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
+  daysPlanned: zod.number().int().nullish(),
+  daysBrewing: zod.number().int().nullish(),
+  daysFermenting: zod.number().int().nullish(),
+  daysConditioning: zod.number().int().nullish(),
+  daysPackaged: zod.number().int().nullish(),
+  avgScore: zod
+    .number()
+    .nullish()
+    .describe(
+      "Mean overallScore across every rated batch of this recipe, 1-10.",
+    ),
+  ratedBatchCount: zod
+    .number()
+    .int()
+    .describe("Batches carrying a scorecard. Always <= batchCount."),
+  batchCount: zod.number().int(),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * Send the PDF as the raw request body. Nothing is saved: the draft is returned for review and then posted to /recipes/import.
+ * @summary Read a MoreBeer kit-sheet PDF into a recipe draft
+ */
+export const ParseMorebeerKitSheetResponse = zod.object({
+  source: zod.enum(["morebeer"]),
+  name: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullable()
+    .describe("Null when the sheet describes a single version."),
+  batchSizeGallons: zod.number(),
+  batchSizeAssumed: zod
+    .boolean()
+    .describe(
+      "True when the sheet prints no batch size and the kit default was used.",
+    ),
+  stats: zod.object({
+    originalGravityMin: zod.number().nullable(),
+    originalGravityMax: zod.number().nullable(),
+    ibu: zod.number().nullable(),
+    colorSrm: zod.number().nullable(),
+    abv: zod.number().nullable(),
+  }),
+  hints: zod
+    .object({
+      boilMinutes: zod.number().int().nullable(),
+      mashTempF: zod.number().nullable(),
+      fermentTempMinF: zod.number().nullable(),
+      fermentTempMaxF: zod.number().nullable(),
+    })
+    .describe(
+      "Figures picked out of the free-text recipe tips. Fahrenheit, as printed.",
+    ),
+  suggestedYeasts: zod.array(
+    zod.object({
+      lab: zod.string(),
+      name: zod.string(),
+    }),
+  ),
+  ingredients: zod.array(
+    zod
+      .object({
+        name: zod.string(),
+        type: zod.enum([
+          "malt",
+          "hop",
+          "yeast",
+          "adjunct",
+          "water_agent",
+          "other",
+        ]),
+        amount: zod.number().nullable(),
+        unit: zod.string().nullable(),
+        use: zod.union([
+          zod.enum([
+            "mash",
+            "steep",
+            "boil",
+            "dry_hop",
+            "whirlpool",
+            "primary",
+            "secondary",
+            "packaging",
+            "other",
+          ]),
+          zod.null(),
+        ]),
+        timingMinutes: zod.number().int().nullable(),
+        notes: zod.string().nullable(),
+        variants: zod
+          .array(
+            zod
+              .enum(["lme", "dme", "all_grain"])
+              .describe("A version a kit recipe can be brewed as."),
+          )
+          .nullable(),
+        sourceText: zod
+          .string()
+          .describe("The line on the sheet this row was read from."),
+      })
+      .describe(
+        "An ingredient as read from the sheet. Unlike a saved ingredient, amount, unit and use may be null when the sheet does not state them.",
+      ),
+  ),
+  tips: zod.string().nullable(),
+  warnings: zod.array(
+    zod.object({
+      code: zod.enum([
+        "missing_amount",
+        "unparsed_line",
+        "use_from_tips",
+        "assumed_batch_size",
+      ]),
+      message: zod.string(),
+      ingredientIndex: zod
+        .number()
+        .int()
+        .nullish()
+        .describe(
+          "Index into the draft's ingredients, when the warning is about one.",
+        ),
+      sourceText: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary Get a recipe by ID
  */
 export const GetRecipeParams = zod.object({
@@ -437,6 +782,16 @@ export const GetRecipeResponse = zod
     id: zod.number().int(),
     name: zod.string(),
     style: zod.string(),
+    variants: zod
+      .array(
+        zod
+          .enum(["lme", "dme", "all_grain"])
+          .describe("A version a kit recipe can be brewed as."),
+      )
+      .nullish()
+      .describe(
+        "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+      ),
     batchSizeGallons: zod.number(),
     originalGravity: zod.number().nullish(),
     finalGravity: zod.number().nullish(),
@@ -513,6 +868,7 @@ export const GetRecipeResponse = zod
             .union([
               zod.enum([
                 "mash",
+                "steep",
                 "boil",
                 "dry_hop",
                 "whirlpool",
@@ -526,6 +882,16 @@ export const GetRecipeResponse = zod
             .optional(),
           timingMinutes: zod.number().int().nullish(),
           notes: zod.string().nullish(),
+          variants: zod
+            .array(
+              zod
+                .enum(["lme", "dme", "all_grain"])
+                .describe("A version a kit recipe can be brewed as."),
+            )
+            .nullish()
+            .describe(
+              "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+            ),
         }),
       ),
       steps: zod.array(
@@ -627,6 +993,16 @@ export const UpdateRecipeResponse = zod.object({
   id: zod.number().int(),
   name: zod.string(),
   style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -710,6 +1086,7 @@ export const ListRecipeIngredientsResponseItem = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -723,6 +1100,16 @@ export const ListRecipeIngredientsResponseItem = zod.object({
     .optional(),
   timingMinutes: zod.number().int().nullish(),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
 export const ListRecipeIngredientsResponse = zod.array(
   ListRecipeIngredientsResponseItem,
@@ -744,6 +1131,7 @@ export const AddRecipeIngredientBody = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -757,6 +1145,16 @@ export const AddRecipeIngredientBody = zod.object({
     .optional(),
   timingMinutes: zod.number().int().nullish(),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.",
+    ),
 });
 
 export const AddRecipeIngredientResponse = zod.object({
@@ -770,6 +1168,7 @@ export const AddRecipeIngredientResponse = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -783,6 +1182,16 @@ export const AddRecipeIngredientResponse = zod.object({
     .optional(),
   timingMinutes: zod.number().int().nullish(),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
 
 /**
@@ -803,6 +1212,7 @@ export const UpdateRecipeIngredientBody = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -816,6 +1226,16 @@ export const UpdateRecipeIngredientBody = zod.object({
     .optional(),
   timingMinutes: zod.number().int().nullish(),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
 
 export const UpdateRecipeIngredientResponse = zod.object({
@@ -829,6 +1249,7 @@ export const UpdateRecipeIngredientResponse = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -842,6 +1263,16 @@ export const UpdateRecipeIngredientResponse = zod.object({
     .optional(),
   timingMinutes: zod.number().int().nullish(),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
 
 /**
@@ -1050,6 +1481,17 @@ export const ListBrewSessionsResponseItem = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -1199,6 +1641,17 @@ export const ListBrewSessionsResponse = zod.array(ListBrewSessionsResponseItem);
 export const CreateBrewSessionBody = zod.object({
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Required when the recipe has several versions; ignored otherwise.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod.string().date().nullish(),
@@ -1254,6 +1707,17 @@ export const CreateBrewSessionResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -1416,6 +1880,17 @@ export const GetBrewSessionResponse = zod
     id: zod.number().int(),
     recipeId: zod.number().int().nullish(),
     recipeName: zod.string(),
+    recipeVariant: zod
+      .union([
+        zod
+          .enum(["lme", "dme", "all_grain"])
+          .describe("A version a kit recipe can be brewed as."),
+        zod.null(),
+      ])
+      .optional()
+      .describe(
+        "Which version of a multi-version recipe this batch was brewed as.",
+      ),
     status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
     brewDate: zod.string().date(),
     plannedDate: zod
@@ -1598,6 +2073,15 @@ export const UpdateBrewSessionParams = zod.object({
 export const UpdateBrewSessionBody = zod.object({
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string().optional(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe("Changing this does not re-deduct inventory."),
   status: zod
     .enum(["brew_day", "fermenting", "conditioning", "packaged"])
     .optional(),
@@ -1662,6 +2146,17 @@ export const UpdateBrewSessionResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -1900,6 +2395,17 @@ export const UpsertBrewRatingResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -2092,6 +2598,17 @@ export const ControlBoilResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod

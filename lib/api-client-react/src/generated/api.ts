@@ -55,8 +55,11 @@ import type {
   ISpindelPayload,
   ISpindelReadingsPage,
   ISpindelSettings,
+  ImportRecipeBody,
   IngestISpindelReading200,
   InventoryItem,
+  KitSheetDraft,
+  KitSheetParseError,
   ListBrewSessionsParams,
   ListEquipmentParams,
   ListISpindelDeviceReadingsParams,
@@ -730,6 +733,239 @@ export function useGetRecipeStyles<
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+export const getImportRecipeUrl = () => {
+  return `/api/recipes/import`;
+};
+
+/**
+ * Everything is inserted in one transaction, so a rejected ingredient leaves no half-built recipe behind. This is also the only way to create a recipe with several versions (LME / DME / all-grain).
+ * @summary Create a recipe together with its ingredients and steps
+ */
+export const importRecipe = async (
+  importRecipeBody: ImportRecipeBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Recipe> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<Recipe>(getImportRecipeUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(importRecipeBody),
+  });
+};
+
+export const getImportRecipeMutationKey = () => ["importRecipe"] as const;
+
+export const getImportRecipeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof importRecipe>>,
+    TError,
+    ImportRecipeMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof importRecipe>>,
+  TError,
+  ImportRecipeMutationVariables,
+  TContext
+> => {
+  const mutationKey = getImportRecipeMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof importRecipe>>,
+    ImportRecipeMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return importRecipe(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ImportRecipeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof importRecipe>>
+>;
+export type ImportRecipeMutationBody = BodyType<ImportRecipeBody>;
+export type ImportRecipeMutationError = ErrorType<ErrorResponse>;
+export type ImportRecipeMutationVariables = {
+  data: BodyType<ImportRecipeBody>;
+};
+
+/**
+ * @summary Create a recipe together with its ingredients and steps
+ */
+export const useImportRecipe = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof importRecipe>>,
+    TError,
+    ImportRecipeMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof importRecipe>>,
+  TError,
+  ImportRecipeMutationVariables,
+  TContext
+> => {
+  return useMutation(getImportRecipeMutationOptions(options));
+};
+
+export const getParseMorebeerKitSheetUrl = () => {
+  return `/api/recipes/import/morebeer/parse`;
+};
+
+/**
+ * Send the PDF as the raw request body. Nothing is saved: the draft is returned for review and then posted to /recipes/import.
+ * @summary Read a MoreBeer kit-sheet PDF into a recipe draft
+ */
+export const parseMorebeerKitSheet = async (
+  parseMorebeerKitSheetBody: Blob,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<KitSheetDraft> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<KitSheetDraft>(getParseMorebeerKitSheetUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+      ...getHeaders(options?.headers),
+    },
+    body: parseMorebeerKitSheetBody,
+  });
+};
+
+export const getParseMorebeerKitSheetMutationKey = () =>
+  ["parseMorebeerKitSheet"] as const;
+
+export const getParseMorebeerKitSheetMutationOptions = <
+  TError = ErrorType<ErrorResponse | KitSheetParseError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseMorebeerKitSheet>>,
+    TError,
+    ParseMorebeerKitSheetMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof parseMorebeerKitSheet>>,
+  TError,
+  ParseMorebeerKitSheetMutationVariables,
+  TContext
+> => {
+  const mutationKey = getParseMorebeerKitSheetMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof parseMorebeerKitSheet>>,
+    ParseMorebeerKitSheetMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return parseMorebeerKitSheet(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ParseMorebeerKitSheetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseMorebeerKitSheet>>
+>;
+export type ParseMorebeerKitSheetMutationBody = BodyType<Blob>;
+export type ParseMorebeerKitSheetMutationError = ErrorType<
+  ErrorResponse | KitSheetParseError
+>;
+export type ParseMorebeerKitSheetMutationVariables = { data: BodyType<Blob> };
+
+/**
+ * @summary Read a MoreBeer kit-sheet PDF into a recipe draft
+ */
+export const useParseMorebeerKitSheet = <
+  TError = ErrorType<ErrorResponse | KitSheetParseError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseMorebeerKitSheet>>,
+    TError,
+    ParseMorebeerKitSheetMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof parseMorebeerKitSheet>>,
+  TError,
+  ParseMorebeerKitSheetMutationVariables,
+  TContext
+> => {
+  return useMutation(getParseMorebeerKitSheetMutationOptions(options));
+};
 
 export const getGetRecipeUrl = (id: number) => {
   return `/api/recipes/${id}`;

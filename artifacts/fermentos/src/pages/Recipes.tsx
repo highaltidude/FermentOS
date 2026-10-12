@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Plus, Search, BookOpen, ChevronRight, Beaker, Clock, FlaskConical } from "lucide-react";
+import { Plus, Search, BookOpen, ChevronRight, Beaker, Clock, FlaskConical, FileUp } from "lucide-react";
 import { useListRecipes, useGetRecipeStyles } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,12 +32,20 @@ export default function Recipes() {
           <h1 className="text-xl font-bold text-foreground">Recipes</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{recipes?.length ?? 0} recipes in your book</p>
         </div>
-        <Link href="/recipes/new">
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-1.5" />
-            New Recipe
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/recipes/import">
+            <Button size="sm" variant="outline">
+              <FileUp className="w-4 h-4 mr-1.5" />
+              Import
+            </Button>
+          </Link>
+          <Link href="/recipes/new">
+            <Button size="sm">
+              <Plus className="w-4 h-4 mr-1.5" />
+              New Recipe
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

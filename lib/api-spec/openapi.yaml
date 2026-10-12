@@ -153,6 +153,70 @@ paths:
                 items:
                   $ref: "#/components/schemas/StyleCount"
 
+  /recipes/import:
+    post:
+      operationId: importRecipe
+      tags: [recipes]
+      summary: Create a recipe together with its ingredients and steps
+      description: >-
+        Everything is inserted in one transaction, so a rejected ingredient
+        leaves no half-built recipe behind. This is also the only way to create
+        a recipe with several versions (LME / DME / all-grain).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRecipeBody"
+      responses:
+        "201":
+          description: Recipe created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipe"
+        "400":
+          description: Invalid body, or an ingredient names a version the recipe does not have
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /recipes/import/morebeer/parse:
+    post:
+      operationId: parseMorebeerKitSheet
+      tags: [recipes]
+      summary: Read a MoreBeer kit-sheet PDF into a recipe draft
+      description: >-
+        Send the PDF as the raw request body. Nothing is saved: the draft is
+        returned for review and then posted to /recipes/import.
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Parsed draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KitSheetDraft"
+        "400":
+          description: The body is not a PDF, or is too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: A PDF, but not one that could be read as a kit sheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KitSheetParseError"
+
   /recipes/{id}:
     get:
       operationId: getRecipe
@@ -1596,7 +1660,12 @@ components:
 
     IngredientUse:
       type: string
-      enum: [mash, boil, dry_hop, whirlpool, primary, secondary, packaging, other]
+      enum: [mash, steep, boil, dry_hop, whirlpool, primary, secondary, packaging, other]
+
+    RecipeVariant:
+      type: string
+      description: A version a kit recipe can be brewed as.
+      enum: [lme, dme, all_grain]
 
     Recipe:
       type: object
@@ -1607,6 +1676,12 @@ components:
           type: string
         style:
           type: string
+        variants:
+          type: array
+          nullable: true
+          description: The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.
+          items:
+            $ref: "#/components/schemas/RecipeVariant"
         batchSizeGallons:
           type: number
         originalGravity:
@@ -1969,6 +2044,12 @@ components:
         notes:
           type: string
           nullable: true
+        variants:
+          type: array
+          nullable: true
+          description: Which of the recipe's versions this ingredient belongs to. Null means every version.
+          items:
+            $ref: "#/components/schemas/RecipeVariant"
       required: [id, recipeId, name, type, amount, unit]
 
     CreateRecipeIngredientBody:
@@ -1991,6 +2072,12 @@ components:
         notes:
           type: string
           nullable: true
+        variants:
+          type: array
+          nullable: true
+          description: Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.
+          items:
+            $ref: "#/components/schemas/RecipeVariant"
       required: [name, type, amount, unit]
 
     UpdateRecipeIngredientBody:
@@ -2013,6 +2100,176 @@ components:
         notes:
           type: string
           nullable: true
+        variants:
+          type: array
+          nullable: true
+          description: Which of the recipe's versions this ingredient belongs to. Null means every version.
+          items:
+            $ref: "#/components/schemas/RecipeVariant"
+
+    ImportRecipeBody:
+      type: object
+      properties:
+        recipe:
+          $ref: "#/components/schemas/CreateRecipeBody"
+        variants:
+          type: array
+          nullable: true
+          description: The versions the recipe can be brewed as. Omit or null for a single-version recipe.
+          items:
+            $ref: "#/components/schemas/RecipeVariant"
+        ingredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateRecipeIngredientBody"
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateRecipeStepBody"
+      required: [recipe, ingredients]
+
+    KitSheetWarning:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [missing_amount, unparsed_line, use_from_tips, assumed_batch_size]
+        message:
+          type: string
+        ingredientIndex:
+          type: integer
+          nullable: true
+          description: Index into the draft's ingredients, when the warning is about one.
+        sourceText:
+          type: string
+          nullable: true
+      required: [code, message]
+
+    KitSheetYeast:
+      type: object
+      properties:
+        lab:
+          type: string
+        name:
+          type: string
+      required: [lab, name]
+
+    KitSheetDraftIngredient:
+      type: object
+      description: >-
+        An ingredient as read from the sheet. Unlike a saved ingredient, amount,
+        unit and use may be null when the sheet does not state them.
+      properties:
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        use:
+          $ref: "#/components/schemas/IngredientUse"
+          nullable: true
+        timingMinutes:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        variants:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/RecipeVariant"
+        sourceText:
+          type: string
+          description: The line on the sheet this row was read from.
+      required: [name, type, amount, unit, use, timingMinutes, notes, variants, sourceText]
+
+    KitSheetDraft:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [morebeer]
+        name:
+          type: string
+        variants:
+          type: array
+          nullable: true
+          description: Null when the sheet describes a single version.
+          items:
+            $ref: "#/components/schemas/RecipeVariant"
+        batchSizeGallons:
+          type: number
+        batchSizeAssumed:
+          type: boolean
+          description: True when the sheet prints no batch size and the kit default was used.
+        stats:
+          type: object
+          properties:
+            originalGravityMin:
+              type: number
+              nullable: true
+            originalGravityMax:
+              type: number
+              nullable: true
+            ibu:
+              type: number
+              nullable: true
+            colorSrm:
+              type: number
+              nullable: true
+            abv:
+              type: number
+              nullable: true
+          required: [originalGravityMin, originalGravityMax, ibu, colorSrm, abv]
+        hints:
+          type: object
+          description: Figures picked out of the free-text recipe tips. Fahrenheit, as printed.
+          properties:
+            boilMinutes:
+              type: integer
+              nullable: true
+            mashTempF:
+              type: number
+              nullable: true
+            fermentTempMinF:
+              type: number
+              nullable: true
+            fermentTempMaxF:
+              type: number
+              nullable: true
+          required: [boilMinutes, mashTempF, fermentTempMinF, fermentTempMaxF]
+        suggestedYeasts:
+          type: array
+          items:
+            $ref: "#/components/schemas/KitSheetYeast"
+        ingredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/KitSheetDraftIngredient"
+        tips:
+          type: string
+          nullable: true
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/KitSheetWarning"
+      required: [source, name, variants, batchSizeGallons, batchSizeAssumed, stats, hints, suggestedYeasts, ingredients, tips, warnings]
+
+    KitSheetParseError:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum: [no_text, unrecognized_sheet, unreadable_pdf]
+      required: [error, code]
 
     BrewSession:
       type: object
@@ -2024,6 +2281,10 @@ components:
           nullable: true
         recipeName:
           type: string
+        recipeVariant:
+          $ref: "#/components/schemas/RecipeVariant"
+          nullable: true
+          description: Which version of a multi-version recipe this batch was brewed as.
         status:
           $ref: "#/components/schemas/BrewStatus"
         brewDate:
@@ -2196,6 +2457,10 @@ components:
           nullable: true
         recipeName:
           type: string
+        recipeVariant:
+          $ref: "#/components/schemas/RecipeVariant"
+          nullable: true
+          description: Required when the recipe has several versions; ignored otherwise.
         status:
           $ref: "#/components/schemas/BrewStatus"
         brewDate:
@@ -2259,6 +2524,10 @@ components:
           nullable: true
         recipeName:
           type: string
+        recipeVariant:
+          $ref: "#/components/schemas/RecipeVariant"
+          nullable: true
+          description: Changing this does not re-deduct inventory.
         status:
           $ref: "#/components/schemas/BrewStatus"
         brewDate:

@@ -14,7 +14,7 @@ import { boilPhase } from "../lib/boilTimer";
 import { parseIdParam } from "../lib/http";
 import { SESSION_UPLOADS_DIR } from "../lib/paths";
 import { scheduleBoilAlerts, clearBoilAlerts } from "../services/boilScheduler";
-import { createBrewSession } from "../services/brewSessionCreate";
+import { createBrewSession, recipeVariantsOf } from "../services/brewSessionCreate";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -73,6 +73,11 @@ router.post("/brew-sessions", async (req, res) => {
   if (outcome.kind === "shortage") {
     return res.status(409).json({ error: "Insufficient inventory", shortages: outcome.shortages });
   }
+  if (outcome.kind === "invalid_variant") {
+    return res.status(400).json({
+      error: `This recipe has several versions — choose one of: ${outcome.variants.join(", ")}`,
+    });
+  }
   return res.status(201).json(outcome.session);
 });
 
@@ -119,6 +124,22 @@ router.put("/brew-sessions/:id", async (req, res) => {
   // plannedDate is nullable — explicit null clears it, undefined leaves untouched.
   if (plannedDateRawUpd !== undefined) updatePayload.plannedDate = plannedDateRawUpd;
 
+  // The version only means something against the recipe it belongs to, so
+  // check it whenever either of the two changes.
+  if (body.data.recipeVariant !== undefined || body.data.recipeId !== undefined) {
+    const recipeId = body.data.recipeId !== undefined ? body.data.recipeId : existing[0].recipeId;
+    const variants = await recipeVariantsOf(recipeId);
+    if (!variants) {
+      updatePayload.recipeVariant = null;
+    } else if (body.data.recipeVariant !== undefined) {
+      if (!body.data.recipeVariant || !variants.includes(body.data.recipeVariant)) {
+        return res.status(400).json({
+          error: `This recipe has several versions — choose one of: ${variants.join(", ")}`,
+        });
+      }
+    }
+  }
+
   // Auto-calculate ABV when session is packaged or when OG/FG change on a packaged session
   const resultingStatus = updatePayload.status ?? existing[0].status;
   const resultingOg = updatePayload.originalGravityActual ?? existing[0].originalGravityActual;
@@ -136,6 +157,12 @@ router.put("/brew-sessions/:id", async (req, res) => {
 
   const [session] = await db.update(brewSessionsTable).set(updatePayload).where(eq(brewSessionsTable.id, id)).returning();
   if (!session) return res.status(404).json({ error: "Brew session not found" });
+
+  // A running boil's alerts were built from the old version's additions.
+  if (session.recipeId !== existing[0].recipeId || session.recipeVariant !== existing[0].recipeVariant) {
+    await scheduleBoilAlerts(id).catch((err) =>
+      req.log.error({ err, brewSessionId: id }, "Failed to schedule boil alerts"));
+  }
 
   if (body.data.status && body.data.status !== existing[0].status) {
     await db.insert(brewSessionStatusLogTable).values({

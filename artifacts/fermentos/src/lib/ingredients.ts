@@ -1,5 +1,5 @@
 export const INGREDIENT_TYPES = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"];
-export const INGREDIENT_USES = ["mash", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"];
+export const INGREDIENT_USES = ["mash", "steep", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"];
 export const STEP_PHASES = ["mash", "boil", "fermentation", "conditioning", "packaging", "other"];
 
 // Uses whose timing the boil timer schedules alerts from.

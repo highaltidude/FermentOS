@@ -176,6 +176,7 @@ export type IngredientUse = (typeof IngredientUse)[keyof typeof IngredientUse];
 
 export const IngredientUse = {
   mash: "mash",
+  steep: "steep",
   boil: "boil",
   dry_hop: "dry_hop",
   whirlpool: "whirlpool",
@@ -185,10 +186,26 @@ export const IngredientUse = {
   other: "other",
 } as const;
 
+/**
+ * A version a kit recipe can be brewed as.
+ */
+export type RecipeVariant = (typeof RecipeVariant)[keyof typeof RecipeVariant];
+
+export const RecipeVariant = {
+  lme: "lme",
+  dme: "dme",
+  all_grain: "all_grain",
+} as const;
+
 export interface Recipe {
   id: number;
   name: string;
   style: string;
+  /**
+   * The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
   batchSizeGallons: number;
   /** @nullable */
   originalGravity?: number | null;
@@ -272,6 +289,11 @@ export interface RecipeIngredient {
   timingMinutes?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+   * Which of the recipe's versions this ingredient belongs to. Null means every version.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
 }
 
 export type StepPhase = (typeof StepPhase)[keyof typeof StepPhase];
@@ -474,6 +496,11 @@ export interface CreateRecipeIngredientBody {
   timingMinutes?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+   * Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
 }
 
 export interface UpdateRecipeIngredientBody {
@@ -486,6 +513,139 @@ export interface UpdateRecipeIngredientBody {
   timingMinutes?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+   * Which of the recipe's versions this ingredient belongs to. Null means every version.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
+}
+
+export interface ImportRecipeBody {
+  recipe: CreateRecipeBody;
+  /**
+   * The versions the recipe can be brewed as. Omit or null for a single-version recipe.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
+  ingredients: CreateRecipeIngredientBody[];
+  steps?: CreateRecipeStepBody[];
+}
+
+export type KitSheetWarningCode =
+  (typeof KitSheetWarningCode)[keyof typeof KitSheetWarningCode];
+
+export const KitSheetWarningCode = {
+  missing_amount: "missing_amount",
+  unparsed_line: "unparsed_line",
+  use_from_tips: "use_from_tips",
+  assumed_batch_size: "assumed_batch_size",
+} as const;
+
+export interface KitSheetWarning {
+  code: KitSheetWarningCode;
+  message: string;
+  /**
+   * Index into the draft's ingredients, when the warning is about one.
+   * @nullable
+   */
+  ingredientIndex?: number | null;
+  /** @nullable */
+  sourceText?: string | null;
+}
+
+export interface KitSheetYeast {
+  lab: string;
+  name: string;
+}
+
+/**
+ * An ingredient as read from the sheet. Unlike a saved ingredient, amount, unit and use may be null when the sheet does not state them.
+ */
+export interface KitSheetDraftIngredient {
+  name: string;
+  type: IngredientType;
+  /** @nullable */
+  amount: number | null;
+  /** @nullable */
+  unit: string | null;
+  use: IngredientUse | null;
+  /** @nullable */
+  timingMinutes: number | null;
+  /** @nullable */
+  notes: string | null;
+  /** @nullable */
+  variants: RecipeVariant[] | null;
+  /** The line on the sheet this row was read from. */
+  sourceText: string;
+}
+
+export type KitSheetDraftSource =
+  (typeof KitSheetDraftSource)[keyof typeof KitSheetDraftSource];
+
+export const KitSheetDraftSource = {
+  morebeer: "morebeer",
+} as const;
+
+export type KitSheetDraftStats = {
+  /** @nullable */
+  originalGravityMin: number | null;
+  /** @nullable */
+  originalGravityMax: number | null;
+  /** @nullable */
+  ibu: number | null;
+  /** @nullable */
+  colorSrm: number | null;
+  /** @nullable */
+  abv: number | null;
+};
+
+/**
+ * Figures picked out of the free-text recipe tips. Fahrenheit, as printed.
+ */
+export type KitSheetDraftHints = {
+  /** @nullable */
+  boilMinutes: number | null;
+  /** @nullable */
+  mashTempF: number | null;
+  /** @nullable */
+  fermentTempMinF: number | null;
+  /** @nullable */
+  fermentTempMaxF: number | null;
+};
+
+export interface KitSheetDraft {
+  source: KitSheetDraftSource;
+  name: string;
+  /**
+   * Null when the sheet describes a single version.
+   * @nullable
+   */
+  variants: RecipeVariant[] | null;
+  batchSizeGallons: number;
+  /** True when the sheet prints no batch size and the kit default was used. */
+  batchSizeAssumed: boolean;
+  stats: KitSheetDraftStats;
+  /** Figures picked out of the free-text recipe tips. Fahrenheit, as printed. */
+  hints: KitSheetDraftHints;
+  suggestedYeasts: KitSheetYeast[];
+  ingredients: KitSheetDraftIngredient[];
+  /** @nullable */
+  tips: string | null;
+  warnings: KitSheetWarning[];
+}
+
+export type KitSheetParseErrorCode =
+  (typeof KitSheetParseErrorCode)[keyof typeof KitSheetParseErrorCode];
+
+export const KitSheetParseErrorCode = {
+  no_text: "no_text",
+  unrecognized_sheet: "unrecognized_sheet",
+  unreadable_pdf: "unreadable_pdf",
+} as const;
+
+export interface KitSheetParseError {
+  error: string;
+  code: KitSheetParseErrorCode;
 }
 
 export interface BrewSession {
@@ -493,6 +653,8 @@ export interface BrewSession {
   /** @nullable */
   recipeId?: number | null;
   recipeName: string;
+  /** Which version of a multi-version recipe this batch was brewed as. */
+  recipeVariant?: RecipeVariant | null;
   status: BrewStatus;
   brewDate: string;
   /**
@@ -653,6 +815,8 @@ export interface CreateBrewSessionBody {
   /** @nullable */
   recipeId?: number | null;
   recipeName: string;
+  /** Required when the recipe has several versions; ignored otherwise. */
+  recipeVariant?: RecipeVariant | null;
   status: BrewStatus;
   brewDate: string;
   /** @nullable */
@@ -705,6 +869,8 @@ export interface UpdateBrewSessionBody {
   /** @nullable */
   recipeId?: number | null;
   recipeName?: string;
+  /** Changing this does not re-deduct inventory. */
+  recipeVariant?: RecipeVariant | null;
   status?: BrewStatus;
   brewDate?: string;
   /** @nullable */

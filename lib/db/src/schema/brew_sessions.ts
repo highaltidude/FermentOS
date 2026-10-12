@@ -1,5 +1,5 @@
 import { pgTable, serial, text, real, integer, boolean, timestamp, date } from "drizzle-orm/pg-core";
-import { recipesTable } from "./recipes";
+import { recipesTable, recipeVariantEnum } from "./recipes";
 
 // Lifecycle stages: brew_day → fermenting → conditioning → packaged.
 // On startup the api-server runs migrateLegacyStatuses() which converts any
@@ -38,6 +38,9 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   id: serial("id").primaryKey(),
   recipeId: integer("recipe_id").references(() => recipesTable.id, { onDelete: "set null" }),
   recipeName: text("recipe_name").notNull(),
+  // Which version of a multi-version recipe this batch was brewed as. A
+  // record, not a constraint: null for single-version recipes.
+  recipeVariant: text("recipe_variant", { enum: recipeVariantEnum }),
   status: text("status", { enum: brewStatusEnum }).notNull().default("brew_day"),
   brewDate: date("brew_date").notNull(),
   plannedDate: date("planned_date"),

@@ -10,11 +10,7 @@ import { FilterChip } from "@/components/ui/filter-chip";
 import { useToast } from "@/hooks/use-toast";
 import { INGREDIENT_TYPES, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
 import { parseLocalDate } from "@/lib/format";
-const MALT_TYPES = [
-  { value: "lme", label: "LME" },
-  { value: "dme", label: "DME" },
-  { value: "all_grain", label: "All-Grain" },
-];
+import { VARIANT_OPTIONS as MALT_TYPES } from "@/lib/recipeVariants";
 const UNITS_BY_SYSTEM: Record<UnitSystem, string[]> = {
   imperial: ["lbs", "oz", "gal", "qt", "pt", "fl oz", "tsp", "tbsp", "pkg", "each"],
   metric:   ["kg", "g", "L", "mL", "tsp", "tbsp", "pkg", "each"],

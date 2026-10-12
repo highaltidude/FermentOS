@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router, type RequestHandler, type Response } from "express";
 import { eq, ilike, or, and, avg, count, sql, asc, inArray } from "drizzle-orm";
 import { db, recipesTable, recipeIngredientsTable, recipeStepsTable, brewSessionsTable } from "@workspace/db";
 import {
@@ -10,8 +10,12 @@ import {
   AddRecipeStepBody,
   UpdateRecipeStepBody,
   ReorderRecipeStepsBody,
+  ImportRecipeBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
+import { parseMorebeerKitSheet } from "../lib/morebeerKitSheet";
+import { normalizeIngredientVariants, normalizeRecipeVariants } from "../lib/recipeVariants";
+import { extractPdfTextItems } from "../services/pdfText";
 
 const router = Router();
 
@@ -24,7 +28,30 @@ function recipeIngredients(recipeId: number) {
   return db
     .select()
     .from(recipeIngredientsTable)
-    .where(eq(recipeIngredientsTable.recipeId, recipeId));
+    .where(eq(recipeIngredientsTable.recipeId, recipeId))
+    // Insertion order, so a list stays in the order it was written or imported.
+    .orderBy(asc(recipeIngredientsTable.id));
+}
+
+/**
+ * An ingredient's version list, checked against its recipe. Sends the error
+ * response itself and returns undefined when it does not fit.
+ */
+async function ingredientVariantsFor(res: Response, recipeId: number, variants: readonly string[]) {
+  const [recipe] = await db
+    .select({ variants: recipesTable.variants })
+    .from(recipesTable)
+    .where(eq(recipesTable.id, recipeId));
+  if (!recipe) {
+    res.status(404).json({ error: "Recipe not found" });
+    return undefined;
+  }
+  const checked = normalizeIngredientVariants(recipe.variants, variants);
+  if (!checked.ok) {
+    res.status(400).json({ error: "That version is not one this recipe has" });
+    return undefined;
+  }
+  return checked;
 }
 
 function orderedRecipeSteps(recipeId: number) {
@@ -93,6 +120,96 @@ router.post("/recipes", async (req, res) => {
     .values({ ...body.data })
     .returning();
   return res.status(201).json(recipe);
+});
+
+// ── Import ────────────────────────────────────────────────────────────────
+
+router.post("/recipes/import", async (req, res) => {
+  const body = ImportRecipeBody.safeParse(req.body);
+  if (!body.success) {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+
+  const variants = normalizeRecipeVariants(body.data.variants);
+  const ingredients: (typeof body.data.ingredients)[number][] = [];
+  for (const ingredient of body.data.ingredients) {
+    const checked = normalizeIngredientVariants(variants, ingredient.variants);
+    if (!checked.ok) {
+      return res.status(400).json({ error: `"${ingredient.name}" is listed for a version this recipe does not have` });
+    }
+    ingredients.push({ ...ingredient, variants: checked.variants });
+  }
+
+  // One transaction: a recipe either arrives whole or not at all.
+  const recipe = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(recipesTable)
+      .values({ ...body.data.recipe, variants })
+      .returning();
+    if (ingredients.length > 0) {
+      await tx.insert(recipeIngredientsTable).values(ingredients.map((i) => ({ ...i, recipeId: created!.id })));
+    }
+    const steps = body.data.steps ?? [];
+    if (steps.length > 0) {
+      await tx.insert(recipeStepsTable).values(
+        steps.map((step, index) => ({
+          recipeId: created!.id,
+          position: step.position ?? index + 1,
+          body: step.body,
+          phase: step.phase ?? null,
+          durationMinutes: step.durationMinutes ?? null,
+        })),
+      );
+    }
+    return created!;
+  });
+
+  return res.status(201).json({ ...recipe, avgScore: null, ratedBatchCount: 0, batchCount: 0 });
+});
+
+const KIT_SHEET_ERRORS = {
+  no_text: "This PDF has no readable text — it looks like a scan. Download the kit sheet from MoreBeer rather than scanning the printed one.",
+  unrecognized_sheet: "This does not look like a MoreBeer kit sheet: no ingredient lists were found in it.",
+  unreadable_pdf: "This PDF could not be opened. It may be damaged or password-protected.",
+} as const;
+
+const KIT_SHEET_MAX_MB = 10;
+const pdfBody = express.raw({ type: "application/pdf", limit: `${KIT_SHEET_MAX_MB}mb` });
+
+// The error handler hides every message in production, so an oversized upload
+// would otherwise come back as "Internal server error".
+const readPdfBody: RequestHandler = (req, res, next) => {
+  pdfBody(req, res, (err?: unknown) => {
+    if (!err) return next();
+    if ((err as { type?: string }).type === "entity.too.large") {
+      res.status(400).json({ error: `That file is too large. Kit sheets are a few megabytes; the limit is ${KIT_SHEET_MAX_MB} MB.` });
+      return;
+    }
+    next(err);
+  });
+};
+
+// Reads the sheet and returns a draft. Nothing is saved: the draft is reviewed
+// in the browser and comes back through POST /recipes/import.
+router.post("/recipes/import/morebeer/parse", readPdfBody, async (req, res) => {
+  const pdf: unknown = req.body;
+  if (!Buffer.isBuffer(pdf) || !pdf.subarray(0, 1024).includes("%PDF-")) {
+    return res.status(400).json({ error: "Upload a PDF file." });
+  }
+
+  let pages;
+  try {
+    pages = await extractPdfTextItems(pdf);
+  } catch (err) {
+    req.log.warn({ err }, "Kit sheet PDF could not be read");
+    return res.status(422).json({ error: KIT_SHEET_ERRORS.unreadable_pdf, code: "unreadable_pdf" });
+  }
+
+  const result = parseMorebeerKitSheet(pages);
+  if (!result.ok) {
+    return res.status(422).json({ error: KIT_SHEET_ERRORS[result.code], code: result.code });
+  }
+  return res.json(result.draft);
 });
 
 router.get("/recipes/styles", async (req, res) => {
@@ -193,9 +310,16 @@ router.post("/recipes/:id/ingredients", async (req, res) => {
   const body = AddRecipeIngredientBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
 
+  let variants = null;
+  if (body.data.variants?.length) {
+    const checked = await ingredientVariantsFor(res, id, body.data.variants);
+    if (!checked) return;
+    variants = checked.variants;
+  }
+
   const [ingredient] = await db
     .insert(recipeIngredientsTable)
-    .values({ ...body.data, recipeId: id })
+    .values({ ...body.data, variants, recipeId: id })
     .returning();
   return res.status(201).json(ingredient);
 });
@@ -207,9 +331,24 @@ router.put("/ingredients/:id", async (req, res) => {
   const body = UpdateRecipeIngredientBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
 
+  const update = { ...body.data };
+  if (update.variants?.length) {
+    const [existing] = await db
+      .select({ recipeId: recipeIngredientsTable.recipeId })
+      .from(recipeIngredientsTable)
+      .where(eq(recipeIngredientsTable.id, id));
+    if (!existing) return res.status(404).json({ error: "Ingredient not found" });
+    const checked = await ingredientVariantsFor(res, existing.recipeId, update.variants);
+    if (!checked) return;
+    update.variants = checked.variants;
+  } else if (update.variants) {
+    // An empty list means "every version", which is stored as null.
+    update.variants = null;
+  }
+
   const [ingredient] = await db
     .update(recipeIngredientsTable)
-    .set(body.data)
+    .set(update)
     .where(eq(recipeIngredientsTable.id, id))
     .returning();
   if (!ingredient) return res.status(404).json({ error: "Ingredient not found" });

@@ -287,6 +287,12 @@ export interface RecipeIngredient {
   use?: IngredientUse | null;
   /** @nullable */
   timingMinutes?: number | null;
+  /**
+   * Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.
+   * @minimum 0
+   * @nullable
+   */
+  dryHopDay?: number | null;
   /** @nullable */
   notes?: string | null;
   /**
@@ -494,6 +500,12 @@ export interface CreateRecipeIngredientBody {
   use?: IngredientUse | null;
   /** @nullable */
   timingMinutes?: number | null;
+  /**
+   * Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.
+   * @minimum 0
+   * @nullable
+   */
+  dryHopDay?: number | null;
   /** @nullable */
   notes?: string | null;
   /**
@@ -511,6 +523,12 @@ export interface UpdateRecipeIngredientBody {
   use?: IngredientUse | null;
   /** @nullable */
   timingMinutes?: number | null;
+  /**
+   * Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.
+   * @minimum 0
+   * @nullable
+   */
+  dryHopDay?: number | null;
   /** @nullable */
   notes?: string | null;
   /**
@@ -770,6 +788,11 @@ export interface BrewSession {
    * @nullable
    */
   boilDoneAdditionIds?: number[] | null;
+  /**
+   * Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.
+   * @nullable
+   */
+  dryHopAddedIds?: number[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1114,6 +1137,40 @@ export interface NotificationSettings {
   tempRepeatHours?: number | null;
   /** Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true. */
   boilAlerts?: boolean;
+  /** Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true. */
+  dryHopAlerts?: boolean;
+  /**
+   * Hours between dry hop reminders while an addition is still due. Defaults to 6.
+   * @minimum 1
+   * @maximum 168
+   */
+  dryHopRepeatHours?: number;
+}
+
+/**
+ * scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.
+ */
+export type DryHopStatus = (typeof DryHopStatus)[keyof typeof DryHopStatus];
+
+export const DryHopStatus = {
+  scheduled: "scheduled",
+  due: "due",
+  added: "added",
+} as const;
+
+export interface DryHopScheduleItem {
+  ingredientId: number;
+  name: string;
+  amount: number;
+  unit: string;
+  /** Days after the batch entered conditioning. */
+  day: number;
+  /**
+   * Null until the batch has entered conditioning.
+   * @nullable
+   */
+  dueAt: string | null;
+  status: DryHopStatus;
 }
 
 export interface NotificationTestResult {

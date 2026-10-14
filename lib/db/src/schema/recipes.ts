@@ -49,6 +49,9 @@ export const recipeIngredientsTable = pgTable("recipe_ingredients", {
   unit: text("unit").notNull(),
   use: text("use", { enum: ingredientUseEnum }),
   timingMinutes: integer("timing_minutes"),
+  // Dry hops only: days after the batch enters conditioning (0 = that day).
+  // Drives the repeating "time to dry hop" alert.
+  dryHopDay: integer("dry_hop_day"),
   notes: text("notes"),
   // Which of the recipe's versions this ingredient belongs to. Null = all.
   variants: text("variants", { enum: recipeVariantEnum }).array(),

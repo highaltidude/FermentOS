@@ -39,6 +39,7 @@ import type {
   DashboardSummary,
   DefaultReadingsShownBody,
   DefaultReadingsShownResponse,
+  DryHopScheduleItem,
   Equipment,
   ErrorResponse,
   FermentTempUnitBody,
@@ -3026,6 +3027,284 @@ export const useControlBoil = <
   TContext
 > => {
   return useMutation(getControlBoilMutationOptions(options));
+};
+
+export const getGetBrewSessionDryHopsUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/dry-hops`;
+};
+
+/**
+ * Days are counted from when the batch last entered conditioning. Only dry hops with a day set are listed.
+ * @summary The recipe's dry hop schedule for this brew, with due dates and status
+ */
+export const getBrewSessionDryHops = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<DryHopScheduleItem[]> => {
+  return customFetch<DryHopScheduleItem[]>(getGetBrewSessionDryHopsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBrewSessionDryHopsQueryKey = (id: number) => {
+  return [`/api/brew-sessions/${id}/dry-hops`] as const;
+};
+
+export const getGetBrewSessionDryHopsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBrewSessionDryHops>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewSessionDryHops>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBrewSessionDryHopsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBrewSessionDryHops>>
+  > = ({ signal }) => getBrewSessionDryHops(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBrewSessionDryHops>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBrewSessionDryHopsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBrewSessionDryHops>>
+>;
+export type GetBrewSessionDryHopsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary The recipe's dry hop schedule for this brew, with due dates and status
+ */
+
+export function useGetBrewSessionDryHops<
+  TData = Awaited<ReturnType<typeof getBrewSessionDryHops>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewSessionDryHops>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBrewSessionDryHopsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getMarkDryHopAddedUrl = (id: number, ingredientId: number) => {
+  return `/api/brew-sessions/${id}/dry-hops/${ingredientId}/added`;
+};
+
+/**
+ * @summary Mark a dry hop as added, which clears its reminder
+ */
+export const markDryHopAdded = async (
+  id: number,
+  ingredientId: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<DryHopScheduleItem[]> => {
+  return customFetch<DryHopScheduleItem[]>(
+    getMarkDryHopAddedUrl(id, ingredientId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getMarkDryHopAddedMutationKey = () => ["markDryHopAdded"] as const;
+
+export const getMarkDryHopAddedMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markDryHopAdded>>,
+    TError,
+    MarkDryHopAddedMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markDryHopAdded>>,
+  TError,
+  MarkDryHopAddedMutationVariables,
+  TContext
+> => {
+  const mutationKey = getMarkDryHopAddedMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markDryHopAdded>>,
+    MarkDryHopAddedMutationVariables
+  > = (props) => {
+    const { id, ingredientId } = props ?? {};
+
+    return markDryHopAdded(id, ingredientId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkDryHopAddedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markDryHopAdded>>
+>;
+
+export type MarkDryHopAddedMutationError = ErrorType<ErrorResponse>;
+export type MarkDryHopAddedMutationVariables = {
+  id: number;
+  ingredientId: number;
+};
+
+/**
+ * @summary Mark a dry hop as added, which clears its reminder
+ */
+export const useMarkDryHopAdded = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markDryHopAdded>>,
+    TError,
+    MarkDryHopAddedMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markDryHopAdded>>,
+  TError,
+  MarkDryHopAddedMutationVariables,
+  TContext
+> => {
+  return useMutation(getMarkDryHopAddedMutationOptions(options));
+};
+
+export const getUnmarkDryHopAddedUrl = (id: number, ingredientId: number) => {
+  return `/api/brew-sessions/${id}/dry-hops/${ingredientId}/added`;
+};
+
+/**
+ * @summary Undo marking a dry hop as added
+ */
+export const unmarkDryHopAdded = async (
+  id: number,
+  ingredientId: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<DryHopScheduleItem[]> => {
+  return customFetch<DryHopScheduleItem[]>(
+    getUnmarkDryHopAddedUrl(id, ingredientId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getUnmarkDryHopAddedMutationKey = () =>
+  ["unmarkDryHopAdded"] as const;
+
+export const getUnmarkDryHopAddedMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unmarkDryHopAdded>>,
+    TError,
+    UnmarkDryHopAddedMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unmarkDryHopAdded>>,
+  TError,
+  UnmarkDryHopAddedMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUnmarkDryHopAddedMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unmarkDryHopAdded>>,
+    UnmarkDryHopAddedMutationVariables
+  > = (props) => {
+    const { id, ingredientId } = props ?? {};
+
+    return unmarkDryHopAdded(id, ingredientId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnmarkDryHopAddedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unmarkDryHopAdded>>
+>;
+
+export type UnmarkDryHopAddedMutationError = ErrorType<ErrorResponse>;
+export type UnmarkDryHopAddedMutationVariables = {
+  id: number;
+  ingredientId: number;
+};
+
+/**
+ * @summary Undo marking a dry hop as added
+ */
+export const useUnmarkDryHopAdded = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unmarkDryHopAdded>>,
+    TError,
+    UnmarkDryHopAddedMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unmarkDryHopAdded>>,
+  TError,
+  UnmarkDryHopAddedMutationVariables,
+  TContext
+> => {
+  return useMutation(getUnmarkDryHopAddedMutationOptions(options));
 };
 
 export const getListFermentationReadingsUrl = (id: number) => {

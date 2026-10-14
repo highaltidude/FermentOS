@@ -8,13 +8,15 @@ import {
   AddFermentationReadingBody,
   UpsertBrewRatingBody,
   ControlBoilBody,
+  MarkDryHopAddedParams,
 } from "@workspace/api-zod";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import { boilPhase } from "../lib/boilTimer";
 import { parseIdParam } from "../lib/http";
 import { SESSION_UPLOADS_DIR } from "../lib/paths";
 import { scheduleBoilAlerts, clearBoilAlerts } from "../services/boilScheduler";
 import { createBrewSession, recipeVariantsOf } from "../services/brewSessionCreate";
+import { loadDryHopSchedule, scheduleForSession } from "../services/dryHops";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -376,6 +378,40 @@ router.post("/brew-sessions/:id/boil", async (req, res) => {
 
   return res.json(session);
 });
+
+// Dry hop schedule. Marking an addition added is what clears its repeating
+// reminder: the alert monitor resolves the row on its next tick. Kept out of
+// UpdateBrewSessionBody for the same stomping reason as the boil timer.
+router.get("/brew-sessions/:id/dry-hops", async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
+  const schedule = await loadDryHopSchedule(id);
+  if (!schedule) return res.status(404).json({ error: "Brew session not found" });
+  return res.json(schedule);
+});
+
+async function setDryHopAdded(req: Request, res: Response, added: boolean) {
+  const params = MarkDryHopAddedParams.safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+  const { id, ingredientId } = params.data;
+
+  const [existing] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, id));
+  if (!existing) return res.status(404).json({ error: "Brew session not found" });
+
+  const ids = new Set(existing.dryHopAddedIds ?? []);
+  if (added) ids.add(ingredientId);
+  else ids.delete(ingredientId);
+
+  const [session] = await db
+    .update(brewSessionsTable)
+    .set({ dryHopAddedIds: [...ids], updatedAt: new Date() })
+    .where(eq(brewSessionsTable.id, id))
+    .returning();
+  return res.json(await scheduleForSession(session!));
+}
+
+router.post("/brew-sessions/:id/dry-hops/:ingredientId/added", (req, res) => setDryHopAdded(req, res, true));
+router.delete("/brew-sessions/:id/dry-hops/:ingredientId/added", (req, res) => setDryHopAdded(req, res, false));
 
 // The tasting scorecard lives on its own sub-resource rather than in
 // UpdateBrewSessionBody: the detail page re-sends the whole session on every

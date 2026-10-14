@@ -17,6 +17,7 @@ import {
   useGetDefaultReadingsShown,
   useGetTempAlertReadings,
   getGetTempAlertReadingsQueryKey,
+  getGetBrewSessionDryHopsQueryKey,
   type BrewStatus,
   type PackagingMethod,
 } from "@workspace/api-client-react";
@@ -41,6 +42,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RateBatchWizard } from "@/components/RateBatchWizard";
 import { BrewStatusBadge } from "@/components/BrewStatusBadge";
 import { TempRangeFields } from "@/components/TempRangeFields";
+import { DryHopCard } from "@/components/DryHopCard";
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: BrewStatus; onStatusChange: (s: BrewStatus) => void; isPending?: boolean }) {
   const idx = BREW_STATUSES.indexOf(status);
@@ -170,6 +172,8 @@ export default function BrewSessionDetail() {
     mutation: {
       onSuccess: (data) => {
         qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
+        // A status change moves the dry hop schedule (conditioning start).
+        qc.invalidateQueries({ queryKey: getGetBrewSessionDryHopsQueryKey(id) });
         setEditing(false);
         toast({ title: "Session updated" });
         if ((data as any).devicesUnassigned > 0) {
@@ -659,6 +663,8 @@ export default function BrewSessionDetail() {
           </Button>
         </div>
       )}
+
+      <DryHopCard brewSessionId={id} />
 
       {/* Tasting & Rating */}
       <div className="bg-card border border-card-border rounded-lg">

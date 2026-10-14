@@ -204,6 +204,7 @@ router.put("/settings/notifications", async (req, res) => {
   // the service receives exactly the union types it declares.
   const types = (d.types ?? []).filter((t): t is AlertType =>
     (ALERT_TYPES as readonly string[]).includes(t));
+  const current = await getNotifyConfig();
 
   await setNotifyConfig({
     channel: d.channel as NotifyChannel,
@@ -214,8 +215,10 @@ router.put("/settings/notifications", async (req, res) => {
     repeatHours: d.repeatHours,
     // undefined (field omitted) and null both mean "inherit repeatHours".
     tempRepeatHours: d.tempRepeatHours ?? null,
-    // Optional in the body; an older client that omits it leaves it as is.
-    boilAlerts: d.boilAlerts ?? (await getNotifyConfig()).boilAlerts,
+    // Optional in the body; an older client that omits them leaves them as is.
+    boilAlerts: d.boilAlerts ?? current.boilAlerts,
+    dryHopAlerts: d.dryHopAlerts ?? current.dryHopAlerts,
+    dryHopRepeatHours: d.dryHopRepeatHours ?? current.dryHopRepeatHours,
   });
   return res.json(await getNotifyConfig());
 });

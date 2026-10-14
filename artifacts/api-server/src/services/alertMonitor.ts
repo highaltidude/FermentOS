@@ -3,7 +3,10 @@ import { db, brewSessionsTable, brewAlertStateTable, sensorDeviceBrewAssignments
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { computeBrewAlerts, tempExcursion, type BrewTelemetry } from "./brewAlerts.js";
-import { getNotifyConfig, sendNotification, type AlertType } from "./notifications.js";
+import { getNotifyConfig, type AlertType } from "./notifications.js";
+import { recordFiringAlert, resolveAlert } from "./alertState.js";
+import { runDryHopCheck } from "./dryHops.js";
+import { isDryHopAlertType } from "../lib/dryHopSchedule.js";
 import { resolveRepeatHours } from "../lib/notifyIntervals.js";
 import { alertAppliesToStatus, notifiesOncePerBrew } from "../lib/alertPolicy.js";
 import { getTempAlertReadings } from "./tempAlertReadings.js";
@@ -102,80 +105,33 @@ async function runAlertCheck(): Promise<void> {
       // ── Conditions currently firing ────────────────────────────────────
       for (const alert of telemetry?.alerts ?? []) {
         if (!firing.has(alert.type as AlertType)) continue;
-        const prior = byType.get(alert.type);
-
-        // A previously resolved row starts over rather than resuming its old
-        // seen count, so a recurrence is treated as a fresh incident.
-        const resuming = prior && prior.resolvedAt != null;
-        const seenCount = !prior || resuming ? 1 : prior.seenCount + 1;
-        // A once-per-brew type keeps its send time through a recurrence, so the
-        // row remembers this brew has already been told.
-        const oncePerBrew = notifiesOncePerBrew(alert.type);
-        const lastNotifiedAt = resuming && !oncePerBrew ? null : prior?.lastNotifiedAt ?? null;
-
-        // Per alert type: temperature can carry its own interval, the rest use
-        // the global one.
-        const repeatMs =
-          resolveRepeatHours(alert.type, config.repeatHours, config.tempRepeatHours) * 60 * 60 * 1000;
-        const dueForRepeat = !oncePerBrew && lastNotifiedAt != null && now.getTime() - new Date(lastNotifiedAt).getTime() >= repeatMs;
-        // Temperature has to persist across N readings; the rest are already
-        // slow enough to stand on their own (see consecutiveTempExcursions).
-        const debounced = alert.type !== "temp_out_of_range" || tempStreak >= requiredTempReadings;
-        const shouldNotify = debounced && (lastNotifiedAt == null || dueForRepeat);
-
-        await db
-          .insert(brewAlertStateTable)
-          .values({
-            brewSessionId: session.id,
-            alertType: alert.type,
-            firstSeenAt: !prior || resuming ? now : prior.firstSeenAt,
-            seenCount,
-            lastNotifiedAt: shouldNotify ? now : lastNotifiedAt,
-            resolvedAt: null,
-          })
-          .onConflictDoUpdate({
-            target: [brewAlertStateTable.brewSessionId, brewAlertStateTable.alertType],
-            set: {
-              seenCount,
-              firstSeenAt: !prior || resuming ? now : prior.firstSeenAt,
-              lastNotifiedAt: shouldNotify ? now : lastNotifiedAt,
-              resolvedAt: null,
-            },
-          });
-
-        if (!shouldNotify) continue;
-
-        const result = await sendNotification({
-          title: titleFor(session.recipeName, alert.type),
-          body: alert.message,
-          priority: alert.type === "battery_low" ? "default" : "high",
-          meta: { brewSessionId: session.id, recipeName: session.recipeName, alertType: alert.type },
-        }, config);
-
-        if (result.ok) {
-          logger.info({ brewSessionId: session.id, alertType: alert.type }, "Alert notification sent");
-        } else {
-          // Roll the timestamp back so a failed send retries next tick instead
-          // of being treated as delivered.
-          await db
-            .update(brewAlertStateTable)
-            .set({ lastNotifiedAt })
-            .where(and(
-              eq(brewAlertStateTable.brewSessionId, session.id),
-              eq(brewAlertStateTable.alertType, alert.type),
-            ));
-          logger.warn({ brewSessionId: session.id, alertType: alert.type, error: result.error }, "Alert notification failed");
-        }
+        await recordFiringAlert({
+          brewSessionId: session.id,
+          alertType: alert.type,
+          prior: byType.get(alert.type),
+          now,
+          // Per alert type: temperature can carry its own interval, the rest
+          // use the global one.
+          repeatMs: resolveRepeatHours(alert.type, config.repeatHours, config.tempRepeatHours) * 60 * 60 * 1000,
+          oncePerBrew: notifiesOncePerBrew(alert.type),
+          // Temperature has to persist across N readings; the rest are already
+          // slow enough to stand on their own (see consecutiveTempExcursions).
+          debounced: alert.type !== "temp_out_of_range" || tempStreak >= requiredTempReadings,
+          payload: {
+            title: titleFor(session.recipeName, alert.type),
+            body: alert.message,
+            priority: alert.type === "battery_low" ? "default" : "high",
+            meta: { brewSessionId: session.id, recipeName: session.recipeName, alertType: alert.type },
+          },
+          config,
+        });
       }
 
       // ── Conditions that have cleared ───────────────────────────────────
+      // Dry hop rows are not sensor conditions; runDryHopCheck resolves them.
       for (const row of existing) {
-        if (firing.has(row.alertType as AlertType) || row.resolvedAt != null) continue;
-        await db
-          .update(brewAlertStateTable)
-          .set({ resolvedAt: now, seenCount: 0 })
-          .where(eq(brewAlertStateTable.id, row.id));
-        logger.info({ brewSessionId: session.id, alertType: row.alertType }, "Alert condition resolved");
+        if (firing.has(row.alertType as AlertType) || isDryHopAlertType(row.alertType)) continue;
+        await resolveAlert(row, now);
       }
     } catch (e) {
       // One bad brew must not stop the others being checked.
@@ -187,6 +143,9 @@ async function runAlertCheck(): Promise<void> {
 export function startAlertMonitor(): void {
   cron.schedule("*/5 * * * *", () => {
     runAlertCheck().catch((e) => logger.error({ e }, "Alert monitor run failed"));
+    // Separate pass: dry hops need no probe and have their own on/off switch,
+    // so they must not sit behind the sensor checks' early returns.
+    runDryHopCheck().catch((e) => logger.error({ e }, "Dry hop check failed"));
   });
   logger.info("Alert monitor started");
 }

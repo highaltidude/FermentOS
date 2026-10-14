@@ -595,6 +595,79 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /brew-sessions/{id}/dry-hops:
+    get:
+      operationId: getBrewSessionDryHops
+      tags: [brew-sessions]
+      summary: The recipe's dry hop schedule for this brew, with due dates and status
+      description: >-
+        Days are counted from when the batch last entered conditioning. Only
+        dry hops with a day set are listed.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Dry hop schedule, sorted by day
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DryHopScheduleItem"
+        "404":
+          description: Brew session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /brew-sessions/{id}/dry-hops/{ingredientId}/added:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+      - name: ingredientId
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: markDryHopAdded
+      tags: [brew-sessions]
+      summary: Mark a dry hop as added, which clears its reminder
+      responses:
+        "200":
+          description: Updated dry hop schedule
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DryHopScheduleItem"
+        "404":
+          description: Brew session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: unmarkDryHopAdded
+      tags: [brew-sessions]
+      summary: Undo marking a dry hop as added
+      responses:
+        "200":
+          description: Updated dry hop schedule
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DryHopScheduleItem"
+        "404":
+          description: Brew session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /brew-sessions/{id}/readings:
     get:
       operationId: listFermentationReadings
@@ -2041,6 +2114,13 @@ components:
         timingMinutes:
           type: integer
           nullable: true
+        dryHopDay:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: >-
+            Dry hops only. Days after the batch enters conditioning to add it,
+            0 being the day conditioning starts. Drives the dry hop reminder.
         notes:
           type: string
           nullable: true
@@ -2069,6 +2149,13 @@ components:
         timingMinutes:
           type: integer
           nullable: true
+        dryHopDay:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: >-
+            Dry hops only. Days after the batch enters conditioning to add it,
+            0 being the day conditioning starts. Drives the dry hop reminder.
         notes:
           type: string
           nullable: true
@@ -2097,6 +2184,13 @@ components:
         timingMinutes:
           type: integer
           nullable: true
+        dryHopDay:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: >-
+            Dry hops only. Days after the batch enters conditioning to add it,
+            0 being the day conditioning starts. Drives the dry hop reminder.
         notes:
           type: string
           nullable: true
@@ -2407,6 +2501,12 @@ components:
           type: array
           nullable: true
           description: Recipe ingredient ids ticked off during the boil.
+          items:
+            type: integer
+        dryHopAddedIds:
+          type: array
+          nullable: true
+          description: Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.
           items:
             type: integer
         createdAt:
@@ -2829,7 +2929,48 @@ components:
             running. Kept out of types because it is a one-shot schedule, not a
             monitored condition, and so an existing saved types list does not
             leave it switched off on upgrade. Defaults to true.
+        dryHopAlerts:
+          type: boolean
+          description: >-
+            Remind when a dry hop addition comes due during conditioning, and
+            keep reminding every dryHopRepeatHours until it is marked added.
+            Kept out of types for the same reason as boilAlerts. Defaults to true.
+        dryHopRepeatHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+          description: Hours between dry hop reminders while an addition is still due. Defaults to 6.
       required: [channel, ntfyServer, ntfyTopic, webhookUrl, types, repeatHours]
+
+    DryHopStatus:
+      type: string
+      description: >-
+        scheduled = not yet due (or the batch has not reached conditioning),
+        due = reminding until marked added, added = done.
+      enum: [scheduled, due, added]
+
+    DryHopScheduleItem:
+      type: object
+      properties:
+        ingredientId:
+          type: integer
+        name:
+          type: string
+        amount:
+          type: number
+        unit:
+          type: string
+        day:
+          type: integer
+          description: Days after the batch entered conditioning.
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null until the batch has entered conditioning.
+        status:
+          $ref: "#/components/schemas/DryHopStatus"
+      required: [ingredientId, name, amount, unit, day, dueAt, status]
 
     NotificationTestResult:
       type: object

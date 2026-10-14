@@ -32,7 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
-import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlaceholder, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
+import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, DRY_HOP, hasTimingField, timingFields, timingValue, timingPlaceholder, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { ScoreBadge } from "@/components/ui/score-picker";
 import { StyleSelect } from "@/components/StyleSelect";
@@ -354,20 +354,21 @@ function StepList({ recipeId, steps }: { recipeId: number; steps: StepLike[] }) 
 /**
  * Adds an ingredient, or edits `ingredient` when one is passed. For a recipe
  * with several versions, `recipeVariants` lists them so the ingredient can be
- * limited to some.
+ * limited to some. `preset` fills in a new ingredient's type, unit and use.
  */
-function IngredientForm({ recipeId, ingredient, recipeVariants, onDone }: {
+function IngredientForm({ recipeId, ingredient, recipeVariants, preset, onDone }: {
   recipeId: number;
   ingredient?: RecipeIngredient;
   recipeVariants: readonly RecipeVariant[] | null;
+  preset?: { type: string; unit: string; use: string };
   onDone: () => void;
 }) {
   const [name, setName] = useState(ingredient?.name ?? "");
-  const [type, setType] = useState<string>(ingredient?.type ?? "malt");
+  const [type, setType] = useState<string>(ingredient?.type ?? preset?.type ?? "malt");
   const [amount, setAmount] = useState(ingredient ? String(ingredient.amount) : "");
-  const [unit, setUnit] = useState(ingredient?.unit ?? "lbs");
-  const [use, setUse] = useState<string>(ingredient?.use ?? "");
-  const [timingMinutes, setTimingMinutes] = useState(ingredient?.timingMinutes != null ? String(ingredient.timingMinutes) : "");
+  const [unit, setUnit] = useState(ingredient?.unit ?? preset?.unit ?? "lbs");
+  const [use, setUse] = useState<string>(ingredient?.use ?? preset?.use ?? "");
+  const [timingMinutes, setTimingMinutes] = useState(ingredient ? timingValue(ingredient) : "");
   const [notes, setNotes] = useState(ingredient?.notes ?? "");
   const [variants, setVariants] = useState<RecipeVariant[] | null>(ingredient?.variants ?? null);
   const qc = useQueryClient();
@@ -409,7 +410,7 @@ function IngredientForm({ recipeId, ingredient, recipeVariants, onDone }: {
         id: ingredient.id,
         data: {
           name, type: type as IngredientType, amount: Number(amount), unit, use: (use || null) as IngredientUse | null,
-          timingMinutes: TIMED_USES.includes(use) && timingMinutes !== "" ? Number(timingMinutes) : null,
+          ...timingFields(use, timingMinutes),
           notes: notes || null,
           variants,
         },
@@ -420,7 +421,7 @@ function IngredientForm({ recipeId, ingredient, recipeVariants, onDone }: {
       id: recipeId,
       data: {
         name, type: type as IngredientType, amount: Number(amount), unit, use: (use || undefined) as IngredientUse | undefined,
-        timingMinutes: TIMED_USES.includes(use) && timingMinutes !== "" ? Number(timingMinutes) : undefined,
+        ...timingFields(use, timingMinutes),
         notes: notes || undefined,
         variants,
       },
@@ -455,7 +456,7 @@ function IngredientForm({ recipeId, ingredient, recipeVariants, onDone }: {
           </SelectContent>
         </Select>
       </div>
-      {TIMED_USES.includes(use) && (
+      {hasTimingField(use) && (
         <Input
           type="number" min="0" step="1" inputMode="numeric" className="text-sm"
           placeholder={timingPlaceholder(use)}
@@ -494,6 +495,10 @@ function IngredientRow({ recipeId, ing, recipeVariants, onDelete }: {
         {ing.use && <span className="text-muted-foreground ml-1">• {ing.use.replace("_", " ")}</span>}
         {ing.use && TIMED_USES.includes(ing.use) ? (
           <IngredientTiming recipeId={recipeId} ingredientId={ing.id} use={ing.use} timingMinutes={ing.timingMinutes} />
+        ) : ing.use === DRY_HOP ? (
+          ing.dryHopDay != null
+            ? <span className="text-muted-foreground ml-1">@ day {ing.dryHopDay} of conditioning</span>
+            : <span className="text-amber-600 dark:text-amber-400 ml-1">• no day set, no reminder</span>
         ) : (
           ing.timingMinutes != null && <span className="text-muted-foreground ml-1">@ {ing.timingMinutes} min</span>
         )}
@@ -525,6 +530,7 @@ export default function RecipeDetail() {
 
   const [editing, setEditing] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
+  const [showAddDryHop, setShowAddDryHop] = useState(false);
   const [showAddStep, setShowAddStep] = useState(false);
   const [startingBrew, setStartingBrew] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
@@ -682,6 +688,10 @@ export default function RecipeDetail() {
     if (!grouped[ing.type]) grouped[ing.type] = [];
     grouped[ing.type].push(ing);
   });
+
+  const dryHops = ingredientsForVariant(recipe.ingredients ?? [], viewVariant)
+    .filter((ing) => ing.use === DRY_HOP)
+    .sort((a, b) => (a.dryHopDay ?? Infinity) - (b.dryHopDay ?? Infinity));
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
@@ -894,6 +904,38 @@ export default function RecipeDetail() {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      </div>
+
+      {/* Dry Hop Schedule — the day of conditioning each dry hop goes in */}
+      <div className="bg-card border border-card-border rounded-lg">
+        <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Dry Hop Schedule</h2>
+          <Button size="sm" variant="outline" onClick={() => setShowAddDryHop(!showAddDryHop)}>
+            <Plus className="w-3.5 h-3.5 mr-1" />Add dry hop
+          </Button>
+        </div>
+        <div className="p-4 space-y-2">
+          {showAddDryHop && (
+            <IngredientForm
+              recipeId={id}
+              recipeVariants={recipeVariants}
+              preset={{ type: "hop", unit: "oz", use: DRY_HOP }}
+              onDone={() => setShowAddDryHop(false)}
+            />
+          )}
+          {dryHops.length === 0 && !showAddDryHop ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No dry hops. Each one you add gets a day of conditioning, and a brew of this recipe
+              reminds you on that day until you mark it added.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {dryHops.map((ing) => (
+                <IngredientRow key={ing.id} recipeId={id} ing={ing} recipeVariants={recipeVariants} onDelete={() => deleteIngredientMutation.mutate({ id: ing.id })} />
+              ))}
+            </div>
           )}
         </div>
       </div>

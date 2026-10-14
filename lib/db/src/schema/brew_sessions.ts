@@ -81,6 +81,9 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   // recipe_ingredients ids ticked off during the boil. Not a foreign key: the
   // recipe can be edited after brew day and the checklist is only a record.
   boilDoneAdditionIds: integer("boil_done_addition_ids").array(),
+  // recipe_ingredients ids of dry hops marked as added. Not a foreign key, for
+  // the same reason as above. Marking one clears its dry hop alert.
+  dryHopAddedIds: integer("dry_hop_added_ids").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

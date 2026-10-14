@@ -189,6 +189,12 @@ export const GetDashboardSummaryResponse = zod.object({
         .array(zod.number().int())
         .nullish()
         .describe("Recipe ingredient ids ticked off during the boil."),
+      dryHopAddedIds: zod
+        .array(zod.number().int())
+        .nullish()
+        .describe(
+          "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+        ),
       createdAt: zod.string().datetime({ offset: true }),
       updatedAt: zod.string().datetime({ offset: true }),
     }),
@@ -460,6 +466,8 @@ export const GetRecipeStylesResponse = zod.array(GetRecipeStylesResponseItem);
  * Everything is inserted in one transaction, so a rejected ingredient leaves no half-built recipe behind. This is also the only way to create a recipe with several versions (LME / DME / all-grain).
  * @summary Create a recipe together with its ingredients and steps
  */
+export const importRecipeBodyIngredientsItemDryHopDayMin = 0;
+
 export const ImportRecipeBody = zod.object({
   recipe: zod.object({
     name: zod.string(),
@@ -546,6 +554,14 @@ export const ImportRecipeBody = zod.object({
         ])
         .optional(),
       timingMinutes: zod.number().int().nullish(),
+      dryHopDay: zod
+        .number()
+        .int()
+        .min(importRecipeBodyIngredientsItemDryHopDayMin)
+        .nullish()
+        .describe(
+          "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+        ),
       notes: zod.string().nullish(),
       variants: zod
         .array(
@@ -777,6 +793,8 @@ export const GetRecipeParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const getRecipeResponseTwoIngredientsItemDryHopDayMin = 0;
+
 export const GetRecipeResponse = zod
   .object({
     id: zod.number().int(),
@@ -881,6 +899,14 @@ export const GetRecipeResponse = zod
             ])
             .optional(),
           timingMinutes: zod.number().int().nullish(),
+          dryHopDay: zod
+            .number()
+            .int()
+            .min(getRecipeResponseTwoIngredientsItemDryHopDayMin)
+            .nullish()
+            .describe(
+              "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+            ),
           notes: zod.string().nullish(),
           variants: zod
             .array(
@@ -1075,6 +1101,8 @@ export const ListRecipeIngredientsParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const listRecipeIngredientsResponseDryHopDayMin = 0;
+
 export const ListRecipeIngredientsResponseItem = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int(),
@@ -1099,6 +1127,14 @@ export const ListRecipeIngredientsResponseItem = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(listRecipeIngredientsResponseDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
   variants: zod
     .array(
@@ -1122,6 +1158,8 @@ export const AddRecipeIngredientParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const addRecipeIngredientBodyDryHopDayMin = 0;
+
 export const AddRecipeIngredientBody = zod.object({
   name: zod.string(),
   type: zod.enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"]),
@@ -1144,6 +1182,14 @@ export const AddRecipeIngredientBody = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(addRecipeIngredientBodyDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
   variants: zod
     .array(
@@ -1156,6 +1202,8 @@ export const AddRecipeIngredientBody = zod.object({
       "Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.",
     ),
 });
+
+export const addRecipeIngredientResponseDryHopDayMin = 0;
 
 export const AddRecipeIngredientResponse = zod.object({
   id: zod.number().int(),
@@ -1181,6 +1229,14 @@ export const AddRecipeIngredientResponse = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(addRecipeIngredientResponseDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
   variants: zod
     .array(
@@ -1200,6 +1256,8 @@ export const AddRecipeIngredientResponse = zod.object({
 export const UpdateRecipeIngredientParams = zod.object({
   id: zod.coerce.number().int(),
 });
+
+export const updateRecipeIngredientBodyDryHopDayMin = 0;
 
 export const UpdateRecipeIngredientBody = zod.object({
   name: zod.string().optional(),
@@ -1225,6 +1283,14 @@ export const UpdateRecipeIngredientBody = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(updateRecipeIngredientBodyDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
   variants: zod
     .array(
@@ -1237,6 +1303,8 @@ export const UpdateRecipeIngredientBody = zod.object({
       "Which of the recipe's versions this ingredient belongs to. Null means every version.",
     ),
 });
+
+export const updateRecipeIngredientResponseDryHopDayMin = 0;
 
 export const UpdateRecipeIngredientResponse = zod.object({
   id: zod.number().int(),
@@ -1262,6 +1330,14 @@ export const UpdateRecipeIngredientResponse = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(updateRecipeIngredientResponseDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
   variants: zod
     .array(
@@ -1630,6 +1706,12 @@ export const ListBrewSessionsResponseItem = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -1856,6 +1938,12 @@ export const CreateBrewSessionResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -2029,6 +2117,12 @@ export const GetBrewSessionResponse = zod
       .array(zod.number().int())
       .nullish()
       .describe("Recipe ingredient ids ticked off during the boil."),
+    dryHopAddedIds: zod
+      .array(zod.number().int())
+      .nullish()
+      .describe(
+        "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+      ),
     createdAt: zod.string().datetime({ offset: true }),
     updatedAt: zod.string().datetime({ offset: true }),
   })
@@ -2295,6 +2389,12 @@ export const UpdateBrewSessionResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -2544,6 +2644,12 @@ export const UpsertBrewRatingResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -2747,9 +2853,109 @@ export const ControlBoilResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
+
+/**
+ * Days are counted from when the batch last entered conditioning. Only dry hops with a day set are listed.
+ * @summary The recipe's dry hop schedule for this brew, with due dates and status
+ */
+export const GetBrewSessionDryHopsParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetBrewSessionDryHopsResponseItem = zod.object({
+  ingredientId: zod.number().int(),
+  name: zod.string(),
+  amount: zod.number(),
+  unit: zod.string(),
+  day: zod
+    .number()
+    .int()
+    .describe("Days after the batch entered conditioning."),
+  dueAt: zod
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .describe("Null until the batch has entered conditioning."),
+  status: zod
+    .enum(["scheduled", "due", "added"])
+    .describe(
+      "scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.",
+    ),
+});
+export const GetBrewSessionDryHopsResponse = zod.array(
+  GetBrewSessionDryHopsResponseItem,
+);
+
+/**
+ * @summary Mark a dry hop as added, which clears its reminder
+ */
+export const MarkDryHopAddedParams = zod.object({
+  id: zod.coerce.number().int(),
+  ingredientId: zod.coerce.number().int(),
+});
+
+export const MarkDryHopAddedResponseItem = zod.object({
+  ingredientId: zod.number().int(),
+  name: zod.string(),
+  amount: zod.number(),
+  unit: zod.string(),
+  day: zod
+    .number()
+    .int()
+    .describe("Days after the batch entered conditioning."),
+  dueAt: zod
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .describe("Null until the batch has entered conditioning."),
+  status: zod
+    .enum(["scheduled", "due", "added"])
+    .describe(
+      "scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.",
+    ),
+});
+export const MarkDryHopAddedResponse = zod.array(MarkDryHopAddedResponseItem);
+
+/**
+ * @summary Undo marking a dry hop as added
+ */
+export const UnmarkDryHopAddedParams = zod.object({
+  id: zod.coerce.number().int(),
+  ingredientId: zod.coerce.number().int(),
+});
+
+export const UnmarkDryHopAddedResponseItem = zod.object({
+  ingredientId: zod.number().int(),
+  name: zod.string(),
+  amount: zod.number(),
+  unit: zod.string(),
+  day: zod
+    .number()
+    .int()
+    .describe("Days after the batch entered conditioning."),
+  dueAt: zod
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .describe("Null until the batch has entered conditioning."),
+  status: zod
+    .enum(["scheduled", "due", "added"])
+    .describe(
+      "scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.",
+    ),
+});
+export const UnmarkDryHopAddedResponse = zod.array(
+  UnmarkDryHopAddedResponseItem,
+);
 
 /**
  * @summary List fermentation readings for a brew session
@@ -2966,6 +3172,8 @@ export const getNotificationSettingsResponseRepeatHoursMax = 168;
 
 export const getNotificationSettingsResponseTempRepeatHoursMax = 168;
 
+export const getNotificationSettingsResponseDryHopRepeatHoursMax = 168;
+
 export const GetNotificationSettingsResponse = zod
   .object({
     channel: zod
@@ -3017,6 +3225,21 @@ export const GetNotificationSettingsResponse = zod
       .describe(
         "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
       ),
+    dryHopAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
+    dryHopRepeatHours: zod
+      .number()
+      .int()
+      .min(1)
+      .max(getNotificationSettingsResponseDryHopRepeatHoursMax)
+      .optional()
+      .describe(
+        "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -3028,6 +3251,8 @@ export const GetNotificationSettingsResponse = zod
 export const setNotificationSettingsBodyRepeatHoursMax = 168;
 
 export const setNotificationSettingsBodyTempRepeatHoursMax = 168;
+
+export const setNotificationSettingsBodyDryHopRepeatHoursMax = 168;
 
 export const SetNotificationSettingsBody = zod
   .object({
@@ -3080,6 +3305,21 @@ export const SetNotificationSettingsBody = zod
       .describe(
         "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
       ),
+    dryHopAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
+    dryHopRepeatHours: zod
+      .number()
+      .int()
+      .min(1)
+      .max(setNotificationSettingsBodyDryHopRepeatHoursMax)
+      .optional()
+      .describe(
+        "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -3088,6 +3328,8 @@ export const SetNotificationSettingsBody = zod
 export const setNotificationSettingsResponseRepeatHoursMax = 168;
 
 export const setNotificationSettingsResponseTempRepeatHoursMax = 168;
+
+export const setNotificationSettingsResponseDryHopRepeatHoursMax = 168;
 
 export const SetNotificationSettingsResponse = zod
   .object({
@@ -3139,6 +3381,21 @@ export const SetNotificationSettingsResponse = zod
       .optional()
       .describe(
         "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
+      ),
+    dryHopAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
+    dryHopRepeatHours: zod
+      .number()
+      .int()
+      .min(1)
+      .max(setNotificationSettingsResponseDryHopRepeatHoursMax)
+      .optional()
+      .describe(
+        "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
       ),
   })
   .describe(

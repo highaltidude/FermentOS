@@ -57,6 +57,7 @@ install to a tracked first batch.
 - **Kit import** — Upload the recipe PDF from a MoreBeer kit and FermentOS reads the ingredients, hop schedule, stats and suggested yeasts into a recipe for you to check before it is saved. A sheet that covers the LME, DME and All-Grain kits becomes one recipe with three versions; you pick the version each time you brew, and only that version's ingredients are deducted from stock and called on the boil timer
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
 - **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
+- **Dry hop reminders** — Give each dry hop a day of conditioning and the recipe gets a Dry Hop Schedule. When a batch reaches that day, your phone is reminded every 6 hours (adjustable) until you mark the addition as added on the brew page. No sensor needed
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
 - **Fermentation tracker** — Temperature and gravity over time on an interactive chart, filled in automatically if you have an iSpindel. Readings you enter by hand can also carry pH and notes
 - **Alerts to your phone** — FermentOS watches every active batch that has a sensor assigned and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. Temperature is checked against the fermentation range while fermenting and an optional separate conditioning range (for a cold crash or lagering) while conditioning. See [Get alerts on your phone](#get-alerts-on-your-phone)
@@ -222,6 +223,14 @@ gets no alert; set its time there or on the recipe to schedule it. A boil step w
 duration sets the boil length; without one, FermentOS uses your longest boil
 addition, or 60 minutes.
 
+For dry hops, set the **Use** to **Dry hop** and fill in the **day of
+conditioning** it goes in: 0 is the day the batch moves to Conditioning, 3 is
+three days after. The recipe page lists them in a **Dry Hop Schedule** card
+(its **Add dry hop** button fills in the hop type and use for you). Days are
+counted from when the batch last entered Conditioning, so a batch you move
+there late gets its dry hops late too. A dry hop with no day is listed but gets
+no reminder.
+
 **3. Stock your ingredients** *(optional)*
 
 **Ingredients** is where malts, hops, yeast, and adjuncts live, with quantities,
@@ -327,8 +336,8 @@ batch you have made from it.
 
 FermentOS checks every active batch that has a sensor assigned every five
 minutes and can message you when something needs attention. A batch with only
-hand-entered readings is not monitored; the boil alerts are the one kind that
-needs no sensor.
+hand-entered readings is not monitored; boil alerts and dry hop reminders are
+the kinds that need no sensor.
 
 | Alert | Fires when |
 |-------|-----------|
@@ -337,10 +346,19 @@ needs no sensor.
 | Sensor offline | Your iSpindel has stopped reporting |
 | Sensor battery low | The iSpindel battery drops below 20% |
 | Boil additions | A boil timer is running and a hop addition, or flameout, is due |
+| Dry hop reminders | A batch in Conditioning has reached a dry hop's day — repeats until you mark it added |
 
 Boil additions are the exception to the five-minute check: each one is sent at
 the moment it is due, and anything you have already ticked off on the checklist
 is skipped. They have their own **Boil additions** checkbox, on by default.
+
+Dry hop reminders don't stop by themselves. Once a dry hop's day arrives, a
+**Dry Hops** card on the brew page shows it as due. You get a reminder straight
+away, then again every 6 hours, until you click **Mark added** there; the
+reminders stop within five minutes. Two dry hops on the same day share one
+message. Moving the batch out of Conditioning also stops them. They have their
+own **Dry hop reminders** checkbox (on by default), and a **Remind again every**
+setting of their own, separate from the general one.
 
 Both delivery methods are **outbound** — FermentOS makes the request, nothing
 connects in to it. That is what makes this work on an ordinary home network with
@@ -774,7 +792,9 @@ Response is an array, one entry per device:
   "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
   "repeatHours": 6,
   "tempRepeatHours": null,
-  "boilAlerts": true
+  "boilAlerts": true,
+  "dryHopAlerts": true,
+  "dryHopRepeatHours": 6
 }
 ```
 
@@ -784,6 +804,11 @@ Response is an array, one entry per device:
 `boilAlerts` turns boil-addition and flameout messages on or off. It is separate
 from `types` because it is a one-off schedule rather than a monitored condition.
 It defaults to `true`, and leaving it out of a `PUT` keeps the current value.
+
+`dryHopAlerts` turns dry hop reminders on or off, and `dryHopRepeatHours` (1–168,
+default 6) is how often a due dry hop is repeated until it is marked added.
+Both are separate from `types` for the same reason as `boilAlerts`, and leaving
+either out of a `PUT` keeps the current value.
 
 `tempRepeatHours` overrides `repeatHours` for `temp_out_of_range` only, and is
 also 1–168. `null` — the default — inherits `repeatHours`, so upgrading never
@@ -829,6 +854,24 @@ additions that are due:
     { "id": 12, "name": "Cascade", "amount": 1, "unit": "oz" },
     { "id": 13, "name": "Citra", "amount": 0.5, "unit": "oz" }
   ]
+}
+```
+
+Dry hop reminders carry `alertType` `dry_hop_day_<N>` (one per day of
+conditioning), plus `event: "dry_hop_due"` and `day`:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Pacific Haze IPA: Time to dry hop",
+  "message": "Day 3 of conditioning — add 2 oz Citra, 1 oz Mosaic. Mark it added in FermentOS to stop these reminders.",
+  "priority": "high",
+  "triggeredAt": "2026-10-13T18:05:00.000Z",
+  "brewSessionId": 7,
+  "recipeName": "Pacific Haze IPA",
+  "alertType": "dry_hop_day_3",
+  "event": "dry_hop_due",
+  "day": 3
 }
 ```
 ---
@@ -1078,8 +1121,12 @@ On a recipe with several versions, an ingredient may also carry
 `null` for an ingredient every version uses. Naming a version the recipe does
 not have returns `400`.
 
+A `dry_hop` ingredient takes `"dryHopDay": 3` instead of `timingMinutes`: the day
+of conditioning it goes in, where 0 is the day the batch enters Conditioning. It
+drives the dry hop reminders.
+
 `PUT /api/ingredients/:id` accepts the same fields, all optional; send `null` to
-clear `use`, `timingMinutes`, `notes` or `variants`.
+clear `use`, `timingMinutes`, `dryHopDay`, `notes` or `variants`.
 
 Ingredients are returned in the order they were added.
 
@@ -1168,6 +1215,9 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 | PUT | `/api/brew-sessions/:id/rating` | Save the tasting scorecard |
 | DELETE | `/api/brew-sessions/:id/rating` | Clear the tasting scorecard |
 | POST | `/api/brew-sessions/:id/boil` | Start, pause, resume, finish, or reset the boil timer, or save its checklist |
+| GET | `/api/brew-sessions/:id/dry-hops` | The recipe's dry hop schedule for this batch, with due times and status |
+| POST | `/api/brew-sessions/:id/dry-hops/:ingredientId/added` | Mark a dry hop added, which stops its reminders |
+| DELETE | `/api/brew-sessions/:id/dry-hops/:ingredientId/added` | Undo marking a dry hop added |
 
 **POST /api/brew-sessions** body:
 ```json
@@ -1267,6 +1317,22 @@ The timer is stored as timestamps on the brew session (`boilMinutes`,
 time since `boilStartedAt`, less `boilPausedMs` and any pause in progress. Every
 change reschedules the boil-addition alerts, and they are rebuilt from these
 fields when the server restarts.
+
+**GET /api/brew-sessions/:id/dry-hops** returns the recipe's dry hops that have
+a `dryHopDay`, for the version being brewed, sorted by day:
+```json
+[
+  { "ingredientId": 21, "name": "Citra", "amount": 2, "unit": "oz", "day": 0,
+    "dueAt": "2026-10-10T18:00:00.000Z", "status": "added" },
+  { "ingredientId": 22, "name": "Mosaic", "amount": 1, "unit": "oz", "day": 3,
+    "dueAt": "2026-10-13T18:00:00.000Z", "status": "due" }
+]
+```
+`dueAt` is the time the batch last entered Conditioning (from its stage history)
+plus `day` days, and is `null` until it has. `status` is `scheduled`, `due` or
+`added`. Nothing is `due` unless the batch is in Conditioning now. The two
+`/added` endpoints return the updated schedule. Added ids are stored on the
+session as `dryHopAddedIds`.
 
 ---
 

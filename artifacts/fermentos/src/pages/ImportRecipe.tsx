@@ -23,7 +23,7 @@ import { VariantChips, VariantSwitcher } from "@/components/VariantChips";
 import { useToast } from "@/hooks/use-toast";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { apiErrorMessage } from "@/lib/inventoryShortage";
-import { INGREDIENT_TYPES, INGREDIENT_USES, TIMED_USES, timingPlaceholder } from "@/lib/ingredients";
+import { INGREDIENT_TYPES, INGREDIENT_USES, hasTimingField, timingFields, timingPlaceholder } from "@/lib/ingredients";
 import { appliesToVariant, VARIANT_LABELS, variantListLabel } from "@/lib/recipeVariants";
 
 // Matches the server's limit, so an oversized file is caught before it uploads.
@@ -228,7 +228,7 @@ export default function ImportRecipe() {
           amount: Number(r.amount),
           unit: r.unit.trim(),
           use: (r.use || undefined) as IngredientUse | undefined,
-          timingMinutes: TIMED_USES.includes(r.use) && r.timingMinutes !== "" ? Number(r.timingMinutes) : undefined,
+          ...timingFields(r.use, r.timingMinutes),
           notes: r.notes || undefined,
           variants: r.variants,
         })),
@@ -388,7 +388,7 @@ export default function ImportRecipe() {
                   <SelectContent>{INGREDIENT_USES.map((u) => <SelectItem key={u} value={u}>{u.replace("_", " ")}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {TIMED_USES.includes(row.use) && (
+              {hasTimingField(row.use) && (
                 <Input
                   className="text-sm" type="number" min="0" step="1" inputMode="numeric"
                   placeholder={timingPlaceholder(row.use)}

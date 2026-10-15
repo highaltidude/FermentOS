@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.9.0-beta1...fermentos-v1.9.0-beta2) (2026-10-15)
+
+
+### Features
+
+* dry hop schedule with repeating reminders during conditioning ([61c4abf](https://github.com/highaltidude/FermentOS/commit/61c4abf3a15bd30e690cc1018f7ad902bf516079))
+* **recipes:** import MoreBeer kit sheets as one recipe with LME, DME and all-grain versions ([dd7f733](https://github.com/highaltidude/FermentOS/commit/dd7f733ab56d00dcdfdce846113d15767da1a49e))
+
+
+### Bug Fixes
+
+* **fermentation:** require attenuation before auto-advancing and honour a manual move back ([1408c16](https://github.com/highaltidude/FermentOS/commit/1408c16e10212f4709cfa38ae98af8441a9f3447))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

@@ -19,8 +19,6 @@ RUN pnpm install --frozen-lockfile
 # Stage 3 — builder: compile API server and frontend
 FROM deps AS builder
 COPY . .
-ARG BUILD_TARGET=linux/amd64
-ENV BUILD_TARGET=${BUILD_TARGET}
 # Bake git metadata into the image so the runner can show branch/hash and
 # check for updates without needing a .git directory at runtime.
 ARG GIT_HASH=unknown

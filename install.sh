@@ -145,11 +145,9 @@ sudo -u postgres psql -q -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB
 success "Database '${DB_NAME}' ready"
 
 if [ ! -f "$ENV_FILE" ]; then
-  SESSION_SECRET="$(openssl rand -hex 32)"
   DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}"
   cat > "$ENV_FILE" <<EOF
 DATABASE_URL=${DATABASE_URL}
-SESSION_SECRET=${SESSION_SECRET}
 NODE_ENV=production
 PORT=${APP_PORT}
 BASE_PATH=/

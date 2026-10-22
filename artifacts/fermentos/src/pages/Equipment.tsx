@@ -19,7 +19,7 @@ import { formatDate } from "@/lib/format";
 
 const CATEGORIES = [
   "Kettle", "Fermenter", "Mash Tun", "Chiller", "Pump", "Keg", "Tap System",
-  "Hydrometer", "Thermometer", "pH Meter", "Scale", "Filter", "Cleaning", "Other",
+  "Hydrometer", "Refractometer", "Thermometer", "pH Meter", "Scale", "Filter", "Cleaning", "Other",
 ];
 
 const CONDITIONS = ["new", "good", "fair", "poor"] as const;

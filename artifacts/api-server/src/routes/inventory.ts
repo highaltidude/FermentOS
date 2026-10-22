@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, getTableColumns, ilike } from "drizzle-orm";
 import { db, inventoryTable } from "@workspace/db";
 import {
   ListInventoryQueryParams,
@@ -7,6 +7,10 @@ import {
   UpdateInventoryItemBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
+import { normalizeSuppliers } from "../services/inventorySuppliers";
+
+// Every column except the legacy single supplier/cost pair (see the schema).
+const { cost: _cost, supplier: _supplier, ...itemColumns } = getTableColumns(inventoryTable);
 
 const router = Router();
 
@@ -20,7 +24,7 @@ router.get("/inventory", async (req, res) => {
   ];
 
   const rows = await db
-    .select()
+    .select(itemColumns)
     .from(inventoryTable)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(inventoryTable.name);
@@ -34,8 +38,8 @@ router.post("/inventory", async (req, res) => {
 
   const [item] = await db
     .insert(inventoryTable)
-    .values({ ...body.data })
-    .returning();
+    .values({ ...body.data, suppliers: normalizeSuppliers(body.data.suppliers ?? []) })
+    .returning(itemColumns);
   return res.status(201).json(item);
 });
 
@@ -46,11 +50,16 @@ router.put("/inventory/:id", async (req, res) => {
   const body = UpdateInventoryItemBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
 
+  const { suppliers, ...fields } = body.data;
   const [item] = await db
     .update(inventoryTable)
-    .set({ ...body.data, updatedAt: new Date() })
+    .set({
+      ...fields,
+      ...(suppliers && { suppliers: normalizeSuppliers(suppliers) }),
+      updatedAt: new Date(),
+    })
     .where(eq(inventoryTable.id, id))
-    .returning();
+    .returning(itemColumns);
   if (!item) return res.status(404).json({ error: "Inventory item not found" });
   return res.json(item);
 });

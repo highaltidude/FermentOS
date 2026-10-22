@@ -7,6 +7,7 @@ import multer from "multer";
 import SftpClient from "ssh2-sftp-client";
 import { computeBackupAudit } from "../services/backupAudit";
 import { commandErrorReason } from "../lib/commandError";
+import { migrateInventorySuppliers } from "../lib/dataMigrations";
 import {
   type BackupConfig,
   type BackupTarget,
@@ -170,6 +171,18 @@ async function runRestoreFromFile(filePath: string): Promise<{ message: string }
       env: { ...process.env },
       stdio: "pipe",
     });
+  } catch {
+    return {
+      message:
+        "Database restored, but updating it to this version's schema failed. " +
+        "Restart FermentOS to retry.",
+    };
+  }
+
+  // Step 3: data moves push can't make. Without this, a backup from before
+  // ingredient supplier lists would show no suppliers until the next restart.
+  try {
+    await migrateInventorySuppliers();
   } catch {
     return {
       message:

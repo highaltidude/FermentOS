@@ -123,3 +123,38 @@ export async function migrateLegacyStatuses(): Promise<void> {
     logger.info({ rows: completeCount }, "Migrated legacy complete → packaged");
   }
 }
+
+/**
+ * Moves the single legacy `supplier` / `cost` pair on each inventory item into
+ * the `suppliers` list. Runs at boot and after a backup restore, since a backup
+ * from before the list existed comes back with only the old columns filled.
+ *
+ * The same UPDATE clears the legacy pair, which makes the move one-shot: an
+ * item whose suppliers were all deleted on purpose doesn't get its old one
+ * copied back on the next boot. The columns themselves stay (see the schema).
+ * An item that already has suppliers (legacy pair set again after a rollback)
+ * gets the legacy one appended, unpreferred, rather than losing it.
+ */
+export async function migrateInventorySuppliers(): Promise<void> {
+  // Self-healing, for the same git-pull-without-push reason as above.
+  await db.execute(
+    sql`ALTER TABLE inventory ADD COLUMN IF NOT EXISTS suppliers jsonb NOT NULL DEFAULT '[]'::jsonb`,
+  );
+
+  const moved = await db.execute(sql`
+    UPDATE inventory
+    SET suppliers = suppliers || jsonb_build_array(jsonb_build_object(
+          'name', COALESCE(NULLIF(TRIM(supplier), ''), 'Unknown supplier'),
+          'price', cost,
+          'url', NULL,
+          'preferred', suppliers = '[]'::jsonb
+        )),
+        supplier = NULL,
+        cost = NULL
+    WHERE NULLIF(TRIM(supplier), '') IS NOT NULL OR cost IS NOT NULL
+  `);
+  const movedCount = (moved as { rowCount?: number }).rowCount ?? 0;
+  if (movedCount > 0) {
+    logger.info({ rows: movedCount }, "Moved legacy inventory supplier/cost into suppliers");
+  }
+}

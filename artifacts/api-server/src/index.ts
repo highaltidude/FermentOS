@@ -2,7 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { initBackupScheduler } from "./services/backup";
 import { startRetentionCleanup } from "./services/readingRetention";
-import { migrateLegacyStatuses } from "./lib/dataMigrations";
+import { migrateLegacyStatuses, migrateInventorySuppliers } from "./lib/dataMigrations";
 import { startSystemHealthSampler } from "./services/systemHealthSampler";
 import { startAlertMonitor } from "./services/alertMonitor";
 import { resumeBoilAlerts } from "./services/boilScheduler";
@@ -35,6 +35,7 @@ app.listen(port, (err) => {
     .then(startRetentionCleanup)
     .catch((e) => logger.error({ e }, "Retention cleanup scheduling failed"));
   migrateLegacyStatuses().catch((e) => logger.error({ e }, "Legacy status migration failed"));
+  migrateInventorySuppliers().catch((e) => logger.error({ e }, "Inventory suppliers migration failed"));
   startSystemHealthSampler();
   startAlertMonitor();
   resumeBoilAlerts().catch((e) => logger.error({ e }, "Boil timer resume failed"));

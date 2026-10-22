@@ -64,7 +64,7 @@ install to a tracked first batch.
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
 - **Optional HTTPS** — Turn it on from Settings (or with one command) to put FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
-- **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something, and deduct what the recipe uses from stock when you start one
+- **Ingredients** — Malts, hops, yeast, and adjuncts with quantities and expiry dates. Compare prices across several suppliers per item, with a preferred supplier shown at a glance. Optionally block a brew day when you are short of something, and deduct what the recipe uses from stock when you start one
 - **Equipment** — A register of your kit: category, condition, brand and model, serial number, purchase date and price
 - **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is applied when you open the batch's page, not in the background, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
@@ -233,8 +233,10 @@ no reminder.
 
 **3. Stock your ingredients** *(optional)*
 
-**Ingredients** is where malts, hops, yeast, and adjuncts live, with quantities,
-suppliers, and expiry dates. You can skip this entirely and come back to it.
+**Ingredients** is where malts, hops, yeast, and adjuncts live, with quantities
+and expiry dates. Each item can list several suppliers with their price per
+unit. Star the one you usually buy from and it shows on the item's row;
+otherwise the cheapest is shown. You can skip this entirely and come back to it.
 
 It becomes required only if you turn on **Settings → Brewing → Ingredient
 Enforcement**, which stops you starting a brew day when you are short of
@@ -1352,16 +1354,19 @@ session as `dryHopAddedIds`.
   "type": "hop",
   "amount": 8,
   "unit": "oz",
-  "supplier": "MoreBeer",
   "purchasedDate": "2024-03-01",
   "expiryDate": "2025-03-01",
   "maltType": null,
-  "cost": 12.5,
+  "suppliers": [
+    { "name": "MoreBeer", "price": 1.56, "url": "https://www.morebeer.com", "preferred": true },
+    { "name": "Northern Brewer", "price": 1.75, "url": null, "preferred": false }
+  ],
   "notes": "Optional"
 }
 ```
 `type`: `malt` | `hop` | `yeast` | `adjunct` | `water_agent` | `other`
 `maltType`: `lme` | `dme` | `all_grain` | `null`
+`suppliers`: optional list of places to buy the item. `name` is required, `price` is per unit of the item's `unit` (nullable), `url` is optional, and at most one supplier can be `preferred` (if several are flagged, the first one wins). On `PUT`, sending `suppliers` replaces the whole list. Items carry `suppliers` in place of the single `supplier` and `cost` fields used before 1.10.
 
 ---
 

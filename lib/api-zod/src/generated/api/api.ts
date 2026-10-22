@@ -3443,6 +3443,10 @@ export const ListInventoryQueryParams = zod.object({
   search: zod.coerce.string().optional(),
 });
 
+export const listInventoryResponseSuppliersItemPriceMin = 0;
+
+export const listInventoryResponseSuppliersItemPreferredDefault = false;
+
 export const ListInventoryResponseItem = zod.object({
   id: zod.number().int(),
   name: zod.string(),
@@ -3452,10 +3456,25 @@ export const ListInventoryResponseItem = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod.array(
+    zod
+      .object({
+        name: zod.string().min(1),
+        price: zod
+          .number()
+          .min(listInventoryResponseSuppliersItemPriceMin)
+          .nullish(),
+        url: zod.string().nullish(),
+        preferred: zod
+          .boolean()
+          .default(listInventoryResponseSuppliersItemPreferredDefault),
+      })
+      .describe(
+        "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+      ),
+  ),
   notes: zod.string().nullish(),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
@@ -3465,6 +3484,11 @@ export const ListInventoryResponse = zod.array(ListInventoryResponseItem);
 /**
  * @summary Add an inventory item
  */
+
+export const createInventoryItemBodySuppliersItemPriceMin = 0;
+
+export const createInventoryItemBodySuppliersItemPreferredDefault = false;
+
 export const CreateInventoryItemBody = zod.object({
   name: zod.string(),
   type: zod.enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"]),
@@ -3473,12 +3497,33 @@ export const CreateInventoryItemBody = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod
+    .array(
+      zod
+        .object({
+          name: zod.string().min(1),
+          price: zod
+            .number()
+            .min(createInventoryItemBodySuppliersItemPriceMin)
+            .nullish(),
+          url: zod.string().nullish(),
+          preferred: zod
+            .boolean()
+            .default(createInventoryItemBodySuppliersItemPreferredDefault),
+        })
+        .describe(
+          "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+        ),
+    )
+    .optional(),
   notes: zod.string().nullish(),
 });
+
+export const createInventoryItemResponseSuppliersItemPriceMin = 0;
+
+export const createInventoryItemResponseSuppliersItemPreferredDefault = false;
 
 export const CreateInventoryItemResponse = zod.object({
   id: zod.number().int(),
@@ -3489,10 +3534,25 @@ export const CreateInventoryItemResponse = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod.array(
+    zod
+      .object({
+        name: zod.string().min(1),
+        price: zod
+          .number()
+          .min(createInventoryItemResponseSuppliersItemPriceMin)
+          .nullish(),
+        url: zod.string().nullish(),
+        preferred: zod
+          .boolean()
+          .default(createInventoryItemResponseSuppliersItemPreferredDefault),
+      })
+      .describe(
+        "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+      ),
+  ),
   notes: zod.string().nullish(),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
@@ -3505,6 +3565,10 @@ export const UpdateInventoryItemParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const updateInventoryItemBodySuppliersItemPriceMin = 0;
+
+export const updateInventoryItemBodySuppliersItemPreferredDefault = false;
+
 export const UpdateInventoryItemBody = zod.object({
   name: zod.string().optional(),
   type: zod
@@ -3515,12 +3579,34 @@ export const UpdateInventoryItemBody = zod.object({
     .optional(),
   amount: zod.number().optional(),
   unit: zod.string().optional(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod
+    .array(
+      zod
+        .object({
+          name: zod.string().min(1),
+          price: zod
+            .number()
+            .min(updateInventoryItemBodySuppliersItemPriceMin)
+            .nullish(),
+          url: zod.string().nullish(),
+          preferred: zod
+            .boolean()
+            .default(updateInventoryItemBodySuppliersItemPreferredDefault),
+        })
+        .describe(
+          "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+        ),
+    )
+    .optional()
+    .describe("Replaces the item's whole supplier list when present."),
   notes: zod.string().nullish(),
 });
+
+export const updateInventoryItemResponseSuppliersItemPriceMin = 0;
+
+export const updateInventoryItemResponseSuppliersItemPreferredDefault = false;
 
 export const UpdateInventoryItemResponse = zod.object({
   id: zod.number().int(),
@@ -3531,10 +3617,25 @@ export const UpdateInventoryItemResponse = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod.array(
+    zod
+      .object({
+        name: zod.string().min(1),
+        price: zod
+          .number()
+          .min(updateInventoryItemResponseSuppliersItemPriceMin)
+          .nullish(),
+        url: zod.string().nullish(),
+        preferred: zod
+          .boolean()
+          .default(updateInventoryItemResponseSuppliersItemPreferredDefault),
+      })
+      .describe(
+        "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+      ),
+  ),
   notes: zod.string().nullish(),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),

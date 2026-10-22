@@ -1208,6 +1208,22 @@ export const MaltType = {
   all_grain: "all_grain",
 } as const;
 
+/**
+ * A place this ingredient can be bought, with its price per unit of the item's `unit`.
+ */
+export interface InventorySupplier {
+  /** @minLength 1 */
+  name: string;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  price?: number | null;
+  /** @nullable */
+  url?: string | null;
+  preferred?: boolean;
+}
+
 export interface InventoryItem {
   id: number;
   name: string;
@@ -1216,13 +1232,10 @@ export interface InventoryItem {
   amount: number;
   unit: string;
   /** @nullable */
-  cost?: number | null;
-  /** @nullable */
   purchasedDate?: string | null;
   /** @nullable */
   expiryDate?: string | null;
-  /** @nullable */
-  supplier?: string | null;
+  suppliers: InventorySupplier[];
   /** @nullable */
   notes?: string | null;
   createdAt: string;
@@ -1236,13 +1249,10 @@ export interface CreateInventoryItemBody {
   amount: number;
   unit: string;
   /** @nullable */
-  cost?: number | null;
-  /** @nullable */
   purchasedDate?: string | null;
   /** @nullable */
   expiryDate?: string | null;
-  /** @nullable */
-  supplier?: string | null;
+  suppliers?: InventorySupplier[];
   /** @nullable */
   notes?: string | null;
 }
@@ -1254,13 +1264,11 @@ export interface UpdateInventoryItemBody {
   amount?: number;
   unit?: string;
   /** @nullable */
-  cost?: number | null;
-  /** @nullable */
   purchasedDate?: string | null;
   /** @nullable */
   expiryDate?: string | null;
-  /** @nullable */
-  supplier?: string | null;
+  /** Replaces the item's whole supplier list when present. */
+  suppliers?: InventorySupplier[];
   /** @nullable */
   notes?: string | null;
 }

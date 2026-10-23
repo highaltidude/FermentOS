@@ -1037,6 +1037,51 @@ export interface UnitSystemBody {
   system: UnitSystem;
 }
 
+/**
+ * Ion concentrations in ppm (mg/L).
+ */
+export interface WaterProfile {
+  /**
+   * @maxLength 80
+   * @nullable
+   */
+  name?: string | null;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  calcium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  magnesium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  sodium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  sulfate: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  chloride: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  bicarbonate: number;
+}
+
+export interface SourceWater {
+  profile: WaterProfile | null;
+}
+
 export interface ReadingRetentionResponse {
   /** @nullable */
   days: number | null;

@@ -799,6 +799,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/UnitSystemResponse"
 
+  /settings/source-water:
+    get:
+      operationId: getSourceWater
+      tags: [settings]
+      summary: Get the saved source (tap) water profile
+      responses:
+        "200":
+          description: Saved source water, or null when none has been saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceWater"
+    put:
+      operationId: setSourceWater
+      tags: [settings]
+      summary: Save or clear the source (tap) water profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceWater"
+      responses:
+        "200":
+          description: Saved source water
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceWater"
+
   /settings/reading-retention:
     get:
       operationId: getReadingRetention
@@ -2816,6 +2846,49 @@ components:
         system:
           $ref: "#/components/schemas/UnitSystem"
       required: [system]
+
+    WaterProfile:
+      type: object
+      description: Ion concentrations in ppm (mg/L).
+      properties:
+        name:
+          type: string
+          maxLength: 80
+          nullable: true
+        calcium:
+          type: number
+          minimum: 0
+          maximum: 2000
+        magnesium:
+          type: number
+          minimum: 0
+          maximum: 2000
+        sodium:
+          type: number
+          minimum: 0
+          maximum: 2000
+        sulfate:
+          type: number
+          minimum: 0
+          maximum: 2000
+        chloride:
+          type: number
+          minimum: 0
+          maximum: 2000
+        bicarbonate:
+          type: number
+          minimum: 0
+          maximum: 2000
+      required: [calcium, magnesium, sodium, sulfate, chloride, bicarbonate]
+
+    SourceWater:
+      type: object
+      properties:
+        profile:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/WaterProfile"
+      required: [profile]
 
     ReadingRetentionResponse:
       type: object

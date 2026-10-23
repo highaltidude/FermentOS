@@ -3076,6 +3076,183 @@ export const SetUnitSystemResponse = zod.object({
 });
 
 /**
+ * @summary Get the saved source (tap) water profile
+ */
+export const getSourceWaterResponseProfileOneNameMax = 80;
+
+export const getSourceWaterResponseProfileOneCalciumMin = 0;
+export const getSourceWaterResponseProfileOneCalciumMax = 2000;
+
+export const getSourceWaterResponseProfileOneMagnesiumMin = 0;
+export const getSourceWaterResponseProfileOneMagnesiumMax = 2000;
+
+export const getSourceWaterResponseProfileOneSodiumMin = 0;
+export const getSourceWaterResponseProfileOneSodiumMax = 2000;
+
+export const getSourceWaterResponseProfileOneSulfateMin = 0;
+export const getSourceWaterResponseProfileOneSulfateMax = 2000;
+
+export const getSourceWaterResponseProfileOneChlorideMin = 0;
+export const getSourceWaterResponseProfileOneChlorideMax = 2000;
+
+export const getSourceWaterResponseProfileOneBicarbonateMin = 0;
+export const getSourceWaterResponseProfileOneBicarbonateMax = 2000;
+
+export const GetSourceWaterResponse = zod.object({
+  profile: zod.union([
+    zod
+      .object({
+        name: zod
+          .string()
+          .max(getSourceWaterResponseProfileOneNameMax)
+          .nullish(),
+        calcium: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneCalciumMin)
+          .max(getSourceWaterResponseProfileOneCalciumMax),
+        magnesium: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneMagnesiumMin)
+          .max(getSourceWaterResponseProfileOneMagnesiumMax),
+        sodium: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneSodiumMin)
+          .max(getSourceWaterResponseProfileOneSodiumMax),
+        sulfate: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneSulfateMin)
+          .max(getSourceWaterResponseProfileOneSulfateMax),
+        chloride: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneChlorideMin)
+          .max(getSourceWaterResponseProfileOneChlorideMax),
+        bicarbonate: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneBicarbonateMin)
+          .max(getSourceWaterResponseProfileOneBicarbonateMax),
+      })
+      .describe("Ion concentrations in ppm (mg/L)."),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Save or clear the source (tap) water profile
+ */
+export const setSourceWaterBodyProfileOneNameMax = 80;
+
+export const setSourceWaterBodyProfileOneCalciumMin = 0;
+export const setSourceWaterBodyProfileOneCalciumMax = 2000;
+
+export const setSourceWaterBodyProfileOneMagnesiumMin = 0;
+export const setSourceWaterBodyProfileOneMagnesiumMax = 2000;
+
+export const setSourceWaterBodyProfileOneSodiumMin = 0;
+export const setSourceWaterBodyProfileOneSodiumMax = 2000;
+
+export const setSourceWaterBodyProfileOneSulfateMin = 0;
+export const setSourceWaterBodyProfileOneSulfateMax = 2000;
+
+export const setSourceWaterBodyProfileOneChlorideMin = 0;
+export const setSourceWaterBodyProfileOneChlorideMax = 2000;
+
+export const setSourceWaterBodyProfileOneBicarbonateMin = 0;
+export const setSourceWaterBodyProfileOneBicarbonateMax = 2000;
+
+export const SetSourceWaterBody = zod.object({
+  profile: zod.union([
+    zod
+      .object({
+        name: zod.string().max(setSourceWaterBodyProfileOneNameMax).nullish(),
+        calcium: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneCalciumMin)
+          .max(setSourceWaterBodyProfileOneCalciumMax),
+        magnesium: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneMagnesiumMin)
+          .max(setSourceWaterBodyProfileOneMagnesiumMax),
+        sodium: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneSodiumMin)
+          .max(setSourceWaterBodyProfileOneSodiumMax),
+        sulfate: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneSulfateMin)
+          .max(setSourceWaterBodyProfileOneSulfateMax),
+        chloride: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneChlorideMin)
+          .max(setSourceWaterBodyProfileOneChlorideMax),
+        bicarbonate: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneBicarbonateMin)
+          .max(setSourceWaterBodyProfileOneBicarbonateMax),
+      })
+      .describe("Ion concentrations in ppm (mg/L)."),
+    zod.null(),
+  ]),
+});
+
+export const setSourceWaterResponseProfileOneNameMax = 80;
+
+export const setSourceWaterResponseProfileOneCalciumMin = 0;
+export const setSourceWaterResponseProfileOneCalciumMax = 2000;
+
+export const setSourceWaterResponseProfileOneMagnesiumMin = 0;
+export const setSourceWaterResponseProfileOneMagnesiumMax = 2000;
+
+export const setSourceWaterResponseProfileOneSodiumMin = 0;
+export const setSourceWaterResponseProfileOneSodiumMax = 2000;
+
+export const setSourceWaterResponseProfileOneSulfateMin = 0;
+export const setSourceWaterResponseProfileOneSulfateMax = 2000;
+
+export const setSourceWaterResponseProfileOneChlorideMin = 0;
+export const setSourceWaterResponseProfileOneChlorideMax = 2000;
+
+export const setSourceWaterResponseProfileOneBicarbonateMin = 0;
+export const setSourceWaterResponseProfileOneBicarbonateMax = 2000;
+
+export const SetSourceWaterResponse = zod.object({
+  profile: zod.union([
+    zod
+      .object({
+        name: zod
+          .string()
+          .max(setSourceWaterResponseProfileOneNameMax)
+          .nullish(),
+        calcium: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneCalciumMin)
+          .max(setSourceWaterResponseProfileOneCalciumMax),
+        magnesium: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneMagnesiumMin)
+          .max(setSourceWaterResponseProfileOneMagnesiumMax),
+        sodium: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneSodiumMin)
+          .max(setSourceWaterResponseProfileOneSodiumMax),
+        sulfate: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneSulfateMin)
+          .max(setSourceWaterResponseProfileOneSulfateMax),
+        chloride: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneChlorideMin)
+          .max(setSourceWaterResponseProfileOneChlorideMax),
+        bicarbonate: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneBicarbonateMin)
+          .max(setSourceWaterResponseProfileOneBicarbonateMax),
+      })
+      .describe("Ion concentrations in ppm (mg/L)."),
+    zod.null(),
+  ]),
+});
+
+/**
  * @summary Get the reading retention window
  */
 export const GetReadingRetentionResponse = zod.object({

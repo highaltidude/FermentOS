@@ -2940,6 +2940,11 @@ components:
           minimum: 1
           maximum: 168
           description: Hours between dry hop reminders while an addition is still due. Defaults to 6.
+        autoAdvanceAlerts:
+          type: boolean
+          description: >-
+            Notify once when a batch is moved to Conditioning automatically.
+            Kept out of types for the same reason as boilAlerts. Defaults to true.
       required: [channel, ntfyServer, ntfyTopic, webhookUrl, types, repeatHours]
 
     DryHopStatus:

@@ -6,6 +6,7 @@ import { computeBrewAlerts, tempExcursion, type BrewTelemetry } from "./brewAler
 import { getNotifyConfig, type AlertType } from "./notifications.js";
 import { recordFiringAlert, resolveAlert } from "./alertState.js";
 import { runDryHopCheck } from "./dryHops.js";
+import { runAutoAdvanceCheck } from "./autoConditioning.js";
 import { isDryHopAlertType } from "../lib/dryHopSchedule.js";
 import { resolveRepeatHours } from "../lib/notifyIntervals.js";
 import { alertAppliesToStatus, notifiesOncePerBrew } from "../lib/alertPolicy.js";
@@ -146,6 +147,9 @@ export function startAlertMonitor(): void {
     // Separate pass: dry hops need no probe and have their own on/off switch,
     // so they must not sit behind the sensor checks' early returns.
     runDryHopCheck().catch((e) => logger.error({ e }, "Dry hop check failed"));
+    // Also separate: moving a finished batch on must happen with notifications
+    // switched off entirely.
+    runAutoAdvanceCheck().catch((e) => logger.error({ e }, "Auto-advance check failed"));
   });
   logger.info("Alert monitor started");
 }

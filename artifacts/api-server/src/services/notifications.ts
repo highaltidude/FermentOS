@@ -26,6 +26,7 @@ const NOTIFY_KEYS = {
   boilAlerts: "notify_boil",
   dryHopAlerts: "notify_dry_hop",
   dryHopRepeatHours: "notify_dry_hop_repeat_hours",
+  autoAdvanceAlerts: "notify_auto_advance",
 } as const;
 
 export const ALERT_TYPES = ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"] as const;
@@ -63,6 +64,12 @@ export type NotifyConfig = {
    */
   dryHopAlerts: boolean;
   dryHopRepeatHours: number;
+  /**
+   * A one-off message when a batch is moved to Conditioning automatically.
+   * Not an AlertType either: it is an event, not a condition, and a types list
+   * saved before it existed must not leave it switched off.
+   */
+  autoAdvanceAlerts: boolean;
 };
 
 export async function getNotifyConfig(): Promise<NotifyConfig> {
@@ -102,6 +109,7 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
     boilAlerts: map.get(NOTIFY_KEYS.boilAlerts) !== "false",
     dryHopAlerts: map.get(NOTIFY_KEYS.dryHopAlerts) !== "false",
     dryHopRepeatHours,
+    autoAdvanceAlerts: map.get(NOTIFY_KEYS.autoAdvanceAlerts) !== "false",
   };
 }
 
@@ -118,6 +126,7 @@ export async function setNotifyConfig(cfg: NotifyConfig): Promise<void> {
     [NOTIFY_KEYS.boilAlerts, String(cfg.boilAlerts)],
     [NOTIFY_KEYS.dryHopAlerts, String(cfg.dryHopAlerts)],
     [NOTIFY_KEYS.dryHopRepeatHours, String(cfg.dryHopRepeatHours)],
+    [NOTIFY_KEYS.autoAdvanceAlerts, String(cfg.autoAdvanceAlerts)],
   ];
   for (const [key, value] of pairs) {
     await setConfigValue(key, value);

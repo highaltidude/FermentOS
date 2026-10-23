@@ -1145,6 +1145,8 @@ export interface NotificationSettings {
    * @maximum 168
    */
   dryHopRepeatHours?: number;
+  /** Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true. */
+  autoAdvanceAlerts?: boolean;
 }
 
 /**

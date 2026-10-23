@@ -204,6 +204,22 @@ export function NotificationsPanel() {
             )}
           </div>
 
+          <button
+            type="button"
+            onClick={() => setDraft({ ...draft, autoAdvanceAlerts: draft.autoAdvanceAlerts === false })}
+            className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-md border text-left transition-colors ${
+              draft.autoAdvanceAlerts !== false ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/50"
+            }`}
+          >
+            <div>
+              <div className="text-sm font-medium text-foreground">Moved to Conditioning</div>
+              <div className="text-xs text-muted-foreground">Once, when auto-advance moves a finished batch on — the dry hop schedule counts from here</div>
+            </div>
+            <div className={`h-4 w-4 rounded border-2 shrink-0 flex items-center justify-center ${draft.autoAdvanceAlerts !== false ? "border-primary bg-primary" : "border-muted-foreground/30"}`}>
+              {draft.autoAdvanceAlerts !== false && <Check className="w-3 h-3 text-primary-foreground" />}
+            </div>
+          </button>
+
           <div className="max-w-xs">
             <label className="text-xs text-muted-foreground mb-1 block">Re-notify at most every (default)</label>
             <Select value={String(draft.repeatHours)} onValueChange={(v) => setDraft({ ...draft, repeatHours: Number(v) })}>

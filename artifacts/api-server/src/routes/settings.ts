@@ -7,6 +7,7 @@ import {
   SetUnitSystemBody,
   SetFermentTempUnitBody,
   SetBreweryNameBody,
+  SetSourceWaterBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
 import {
@@ -18,6 +19,7 @@ import { getRetentionDays, setRetentionDays } from "../services/readingRetention
 import { getConfigValue, setConfigValue } from "../services/appConfig";
 import { getBreweryName, setBreweryName } from "../services/breweryName";
 import { getAutoConditioning, setAutoConditioning } from "../services/autoConditioning";
+import { getSourceWater, setSourceWater } from "../services/sourceWater";
 import {
   getTempAlertReadings,
   setTempAlertReadings,
@@ -62,6 +64,17 @@ router.put("/settings/unit-system", async (req, res) => {
   }
   await setUnitSystem(parsed.data);
   return res.json({ system: parsed.data });
+});
+
+router.get("/settings/source-water", async (_req, res) => {
+  return res.json({ profile: await getSourceWater() });
+});
+
+router.put("/settings/source-water", async (req, res) => {
+  const body = SetSourceWaterBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "Invalid request body" });
+  await setSourceWater(body.data.profile ?? null);
+  return res.json({ profile: await getSourceWater() });
 });
 
 router.get("/settings/styles", async (_req, res) => {

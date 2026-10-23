@@ -72,7 +72,7 @@ install to a tracked first batch.
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
-- **Calculators** — ABV and attenuation from OG and FG today; water chemistry, recipe scaling, and batch cost are planned
+- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). Recipe scaling and batch cost are planned
 - **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
 - **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
 - **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
@@ -634,6 +634,25 @@ Day to day, that means:
 - **Recipes** carries the average score of every batch brewed from it, so your best recipes surface themselves over time
 - **Ingredients** tracks what you have and flags what is about to expire
 - **Equipment** is a register of your kit, searchable and filtered by category
+- **Calculators** has ABV and attenuation, and water chemistry (below)
+
+**Water chemistry.** Under **Calculators → Water Chemistry**, enter the six
+values from your water report (calcium, magnesium, sodium, sulfate, chloride,
+bicarbonate, in ppm) and press **Save as my water** so they are filled in next
+time, on any device. Leave them at zero, or press **Use RO water**, for RO or
+distilled water. Pick a target, either a style profile such as **Light colored
+and hoppy** or a historic city such as **Burton on Trent**, or enter your own,
+then the total water volume, and press **Suggest additions**. FermentOS works
+out grams of gypsum, calcium chloride, Epsom salt, table salt, and baking soda
+that get closest to the target. Change any amount and the resulting profile,
+sulfate-to-chloride ratio, and residual alkalinity update as you type. Salts
+can only add minerals, so if your water already has more of something than the
+target, it tells you to mix in RO or distilled water instead. Chalk is never
+suggested, because it barely dissolves without acid or CO₂; for high-alkalinity
+targets such as Dublin or Munich the calculator says so rather than making the
+water salty with baking soda. Target values
+come from Brewer's Friend's published table; treat the historic city ones as a
+starting point, not a specification.
 
 Only Brew Day, Fermenting, and Conditioning batches with a sensor assigned are
 monitored for alerts. Once a batch is **Packaged** it is finished, and a stale
@@ -1465,6 +1484,7 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | `/api/settings/default-readings-shown` | `{ "count": 5 \| 10 \| 25 \| 50 \| 100 }` | Default number of readings shown on a fresh fermentation chart |
 | `/api/settings/ferment-temp-unit` | `{ "unit": "F" \| "C" }` | Unit used for fermentation temperature thresholds/readings |
 | `/api/settings/temp-alert-readings` | `{ "count": 2..10 }` | Consecutive out-of-range readings required before a temperature alert fires |
+| `/api/settings/source-water` | `{ "profile": { "calcium": 30, "magnesium": 8, "sodium": 12, "sulfate": 25, "chloride": 20, "bicarbonate": 90, "name": "Tap" } \| null }` | Your tap water in ppm, used to prefill the water calculator. Each ion is 0–2000; `name` is optional. `null` clears it, and `GET` returns `null` until one is saved |
 | `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Global default for auto-advancing a session to Conditioning. The server only stores it; the brew session page applies it |
 
 `GET`/`PUT /api/settings/notifications` and `POST /api/settings/notifications/test`

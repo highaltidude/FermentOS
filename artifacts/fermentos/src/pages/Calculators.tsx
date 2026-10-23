@@ -1,13 +1,9 @@
 import { useState } from "react";
-import { Calculator, Droplets, Scale, DollarSign, FlaskConical } from "lucide-react";
+import { Calculator, Scale, DollarSign, FlaskConical } from "lucide-react";
 import { estimateAbv } from "@/lib/brewMath";
+import { WaterChemistryCalculator } from "@/components/WaterChemistryCalculator";
 
 const comingSoon = [
-  {
-    icon: Droplets,
-    name: "Water Chemistry",
-    description: "Calculate salt additions to match your target water profile for any beer style",
-  },
   {
     icon: Scale,
     name: "Recipe Scaling",
@@ -123,12 +119,14 @@ export default function Calculators() {
         )}
       </div>
 
+      <WaterChemistryCalculator />
+
       {/* Remaining placeholders */}
       <div className="space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
           Coming Soon
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {comingSoon.map(({ icon: Icon, name, description }) => (
             <div
               key={name}

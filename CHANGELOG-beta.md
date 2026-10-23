@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.9.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.9.0-beta1...fermentos-v1.9.0-beta2) (2026-10-23)
+
+
+### Features
+
+* **calculators:** water chemistry calculator with salt suggestions ([8ff65ff](https://github.com/highaltidude/FermentOS/commit/8ff65ffeca74bb4212187ea8efd34955ef26eb45))
+* dry hop schedule with repeating reminders during conditioning ([61c4abf](https://github.com/highaltidude/FermentOS/commit/61c4abf3a15bd30e690cc1018f7ad902bf516079))
+* **equipment:** add Refractometer category ([8c67fbc](https://github.com/highaltidude/FermentOS/commit/8c67fbc0a609212cbaa6e8a05ede37e85c22eaac))
+* **equipment:** add Refractometer category ([d6b04f8](https://github.com/highaltidude/FermentOS/commit/d6b04f861834826e3ce6b910aa0c294c855bc8a3))
+* **inventory:** track multiple suppliers and prices per ingredient ([9983862](https://github.com/highaltidude/FermentOS/commit/998386204482fa0a29beda110b4e0a0b0aa3229b))
+* **recipes:** import MoreBeer kit sheets as one recipe with LME, DME and all-grain versions ([dd7f733](https://github.com/highaltidude/FermentOS/commit/dd7f733ab56d00dcdfdce846113d15767da1a49e))
+
+
+### Bug Fixes
+
+* **deps:** bump proxy-addr, source-map-js and vite for security advisories ([3db5a53](https://github.com/highaltidude/FermentOS/commit/3db5a53c1ad0665d254640b398299e9143ff685b))
+* **fermentation:** auto-advance to conditioning without the page open ([08ef350](https://github.com/highaltidude/FermentOS/commit/08ef35045541f0af784317c7698fa02c040ed9e3))
+* **fermentation:** require attenuation before auto-advancing and honour a manual move back ([1408c16](https://github.com/highaltidude/FermentOS/commit/1408c16e10212f4709cfa38ae98af8441a9f3447))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

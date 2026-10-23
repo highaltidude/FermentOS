@@ -1485,7 +1485,7 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | `/api/settings/ferment-temp-unit` | `{ "unit": "F" \| "C" }` | Unit used for fermentation temperature thresholds/readings |
 | `/api/settings/temp-alert-readings` | `{ "count": 2..10 }` | Consecutive out-of-range readings required before a temperature alert fires |
 | `/api/settings/source-water` | `{ "profile": { "calcium": 30, "magnesium": 8, "sodium": 12, "sulfate": 25, "chloride": 20, "bicarbonate": 90, "name": "Tap" } \| null }` | Your tap water in ppm, used to prefill the water calculator. Each ion is 0–2000; `name` is optional. `null` clears it, and `GET` returns `null` until one is saved |
-| `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Global default for auto-advancing a session to Conditioning. The server only stores it; the brew session page applies it |
+| `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Global default for auto-advancing a session to Conditioning. A batch's own `autoAdvanceToConditioning` overrides it. The server checks every five minutes and moves a finished batch on |
 
 `GET`/`PUT /api/settings/notifications` and `POST /api/settings/notifications/test`
 are described under [Webhooks & alert payloads](#webhooks--alert-payloads).

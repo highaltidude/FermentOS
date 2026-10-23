@@ -17,6 +17,7 @@ import { getUnitSystem, setUnitSystem } from "../services/unitSystem";
 import { getRetentionDays, setRetentionDays } from "../services/readingRetention.js";
 import { getConfigValue, setConfigValue } from "../services/appConfig";
 import { getBreweryName, setBreweryName } from "../services/breweryName";
+import { getAutoConditioning, setAutoConditioning } from "../services/autoConditioning";
 import {
   getTempAlertReadings,
   setTempAlertReadings,
@@ -176,16 +177,14 @@ router.put("/settings/temp-alert-readings", async (req, res) => {
   return res.json({ count });
 });
 
-const AUTO_CONDITIONING_KEY = "auto_advance_to_conditioning";
-
 router.get("/settings/auto-conditioning", async (_req, res) => {
-  return res.json({ enabled: (await getConfigValue(AUTO_CONDITIONING_KEY)) === "true" });
+  return res.json({ enabled: await getAutoConditioning() });
 });
 
 router.put("/settings/auto-conditioning", async (req, res) => {
   const { enabled } = req.body as { enabled: unknown };
   if (typeof enabled !== "boolean") return res.status(400).json({ error: "Body must be { enabled: boolean }" });
-  await setConfigValue(AUTO_CONDITIONING_KEY, String(enabled));
+  await setAutoConditioning(enabled);
   return res.json({ enabled });
 });
 
@@ -219,6 +218,7 @@ router.put("/settings/notifications", async (req, res) => {
     boilAlerts: d.boilAlerts ?? current.boilAlerts,
     dryHopAlerts: d.dryHopAlerts ?? current.dryHopAlerts,
     dryHopRepeatHours: d.dryHopRepeatHours ?? current.dryHopRepeatHours,
+    autoAdvanceAlerts: d.autoAdvanceAlerts ?? current.autoAdvanceAlerts,
   });
   return res.json(await getNotifyConfig());
 });

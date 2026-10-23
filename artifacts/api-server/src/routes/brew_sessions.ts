@@ -17,6 +17,8 @@ import { SESSION_UPLOADS_DIR } from "../lib/paths";
 import { scheduleBoilAlerts, clearBoilAlerts } from "../services/boilScheduler";
 import { createBrewSession, recipeVariantsOf } from "../services/brewSessionCreate";
 import { loadDryHopSchedule, scheduleForSession } from "../services/dryHops";
+import { getAutoConditioning } from "../services/autoConditioning";
+import { overrulesAutoAdvance } from "../lib/autoAdvance";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -140,6 +142,18 @@ router.put("/brew-sessions/:id", async (req, res) => {
         });
       }
     }
+  }
+
+  // Done here rather than in the page so a move back from Home Assistant or a
+  // script counts too; otherwise the next auto-advance check would undo it.
+  if (body.data.status === "fermenting" && existing[0].status === "conditioning" && overrulesAutoAdvance({
+    fromStatus: existing[0].status,
+    toStatus: body.data.status,
+    perBrew: existing[0].autoAdvanceToConditioning,
+    global: await getAutoConditioning(),
+    setsPerBrew: body.data.autoAdvanceToConditioning !== undefined,
+  })) {
+    updatePayload.autoAdvanceToConditioning = false;
   }
 
   // Auto-calculate ABV when session is packaged or when OG/FG change on a packaged session

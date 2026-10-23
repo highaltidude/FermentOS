@@ -93,8 +93,6 @@ export default function BrewSessionDetail() {
   });
   const tempAlertThreshold = tempAlertReadings?.count ?? 2;
   const tempAlertCount = useRef(0);
-  const [globalAutoConditioning, setGlobalAutoConditioning] = useState(false);
-  const autoAdvancedRef = useRef(false);
   const [showReadingForm, setShowReadingForm] = useState(false);
   const [readingForm, setReadingForm] = useState({ readingAt: toDatetimeLocalValue(new Date()), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
   const [editForm, setEditForm] = useState<any>({});
@@ -128,7 +126,9 @@ export default function BrewSessionDetail() {
   const { data: defaultReadingsData } = useGetDefaultReadingsShown();
   const defaultCount = defaultReadingsData?.count ?? 5;
 
-  const { data: session, isLoading } = useGetBrewSession(id, { query: { enabled: !!id, queryKey: getGetBrewSessionQueryKey(id) } });
+  // Polled so a page left open picks up the server moving the batch on to
+  // Conditioning, rather than showing Fermenting until reloaded.
+  const { data: session, isLoading } = useGetBrewSession(id, { query: { enabled: !!id, refetchInterval: 60_000, queryKey: getGetBrewSessionQueryKey(id) } });
 
   const { data: telemetry } = useGetBrewSensorTelemetry(id, {
     query: { enabled: !!id, refetchInterval: 30_000, queryKey: getGetBrewSensorTelemetryQueryKey(id) },
@@ -197,12 +197,7 @@ export default function BrewSessionDetail() {
   // already-recorded method intact when the stage is corrected afterwards.
   const applyStatus = (newStatus: BrewStatus, packagingMethod?: PackagingMethod) => {
     if (!session) return;
-    // Pulling a batch back from Conditioning is the brewer overruling
-    // auto-advance. Switch it off for this batch, or the very next telemetry
-    // poll would advance it again.
-    const autoAdvanceOn = session.autoAdvanceToConditioning ?? globalAutoConditioning;
-    const overruled = session.status === "conditioning" && newStatus === "fermenting" && autoAdvanceOn;
-    if (overruled) toast({ title: "Auto-advance turned off for this batch", description: "Turn it back on from Edit." });
+    const autoAdvanceBefore = session.autoAdvanceToConditioning;
     quickStatusMutation.mutate({
       id,
       data: {
@@ -215,7 +210,14 @@ export default function BrewSessionDetail() {
         abvActual: session.abvActual ?? undefined,
         notes: session.notes ?? undefined,
         packagingMethod: packagingMethod ?? session.packagingMethod ?? undefined,
-        ...(overruled ? { autoAdvanceToConditioning: false } : {}),
+      },
+    }, {
+      // Pulling a batch back from Conditioning switches auto-advance off for
+      // it; the server decides that, so say so when it happened.
+      onSuccess: (data) => {
+        if (data.autoAdvanceToConditioning === false && autoAdvanceBefore !== false) {
+          toast({ title: "Auto-advance turned off for this batch", description: "Turn it back on from Edit." });
+        }
       },
     });
   };
@@ -257,14 +259,6 @@ export default function BrewSessionDetail() {
     },
   });
 
-  // auto-conditioning isn't in the OpenAPI spec, so there's no generated hook for it.
-  useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}api/settings/auto-conditioning`)
-      .then((r) => r.json() as Promise<{ enabled: boolean }>)
-      .then((autoData) => setGlobalAutoConditioning(autoData.enabled ?? false))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     const alerts = telemetry?.alerts ?? [];
     const hasOutOfRange = (telemetry as any)?.isDeviceActive && alerts.some((a) => a.type === "temp_out_of_range");
@@ -279,17 +273,6 @@ export default function BrewSessionDetail() {
       tempAlertCount.current = 0;
     }
   }, [telemetry, tempAlertThreshold, toast]);
-
-  useEffect(() => {
-    const perBrew = session?.autoAdvanceToConditioning;
-    const effectiveAutoAdvance = perBrew !== null && perBrew !== undefined ? perBrew : globalAutoConditioning;
-    if (!effectiveAutoAdvance) return;
-    if (session?.status !== "fermenting") { autoAdvancedRef.current = false; return; }
-    if (telemetry?.insights?.fermentationStatus !== "possibly_complete") return;
-    if (autoAdvancedRef.current || quickStatusMutation.isPending) return;
-    autoAdvancedRef.current = true;
-    handleStatusClick("conditioning");
-  }, [telemetry, globalAutoConditioning, session]);
 
   const saveOgMutation = useUpdateBrewSession({
     mutation: {

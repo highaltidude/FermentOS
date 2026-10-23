@@ -3240,6 +3240,12 @@ export const GetNotificationSettingsResponse = zod
       .describe(
         "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
       ),
+    autoAdvanceAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -3320,6 +3326,12 @@ export const SetNotificationSettingsBody = zod
       .describe(
         "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
       ),
+    autoAdvanceAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -3396,6 +3408,12 @@ export const SetNotificationSettingsResponse = zod
       .optional()
       .describe(
         "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
+      ),
+    autoAdvanceAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true.",
       ),
   })
   .describe(

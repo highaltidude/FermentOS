@@ -5,6 +5,9 @@ import { batteryWarningLevel } from "../lib/batteryUtil";
 import { getConfigValue } from "./appConfig";
 import { activeTempPhase } from "../lib/alertPolicy";
 import { isGravityStalled } from "../lib/gravityStall";
+import { tempExcursion, type TempRange } from "../lib/tempExcursion";
+
+export { tempExcursion, type TempRange, type TempReadingLike, type TempExcursion } from "../lib/tempExcursion";
 
 /**
  * Brew telemetry and alert computation.
@@ -18,15 +21,6 @@ import { isGravityStalled } from "../lib/gravityStall";
 
 export type BrewAlert = { type: string; message: string; triggeredAt: string };
 
-export type TempRange = {
-  min: number | null;
-  max: number | null;
-  ideal: number | null;
-  unit: "F" | "C";
-  /** Which stage's range this is, so the chart can label it. */
-  phase: "fermenting" | "conditioning";
-} | null;
-
 export function calcConnectionStatus(
   lastSeenAt: Date | null,
   reportedIntervalSeconds: number | null,
@@ -37,38 +31,6 @@ export function calcConnectionStatus(
   if (elapsed < intervalMs * 2) return "connected";
   if (elapsed < intervalMs * 4) return "warning";
   return "offline";
-}
-
-export type TempReadingLike = { temperature?: number | null; temperatureUnit?: string | null };
-
-export type TempExcursion = { direction: "below" | "above"; value: number; limit: number; unit: string };
-
-/**
- * Whether one reading sits outside the configured range, expressed in the
- * range's own unit. Exported so the alert monitor can count *consecutive
- * out-of-range readings* using exactly the comparison that raises the alert,
- * rather than a second, drifting copy of the threshold logic.
- */
-export function tempExcursion(
-  reading: TempReadingLike | null | undefined,
-  tempRange: TempRange,
-): TempExcursion | null {
-  if (!tempRange || reading?.temperature == null) return null;
-
-  const readingUnit = (reading.temperatureUnit ?? "C").toUpperCase();
-  const rangeUnit = tempRange.unit;
-  let value = reading.temperature;
-  if (readingUnit === "C" && rangeUnit === "F") {
-    value = value * 9 / 5 + 32;
-  } else if (readingUnit === "F" && rangeUnit === "C") {
-    value = (value - 32) * 5 / 9;
-  }
-
-  const unit = rangeUnit === "F" ? "°F" : "°C";
-  const { min, max } = tempRange;
-  if (min != null && value < min) return { direction: "below", value, limit: min, unit };
-  if (max != null && value > max) return { direction: "above", value, limit: max, unit };
-  return null;
 }
 
 export function buildAlerts(

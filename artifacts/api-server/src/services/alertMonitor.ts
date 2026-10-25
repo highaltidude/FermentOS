@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { db, brewSessionsTable, brewAlertStateTable, sensorDeviceBrewAssignmentsTable, ACTIVE_BREW_STATUSES } from "@workspace/db";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
-import { computeBrewAlerts, tempExcursion, type BrewTelemetry } from "./brewAlerts.js";
+import { computeBrewAlerts } from "./brewAlerts.js";
 import { getNotifyConfig, type AlertType } from "./notifications.js";
 import { recordFiringAlert, resolveAlert } from "./alertState.js";
 import { runDryHopCheck } from "./dryHops.js";
@@ -11,6 +11,7 @@ import { isDryHopAlertType } from "../lib/dryHopSchedule.js";
 import { resolveRepeatHours } from "../lib/notifyIntervals.js";
 import { alertAppliesToStatus, notifiesOncePerBrew } from "../lib/alertPolicy.js";
 import { getTempAlertReadings } from "./tempAlertReadings.js";
+import { consecutiveTempExcursions, tempAlertConfirmed } from "../lib/tempExcursion.js";
 
 /**
  * Scheduled alert monitor.
@@ -21,32 +22,6 @@ import { getTempAlertReadings } from "./tempAlertReadings.js";
  * notifications can never disagree) on a timer and pushes anything new out
  * through the configured channel.
  */
-
-/**
- * Trailing run of readings that are outside the range. Readings with no
- * temperature at all are skipped rather than treated as a recovery, so one
- * partial report does not silently restart the count.
- *
- * Only temperature is debounced this way. The other three conditions are
- * already slow by construction — device_offline needs 4x the report interval
- * to elapse, gravity_stalled needs 24 hours of flat gravity, and battery_low
- * only trips once the pack is under 20% — so they notify on first detection.
- * gravity_stalled is further limited by lib/alertPolicy.ts: it is only checked
- * while fermenting and is sent at most once per brew.
- */
-function consecutiveTempExcursions(telemetry: BrewTelemetry): number {
-  const range = telemetry.tempRange ?? null;
-  if (!range) return 0;
-
-  let streak = 0;
-  for (let i = telemetry.readings.length - 1; i >= 0; i--) {
-    const reading = telemetry.readings[i]!;
-    if (reading.temperature == null) continue;
-    if (!tempExcursion(reading, range)) break;
-    streak++;
-  }
-  return streak;
-}
 
 function titleFor(recipeName: string, alertType: string): string {
   const labels: Record<string, string> = {
@@ -89,7 +64,7 @@ async function runAlertCheck(): Promise<void> {
         ));
 
       const telemetry = activeAssignment ? await computeBrewAlerts(session.id) : null;
-      const tempStreak = telemetry ? consecutiveTempExcursions(telemetry) : 0;
+      const tempStreak = telemetry ? consecutiveTempExcursions(telemetry.readings, telemetry.tempRange) : 0;
       const firing = new Set(
         (telemetry?.alerts ?? [])
           .map((a) => a.type)
@@ -115,9 +90,7 @@ async function runAlertCheck(): Promise<void> {
           // use the global one.
           repeatMs: resolveRepeatHours(alert.type, config.repeatHours, config.tempRepeatHours) * 60 * 60 * 1000,
           oncePerBrew: notifiesOncePerBrew(alert.type),
-          // Temperature has to persist across N readings; the rest are already
-          // slow enough to stand on their own (see consecutiveTempExcursions).
-          debounced: alert.type !== "temp_out_of_range" || tempStreak >= requiredTempReadings,
+          debounced: tempAlertConfirmed(alert.type, tempStreak, requiredTempReadings),
           payload: {
             title: titleFor(session.recipeName, alert.type),
             body: alert.message,

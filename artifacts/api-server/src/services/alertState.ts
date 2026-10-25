@@ -2,6 +2,7 @@ import { db, brewAlertStateTable, type BrewAlertState } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { sendNotification, type NotificationPayload, type NotifyConfig } from "./notifications.js";
+import { decideFiringAlert } from "../lib/alertDecision.js";
 
 /**
  * The brew_alert_state bookkeeping shared by every monitored alert — the
@@ -25,17 +26,8 @@ export type FiringAlert = {
 };
 
 export async function recordFiringAlert(a: FiringAlert): Promise<void> {
-  const { brewSessionId, alertType, prior, now } = a;
-
-  // A previously resolved row starts over rather than resuming its old
-  // seen count, so a recurrence is treated as a fresh incident.
-  const resuming = prior && prior.resolvedAt != null;
-  const seenCount = !prior || resuming ? 1 : prior.seenCount + 1;
-  const lastNotifiedAt = resuming && !a.oncePerBrew ? null : prior?.lastNotifiedAt ?? null;
-
-  const dueForRepeat = !a.oncePerBrew && lastNotifiedAt != null && now.getTime() - new Date(lastNotifiedAt).getTime() >= a.repeatMs;
-  const shouldNotify = a.debounced && (lastNotifiedAt == null || dueForRepeat);
-  const firstSeenAt = !prior || resuming ? now : prior.firstSeenAt;
+  const { brewSessionId, alertType, now } = a;
+  const { seenCount, firstSeenAt, lastNotifiedAt, shouldNotify } = decideFiringAlert(a);
 
   await db
     .insert(brewAlertStateTable)

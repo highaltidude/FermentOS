@@ -1061,9 +1061,9 @@ pnpm --filter @workspace/db run push            # apply schema changes (no migra
 pnpm --filter @workspace/api-spec run codegen   # regenerate the API client after editing openapi.yaml
 ```
 
-The API server needs both `PORT` and `DATABASE_URL` and does not read `.env` itself.
+The API server needs both `PORT` and `DATABASE_URL` and does not read `.env` itself. The Vite dev server forwards `/api` requests to the API at `API_PROXY_TARGET` (default `http://localhost:8080`), so open the frontend on its own port.
 
-Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack (Postgres + both dev servers, live-reloading against a bind-mounted repo) in one command.
+Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack in one command: Postgres, the schema push, the API on http://localhost:8080 and the frontend with hot reload on http://localhost:23975, against a bind-mounted repo. The API builds once at start, so after an API change run `docker compose -f docker-compose.dev.yml restart app`; after a dependency change, run `up --build -V`.
 
 ---
 

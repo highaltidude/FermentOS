@@ -27,6 +27,16 @@ export function scheduleToCron(s: ScheduleChoice): string {
   return `${m} ${h} * * ${days}`;
 }
 
+/** The picker choice a cron came from, or null for a hand-written expression. */
+export function cronToSchedule(cron: string): ScheduleChoice | null {
+  const every = /^0 \*\/(\d+) \* \* \*$/.exec(cron);
+  if (every) return { kind: "everyHours", hours: Number(every[1]) };
+  const daily = /^(\d{1,2}) (\d{1,2}) \* \* (\*|[0-6](?:,[0-6])*)$/.exec(cron);
+  if (!daily || Number(daily[1]) > 59 || Number(daily[2]) > 23) return null;
+  const time = `${daily[2]!.padStart(2, "0")}:${daily[1]!.padStart(2, "0")}`;
+  return { kind: "daily", time, days: daily[3] === "*" ? [] : daily[3]!.split(",").map(Number) };
+}
+
 /** Best-effort reading of a cron built by scheduleToCron; anything else is shown raw. */
 export function describeCron(cron: string): string {
   const every = /^0 \*\/(\d+) \* \* \*$/.exec(cron);
@@ -43,6 +53,7 @@ export function describeCron(cron: string): string {
 type Lookups = { devices: OutputDevice[]; sensors: SensorDeviceWithStatus[]; unit: TempUnit };
 
 function relayName(id: unknown, l: Lookups): string {
+  if (id == null) return "(no relay chosen)";
   return l.devices.find((d) => d.id === id)?.name ?? "a removed relay";
 }
 
@@ -50,7 +61,7 @@ function sourceName(source: unknown, l: Lookups): string {
   const s = source as { kind?: string; sensorDeviceId?: number; outputDeviceId?: number } | undefined;
   if (s?.kind === "shelly") return `${relayName(s.outputDeviceId, l)} probe`;
   if (s?.kind === "sensor") return l.sensors.find((d) => d.device.id === s.sensorDeviceId)?.device.deviceName ?? "a removed sensor";
-  return "no source";
+  return "(no sensor chosen)";
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -139,6 +150,27 @@ const edge = (source: string, target: string) => ({ id: `${source}-${target}`, s
 
 export type TempSourceChoice = { kind: "sensor"; sensorDeviceId: number } | { kind: "shelly"; outputDeviceId: number };
 
+export const sourceKey = (source: unknown): string => {
+  const s = source as Partial<{ kind: string; sensorDeviceId: number; outputDeviceId: number }> | null;
+  if (s?.kind === "shelly") return `shelly:${s.outputDeviceId}`;
+  if (s?.kind === "sensor") return `sensor:${s.sensorDeviceId}`;
+  return "";
+};
+
+/**
+ * Temperature sources for a picker: every sensor that reports temperature. A
+ * Shelly probe reads its relay's live 10-second value rather than the logged
+ * five-minute readings, so control is tighter.
+ */
+export function tempSourceOptions(sensors: SensorDeviceWithStatus[], devices: OutputDevice[]): { key: string; label: string; value: TempSourceChoice }[] {
+  return sensors.map((s) => {
+    const probe = s.device.deviceType === "shelly_probe";
+    const owner = probe ? devices.find((d) => d.probeSensorDeviceId === s.device.id) : undefined;
+    const value: TempSourceChoice = owner ? { kind: "shelly", outputDeviceId: owner.id } : { kind: "sensor", sensorDeviceId: s.device.id };
+    return { key: sourceKey(value), label: `${s.device.deviceName} (${probe ? "Shelly probe" : "iSpindel"})`, value };
+  });
+}
+
 export function fermentationTemplate(opts: {
   source: TempSourceChoice;
   relayId: number;
@@ -151,12 +183,12 @@ export function fermentationTemplate(opts: {
   const edges = [];
   let last = "trigger";
   if (opts.onlyWhileFermenting) {
-    nodes.push(node("status", "condition.brewStatus", 120, { statuses: ["fermenting", "conditioning"] }));
+    nodes.push(node("status", "condition.brewStatus", 150, { statuses: ["fermenting", "conditioning"] }));
     edges.push(edge(last, "status"));
     last = "status";
   }
   nodes.push(
-    node("thermostat", "control.thermostat", nodes.length * 120, {
+    node("thermostat", "control.thermostat", nodes.length * 150, {
       outputDeviceId: opts.relayId,
       mode: opts.mode,
       setpointC: Math.round(opts.setpointC * 100) / 100,
@@ -172,12 +204,112 @@ export function fermentationTemplate(opts: {
 export function timedRelayTemplate(opts: { schedule: ScheduleChoice; relayId: number; minutes: number; notify: string | null }): FlowGraph {
   const nodes = [
     node("trigger", "trigger.schedule", 0, { cron: scheduleToCron(opts.schedule) }),
-    node("relay", "action.relay", 120, { outputDeviceId: opts.relayId, action: "onFor", minutes: opts.minutes }),
+    node("relay", "action.relay", 150, { outputDeviceId: opts.relayId, action: "onFor", minutes: opts.minutes }),
   ];
   const edges = [edge("trigger", "relay")];
   if (opts.notify) {
-    nodes.push(node("notify", "action.notify", 240, { message: opts.notify }));
+    nodes.push(node("notify", "action.notify", 300, { message: opts.notify }));
     edges.push(edge("relay", "notify"));
   }
   return { version: 1, nodes, edges };
+}
+
+// ── Editor ─────────────────────────────────────────────────────────────────
+
+export type NodeCategory = "trigger" | "condition" | "control" | "action";
+export type GraphKind = "temperature" | "schedule";
+
+export const nodeCategory = (type: FlowGraphNodeType) => type.split(".")[0] as NodeCategory;
+
+/** Triggers start a flow, so nothing feeds them. */
+export const hasInput = (type: FlowGraphNodeType) => nodeCategory(type) !== "trigger";
+/** A thermostat owns its relay outright, so it must end its branch. */
+export const hasOutput = (type: FlowGraphNodeType) => type !== "control.thermostat";
+
+export const PALETTE: { category: NodeCategory; label: string; types: FlowGraphNodeType[] }[] = [
+  { category: "trigger", label: "Start with", types: ["trigger.temperature", "trigger.schedule"] },
+  { category: "condition", label: "Only if", types: ["condition.compare", "condition.timeWindow", "condition.brewStatus"] },
+  { category: "control", label: "Control", types: ["control.thermostat"] },
+  { category: "action", label: "Then", types: ["action.relay", "action.notify", "action.delay"] },
+];
+
+export const NODE_HINTS: Record<FlowGraphNodeType, string> = {
+  "trigger.schedule": "Runs the steps below at set times.",
+  "trigger.temperature": "Checks a sensor every 30 seconds and keeps the steps below up to date.",
+  "condition.compare": "Continues only while the temperature is above, below or between values.",
+  "condition.timeWindow": "Continues only between two times of day.",
+  "condition.brewStatus": "Continues only while the sensor's brew is at one of these stages.",
+  "control.thermostat": "Switches a relay to hold a target temperature.",
+  "action.relay": "Turns a relay on or off.",
+  "action.notify": "Sends a notification to your alert channel.",
+  "action.delay": "Waits before the next step.",
+};
+
+/** Whether a node type can be used in a flow of the given kind (null = no trigger yet). */
+export function allowedInKind(type: FlowGraphNodeType, kind: GraphKind | null): boolean {
+  if (kind === null || nodeCategory(type) === "trigger") return true;
+  if (kind === "schedule") return !["condition.compare", "condition.brewStatus", "control.thermostat"].includes(type);
+  return type !== "action.delay";
+}
+
+export function flowKindOf(graph: Pick<FlowGraph, "nodes">): GraphKind | null {
+  const trigger = graph.nodes.find((n) => nodeCategory(n.type) === "trigger");
+  if (!trigger) return null;
+  return trigger.type === "trigger.schedule" ? "schedule" : "temperature";
+}
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** Starting config for a node added to the canvas, in °C like every stored config. */
+export function defaultConfig(type: FlowGraphNodeType, unit: TempUnit, kind: GraphKind | null): Record<string, unknown> {
+  const temp = (c: number, f: number) => round2(unit === "F" ? fromUnit(f, "F") : c);
+  switch (type) {
+    case "trigger.schedule":
+      return { cron: "0 6 * * *" };
+    case "trigger.temperature":
+      return { source: null };
+    case "condition.compare":
+      return { op: "gt", valueC: temp(22, 72), value2C: null };
+    case "condition.timeWindow":
+      return { from: "22:00", to: "06:00", days: [] };
+    case "condition.brewStatus":
+      return { statuses: ["fermenting", "conditioning"] };
+    case "control.thermostat":
+      return { outputDeviceId: null, mode: "heat", setpointC: temp(20, 68), hysteresisC: round2(deltaFromUnit(unit === "F" ? 1 : 0.5, unit)), minOnSec: 0, minOffSec: 0 };
+    case "action.relay":
+      return kind === "schedule"
+        ? { outputDeviceId: null, action: "onFor", minutes: 15 }
+        : { outputDeviceId: null, action: "on", minutes: null };
+    case "action.notify":
+      return { message: kind === "schedule" ? "{flow} ran" : "{flow}: now {temp}" };
+    case "action.delay":
+      return { minutes: 10 };
+  }
+}
+
+/**
+ * Why an edge from `source` to `target` would break the flow's tree shape, or
+ * null if it's fine. The server re-checks everything on save; this only stops
+ * the canvas drawing an edge that could never be valid.
+ */
+export function connectionProblem(graph: Pick<FlowGraph, "nodes" | "edges">, source: string, target: string): string | null {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const from = byId.get(source);
+  const to = byId.get(target);
+  if (!from || !to) return "Unknown step";
+  if (source === target) return "A step can't feed itself";
+  if (!hasInput(to.type)) return "Nothing can feed a trigger";
+  if (!hasOutput(from.type)) return "A thermostat must be the last step on its branch";
+  if (graph.edges.some((e) => e.target === target)) return "Each step can only follow one other step";
+  // Does `target` already lead back to `source`?
+  const stack = [target];
+  const seen = new Set<string>();
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id === source) return "That would make a loop";
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const e of graph.edges) if (e.source === id) stack.push(e.target);
+  }
+  return null;
 }

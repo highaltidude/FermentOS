@@ -815,7 +815,9 @@ Managed from **Settings → System → Backups**.
 FermentOS takes a `pg_dump` of the whole database. You can run one on demand,
 download it, or schedule a run every day at 2 AM or every Sunday at 2 AM. A
 scheduled run pushes to your SFTP server if one is configured, and writes to the
-local disk if it is not, or if the SFTP push fails. Local backups can be deleted
+local disk if it is not, or if the SFTP push fails. If FermentOS was off or
+asleep when a scheduled run was due, it takes the missed backup two minutes
+after it next starts. Local backups can be deleted
 automatically after 5 to 60 days. Restores work from an uploaded file or from
 any backup still in local history.
 

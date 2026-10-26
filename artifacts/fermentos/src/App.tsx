@@ -17,6 +17,7 @@ import Inventory from "@/pages/Inventory";
 import Equipment from "@/pages/Equipment";
 import Calculators from "@/pages/Calculators";
 import Settings from "@/pages/Settings";
+import Flows from "@/pages/Flows";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -50,6 +51,7 @@ function Router() {
         <Route path="/ingredients" component={Inventory} />
         <Route path="/equipment" component={Equipment} />
         <Route path="/calculators" component={Calculators} />
+        <Route path="/flows" component={Flows} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

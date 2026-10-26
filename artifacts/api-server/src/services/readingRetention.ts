@@ -6,6 +6,7 @@ import {
   fermentationReadingsTable,
   brewSessionsTable,
   systemHealthSamplesTable,
+  flowRunsTable,
 } from "@workspace/db";
 import { logger } from "../lib/logger.js";
 import { getConfigValue, setConfigValue } from "./appConfig.js";
@@ -13,6 +14,8 @@ import { getConfigValue, setConfigValue } from "./appConfig.js";
 // Fixed retention window for system health history samples, independent of
 // the user-configurable reading_retention_days setting above.
 const SYSTEM_HEALTH_RETENTION_DAYS = 14;
+// Brew Flow run log, likewise fixed.
+const FLOW_RUN_RETENTION_DAYS = 14;
 
 const CONFIG_KEY = "reading_retention_days";
 
@@ -87,7 +90,16 @@ async function pruneSystemHealthSamples(): Promise<{ deleted: number }> {
   return { deleted: result.length };
 }
 
-/** Nightly 3am cleanup of old readings and system health samples. */
+async function pruneFlowRuns(): Promise<{ deleted: number }> {
+  const cutoff = new Date(Date.now() - FLOW_RUN_RETENTION_DAYS * 86_400_000);
+  const result = await db
+    .delete(flowRunsTable)
+    .where(lt(flowRunsTable.startedAt, cutoff))
+    .returning({ id: flowRunsTable.id });
+  return { deleted: result.length };
+}
+
+/** Nightly 3am cleanup of old readings, system health samples and flow runs. */
 export function startRetentionCleanup(): void {
   cron.schedule("0 3 * * *", () => {
     runRetentionCleanup()
@@ -96,5 +108,8 @@ export function startRetentionCleanup(): void {
     pruneSystemHealthSamples()
       .then((result) => logger.info(result, "Nightly system health sample cleanup"))
       .catch((e) => logger.error({ e }, "System health sample cleanup error"));
+    pruneFlowRuns()
+      .then((result) => logger.info(result, "Nightly flow run cleanup"))
+      .catch((e) => logger.error({ e }, "Flow run cleanup error"));
   });
 }

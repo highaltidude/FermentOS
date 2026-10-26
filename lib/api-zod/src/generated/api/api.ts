@@ -4837,6 +4837,17 @@ export const ListOutputDevicesResponseItem = zod.object({
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -4885,6 +4896,17 @@ export const CreateOutputDeviceResponse = zod.object({
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -4943,6 +4965,17 @@ export const GetOutputDeviceResponse = zod.object({
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -4992,6 +5025,17 @@ export const UpdateOutputDeviceResponse = zod.object({
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -5054,6 +5098,17 @@ export const SetOutputDeviceRelayResponse = zod.object({
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -5092,6 +5147,707 @@ export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary List Brew Flows with any problems and their latest run
+ */
+export const ListFlowsResponseItem = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+export const ListFlowsResponse = zod.array(ListFlowsResponseItem);
+
+/**
+ * @summary Create a flow. It starts disabled; enable it once it has no problems.
+ */
+export const createFlowBodyNameMax = 100;
+
+export const CreateFlowBody = zod.object({
+  name: zod.string().min(1).max(createFlowBodyNameMax),
+  description: zod.string().nullish(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+});
+
+export const CreateFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Get one flow
+ */
+export const GetFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Update a flow's name, description or graph. An enabled flow only accepts a graph with no problems.
+ */
+export const UpdateFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const updateFlowBodyNameMax = 100;
+
+export const UpdateFlowBody = zod.object({
+  name: zod.string().min(1).max(updateFlowBodyNameMax).optional(),
+  description: zod.string().nullish(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+});
+
+export const UpdateFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Delete a flow. Relays it controlled are switched off.
+ */
+export const DeleteFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const DeleteFlowResponse = zod.void();
+
+/**
+ * @summary Turn a flow on
+ */
+export const EnableFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const EnableFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Turn a flow off. Relays it controlled are switched off.
+ */
+export const DisableFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const DisableFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Run an enabled schedule flow now, without waiting for its schedule
+ */
+export const RunFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const RunFlowResponse = zod.object({
+  ok: zod.boolean(),
+  message: zod.string(),
+});
+
+/**
+ * @summary What a flow has done, newest first (kept for 14 days)
+ */
+export const ListFlowRunsParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const listFlowRunsQueryLimitMax = 200;
+
+export const ListFlowRunsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listFlowRunsQueryLimitMax)
+    .optional(),
+});
+
+export const ListFlowRunsResponseItem = zod.object({
+  id: zod.number().int(),
+  flowId: zod.number().int(),
+  startedAt: zod.string().datetime({ offset: true }),
+  trigger: zod.string().describe("tick, schedule, manual or system"),
+  status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+  message: zod.string(),
+  detail: zod.record(zod.string(), zod.unknown()).nullable(),
+});
+export const ListFlowRunsResponse = zod.array(ListFlowRunsResponseItem);
+
+/**
+ * @summary Live state of a flow — current temperature, which steps are active, fail-safe reason
+ */
+export const GetFlowStatusParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetFlowStatusResponse = zod.object({
+  flowId: zod.number().int(),
+  running: zod
+    .boolean()
+    .describe("The flow is enabled and loaded by the engine"),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  lastTickAt: zod.string().datetime({ offset: true }).nullable(),
+  tempC: zod.number().nullable(),
+  failsafe: zod
+    .string()
+    .nullable()
+    .describe("Why the flow is holding its relays off, if it is"),
+  waiting: zod
+    .boolean()
+    .describe("Waiting for the first readings after a restart"),
+  nextRunAt: zod.string().datetime({ offset: true }).nullable(),
+  nodes: zod.record(
+    zod.string(),
+    zod.object({
+      active: zod.boolean().describe("Reached on the last evaluation"),
+      relayOn: zod.boolean().optional(),
+      reason: zod
+        .string()
+        .optional()
+        .describe("Thermostat state, e.g. heating, idle, holding_min_off"),
+    }),
+  ),
 });

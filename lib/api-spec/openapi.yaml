@@ -30,6 +30,8 @@ tags:
     description: Sensor device management (iSpindel, Tilt, RAPT Pill, etc.)
   - name: integrations
     description: Third-party device integrations and telemetry ingest
+  - name: flows
+    description: Brew Flows — automations that switch relays from temperature or a schedule
   - name: devices
     description: Relay devices FermentOS switches (Shelly Gen1)
   - name: system
@@ -1740,6 +1742,12 @@ paths:
       responses:
         "204":
           description: Deleted
+        "409":
+          description: An enabled flow controls this relay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /devices/{id}/relay:
     post:
@@ -1769,6 +1777,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: An enabled flow controls this relay
           content:
             application/json:
               schema:
@@ -1807,6 +1821,225 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /flows:
+    get:
+      operationId: listFlows
+      tags: [flows]
+      summary: List Brew Flows with any problems and their latest run
+      responses:
+        "200":
+          description: Flow list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Flow"
+    post:
+      operationId: createFlow
+      tags: [flows]
+      summary: Create a flow. It starts disabled; enable it once it has no problems.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFlowBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flow"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /flows/{id}:
+    get:
+      operationId: getFlow
+      tags: [flows]
+      summary: Get one flow
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Flow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flow"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateFlow
+      tags: [flows]
+      summary: Update a flow's name, description or graph. An enabled flow only accepts a graph with no problems.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFlowBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flow"
+        "400":
+          description: Invalid input, or the flow is enabled and the new graph has problems
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowValidationError"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteFlow
+      tags: [flows]
+      summary: Delete a flow. Relays it controlled are switched off.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /flows/{id}/enable:
+    post:
+      operationId: enableFlow
+      tags: [flows]
+      summary: Turn a flow on
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flow"
+        "400":
+          description: The flow has problems, or a relay it uses belongs to another enabled flow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowValidationError"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /flows/{id}/disable:
+    post:
+      operationId: disableFlow
+      tags: [flows]
+      summary: Turn a flow off. Relays it controlled are switched off.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flow"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /flows/{id}/run:
+    post:
+      operationId: runFlow
+      tags: [flows]
+      summary: Run an enabled schedule flow now, without waiting for its schedule
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "202":
+          description: Started. The outcome is recorded in the flow's runs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunFlowResult"
+        "400":
+          description: Not an enabled schedule flow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /flows/{id}/runs:
+    get:
+      operationId: listFlowRuns
+      tags: [flows]
+      summary: What a flow has done, newest first (kept for 14 days)
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowRun"
+
+  /flows/{id}/status:
+    get:
+      operationId: getFlowStatus
+      tags: [flows]
+      summary: Live state of a flow — current temperature, which steps are active, fail-safe reason
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowStatus"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     IdParam:
@@ -1816,6 +2049,253 @@ components:
       schema:
         type: integer
   schemas:
+    FlowGraph:
+      type: object
+      description: >-
+        A trigger → condition → action tree in the node/edge shape the editor's
+        canvas uses. Node types and their config are listed in the README
+        (Brew Flows); the server validates them and reports problems per node.
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowGraphNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowGraphEdge"
+      required: [version, nodes, edges]
+
+    FlowGraphNode:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - trigger.schedule
+            - trigger.temperature
+            - condition.compare
+            - condition.timeWindow
+            - condition.brewStatus
+            - control.thermostat
+            - action.relay
+            - action.notify
+            - action.delay
+        position:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+          required: [x, y]
+        data:
+          type: object
+          properties:
+            config:
+              type: object
+              additionalProperties: true
+          required: [config]
+      required: [id, type, position, data]
+
+    FlowGraphEdge:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        target:
+          type: string
+      required: [id, source, target]
+
+    FlowProblem:
+      type: object
+      properties:
+        nodeId:
+          type: string
+          nullable: true
+          description: The node the problem is about, or null for the flow as a whole
+        message:
+          type: string
+      required: [nodeId, message]
+
+    FlowValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowProblem"
+      required: [error, problems]
+
+    Flow:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        graph:
+          $ref: "#/components/schemas/FlowGraph"
+        kind:
+          type: string
+          enum: [temperature, schedule]
+          nullable: true
+          description: Decided by the trigger; null while the graph has problems
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowProblem"
+        relayDeviceIds:
+          type: array
+          items:
+            type: integer
+        lastError:
+          type: string
+          nullable: true
+        lastRun:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/FlowRun"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, description, enabled, graph, kind, problems, relayDeviceIds, lastError, lastRun, createdAt, updatedAt]
+
+    CreateFlowBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        graph:
+          $ref: "#/components/schemas/FlowGraph"
+      required: [name, graph]
+
+    UpdateFlowBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        graph:
+          $ref: "#/components/schemas/FlowGraph"
+
+    FlowRun:
+      type: object
+      properties:
+        id:
+          type: integer
+        flowId:
+          type: integer
+        startedAt:
+          type: string
+          format: date-time
+        trigger:
+          type: string
+          description: tick, schedule, manual or system
+        status:
+          type: string
+          enum: [ok, skipped, error, failsafe]
+        message:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
+          nullable: true
+      required: [id, flowId, startedAt, trigger, status, message, detail]
+
+    FlowNodeState:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: Reached on the last evaluation
+        relayOn:
+          type: boolean
+        reason:
+          type: string
+          description: Thermostat state, e.g. heating, idle, holding_min_off
+      required: [active]
+
+    FlowStatus:
+      type: object
+      properties:
+        flowId:
+          type: integer
+        running:
+          type: boolean
+          description: The flow is enabled and loaded by the engine
+        kind:
+          type: string
+          enum: [temperature, schedule]
+          nullable: true
+        lastTickAt:
+          type: string
+          format: date-time
+          nullable: true
+        tempC:
+          type: number
+          nullable: true
+        failsafe:
+          type: string
+          nullable: true
+          description: Why the flow is holding its relays off, if it is
+        waiting:
+          type: boolean
+          description: Waiting for the first readings after a restart
+        nextRunAt:
+          type: string
+          format: date-time
+          nullable: true
+        nodes:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/FlowNodeState"
+      required: [flowId, running, kind, lastTickAt, tempC, failsafe, waiting, nextRunAt, nodes]
+
+    RunFlowResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+      required: [ok, message]
+
+    OutputDeviceOwner:
+      type: object
+      properties:
+        flowId:
+          type: integer
+        name:
+          type: string
+      required: [flowId, name]
+
     OutputDevice:
       type: object
       properties:
@@ -1848,13 +2328,18 @@ components:
           nullable: true
         state:
           $ref: "#/components/schemas/OutputDeviceLiveState"
+        controlledBy:
+          nullable: true
+          description: The enabled flow switching this relay, if any. Manual control is refused while set.
+          allOf:
+            - $ref: "#/components/schemas/OutputDeviceOwner"
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
-      required: [id, deviceType, name, host, channel, username, hasPassword, enabled, probeSensorDeviceId, lastSeenAt, state, createdAt, updatedAt]
+      required: [id, deviceType, name, host, channel, username, hasPassword, enabled, probeSensorDeviceId, lastSeenAt, state, controlledBy, createdAt, updatedAt]
 
     OutputDeviceLiveState:
       type: object

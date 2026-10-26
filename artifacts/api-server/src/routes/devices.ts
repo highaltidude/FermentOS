@@ -11,6 +11,7 @@ import { parseIdParam } from "../lib/http";
 import { normaliseShellyHost } from "../lib/shellyParse";
 import { probeShelly, getShellyStatus, setShellyRelay, applyShellySafeDefaults } from "../services/shelly";
 import { getLiveState, isReachable, noteRelayState, forgetDevice, pollAllDevices } from "../services/devicePoller";
+import { relayOwners } from "../services/flowEngine";
 
 const router = Router();
 
@@ -21,6 +22,7 @@ function toApi(device: OutputDevice) {
   return {
     ...rest,
     hasPassword: !!password,
+    controlledBy: relayOwners().get(device.id) ?? null,
     state: {
       reachable: isReachable(live),
       ison: live?.ison ?? lastState?.ison ?? null,
@@ -146,6 +148,8 @@ router.delete("/:id", async (req, res) => {
   const id = parseIdParam(req, res);
   if (id === undefined) return;
   const device = await findDevice(id);
+  const owner = relayOwners().get(id);
+  if (owner) return res.status(409).json({ error: `Turn off the flow "${owner.name}" before removing this relay` });
   if (device) {
     // Don't leave a heater running on a relay nothing manages any more.
     await setShellyRelay(device, false);
@@ -163,6 +167,9 @@ router.post("/:id/relay", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
   const device = await findDevice(id);
   if (!device) return res.status(404).json({ error: "Device not found" });
+  // Manual switching would be undone on the next tick anyway; say why instead.
+  const owner = relayOwners().get(id);
+  if (owner) return res.status(409).json({ error: `The flow "${owner.name}" is controlling this relay; turn it off to switch by hand` });
 
   const result = await setShellyRelay(device, body.data.on, body.data.on ? body.data.durationSec : undefined);
   if (!result.ok) return res.status(502).json({ error: result.reason });

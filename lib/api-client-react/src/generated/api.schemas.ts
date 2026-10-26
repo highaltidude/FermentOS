@@ -5,6 +5,208 @@
  * FermentOS API
  * OpenAPI spec version: 0.1.0
  */
+export type FlowGraphVersion =
+  (typeof FlowGraphVersion)[keyof typeof FlowGraphVersion];
+
+export const FlowGraphVersion = {
+  NUMBER_1: 1,
+} as const;
+
+export type FlowGraphNodeType =
+  (typeof FlowGraphNodeType)[keyof typeof FlowGraphNodeType];
+
+export const FlowGraphNodeType = {
+  triggerschedule: "trigger.schedule",
+  triggertemperature: "trigger.temperature",
+  conditioncompare: "condition.compare",
+  conditiontimeWindow: "condition.timeWindow",
+  conditionbrewStatus: "condition.brewStatus",
+  controlthermostat: "control.thermostat",
+  actionrelay: "action.relay",
+  actionnotify: "action.notify",
+  actiondelay: "action.delay",
+} as const;
+
+export type FlowGraphNodePosition = {
+  x: number;
+  y: number;
+};
+
+export type FlowGraphNodeDataConfig = { [key: string]: unknown };
+
+export type FlowGraphNodeData = {
+  config: FlowGraphNodeDataConfig;
+};
+
+export interface FlowGraphNode {
+  id: string;
+  type: FlowGraphNodeType;
+  position: FlowGraphNodePosition;
+  data: FlowGraphNodeData;
+}
+
+export interface FlowGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+/**
+ * A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.
+ */
+export interface FlowGraph {
+  version: FlowGraphVersion;
+  nodes: FlowGraphNode[];
+  edges: FlowGraphEdge[];
+}
+
+export interface FlowProblem {
+  /**
+   * The node the problem is about, or null for the flow as a whole
+   * @nullable
+   */
+  nodeId: string | null;
+  message: string;
+}
+
+export interface FlowValidationError {
+  error: string;
+  problems: FlowProblem[];
+}
+
+/**
+ * Decided by the trigger; null while the graph has problems
+ * @nullable
+ */
+export type FlowKind = (typeof FlowKind)[keyof typeof FlowKind] | null;
+
+export const FlowKind = {
+  temperature: "temperature",
+  schedule: "schedule",
+} as const;
+
+export type FlowRunStatus = (typeof FlowRunStatus)[keyof typeof FlowRunStatus];
+
+export const FlowRunStatus = {
+  ok: "ok",
+  skipped: "skipped",
+  error: "error",
+  failsafe: "failsafe",
+} as const;
+
+/**
+ * @nullable
+ */
+export type FlowRunDetail = { [key: string]: unknown } | null;
+
+export interface FlowRun {
+  id: number;
+  flowId: number;
+  startedAt: string;
+  /** tick, schedule, manual or system */
+  trigger: string;
+  status: FlowRunStatus;
+  message: string;
+  /** @nullable */
+  detail: FlowRunDetail;
+}
+
+export interface Flow {
+  id: number;
+  name: string;
+  /** @nullable */
+  description: string | null;
+  enabled: boolean;
+  graph: FlowGraph;
+  /**
+   * Decided by the trigger; null while the graph has problems
+   * @nullable
+   */
+  kind: FlowKind;
+  problems: FlowProblem[];
+  relayDeviceIds: number[];
+  /** @nullable */
+  lastError: string | null;
+  lastRun: FlowRun | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFlowBody {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  graph: FlowGraph;
+}
+
+export interface UpdateFlowBody {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+  graph?: FlowGraph;
+}
+
+export interface FlowNodeState {
+  /** Reached on the last evaluation */
+  active: boolean;
+  relayOn?: boolean;
+  /** Thermostat state, e.g. heating, idle, holding_min_off */
+  reason?: string;
+}
+
+/**
+ * @nullable
+ */
+export type FlowStatusKind =
+  (typeof FlowStatusKind)[keyof typeof FlowStatusKind] | null;
+
+export const FlowStatusKind = {
+  temperature: "temperature",
+  schedule: "schedule",
+} as const;
+
+export type FlowStatusNodes = { [key: string]: FlowNodeState };
+
+export interface FlowStatus {
+  flowId: number;
+  /** The flow is enabled and loaded by the engine */
+  running: boolean;
+  /** @nullable */
+  kind: FlowStatusKind;
+  /** @nullable */
+  lastTickAt: string | null;
+  /** @nullable */
+  tempC: number | null;
+  /**
+   * Why the flow is holding its relays off, if it is
+   * @nullable
+   */
+  failsafe: string | null;
+  /** Waiting for the first readings after a restart */
+  waiting: boolean;
+  /** @nullable */
+  nextRunAt: string | null;
+  nodes: FlowStatusNodes;
+}
+
+export interface RunFlowResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface OutputDeviceOwner {
+  flowId: number;
+  name: string;
+}
+
 export type OutputDeviceDeviceType =
   (typeof OutputDeviceDeviceType)[keyof typeof OutputDeviceDeviceType];
 
@@ -46,6 +248,8 @@ export interface OutputDevice {
   /** @nullable */
   lastSeenAt: string | null;
   state: OutputDeviceLiveState;
+  /** The enabled flow switching this relay, if any. Manual control is refused while set. */
+  controlledBy: OutputDeviceOwner | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1936,4 +2140,12 @@ export type GetSystemHealthHistoryParams = {
    * @maximum 336
    */
   hours?: number;
+};
+
+export type ListFlowRunsParams = {
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
 };

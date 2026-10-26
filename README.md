@@ -68,6 +68,7 @@ install to a tracked first batch.
 - **Equipment** — A register of your kit: category, condition, brand and model, serial number, purchase date and price
 - **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is checked in the background every five minutes, whether or not anyone has the app open, can notify you when it happens, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
+- **Shelly relays** — Switch a heat wrap, fridge or pump with a Shelly 1 (SHSW-1) over your local network, by hand or for a set number of minutes that the relay itself counts down. A temperature add-on probe on the Shelly is read too and can be logged to a brew like an iSpindel. See [Connect a Shelly relay](#connect-a-shelly-relay)
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
@@ -610,6 +611,40 @@ Set a **Security Token** in the Integrations panel. Then open the iSpindel web U
 #### Simulate a reading (development)
 
 Expand the **Developer: Simulate iSpindel Reading** section in the Integrations panel and click **Send Reading** — useful for testing before your device arrives or while debugging.
+
+### Connect a Shelly relay
+
+A [Shelly 1](https://www.shelly.com/) (model SHSW-1) is a small Wi-Fi relay that can switch a heat wrap, a fermentation fridge or a pump. FermentOS talks to it directly over your home network using its local HTTP API — no Shelly cloud account needed. If you fit the Shelly temperature add-on with a DS18B20 probe, FermentOS reads that too.
+
+> **Safety first.** A Shelly 1 switches mains voltage. Have it wired by someone qualified, inside a proper enclosure, and keep the device's own fuse or breaker in place. FermentOS adds software safeguards; it is not a substitute for a thermal cut-out on a heater.
+
+#### 1. Put the Shelly on your network
+
+Set the Shelly up with the Shelly app or its own hotspot (`http://192.168.33.1`) so it joins your Wi-Fi, then find its IP address in the app or your router's device list. Giving it a fixed (reserved) IP address in your router saves you updating FermentOS if it changes.
+
+#### 2. Add it to FermentOS
+
+Go to **Settings → System → Integrations → Shelly Relays** and click **Add relay**. Enter its IP address and click **Check device** — FermentOS confirms it found a Shelly, whether the relay is on, and whether a probe is fitted. Give it a name and click **Add relay**.
+
+If you turned on *Restricted Login* in the Shelly's settings, enter the same username and password. They are stored on your FermentOS server and never sent back to the browser.
+
+#### 3. Make it fail safe
+
+Click the shield icon next to the relay. This sets the Shelly to come back **off** after a power cut, instead of restoring whatever state it was in.
+
+#### 4. Switch it
+
+Use **Turn on / Turn off**, or type a number of minutes and click **On for…** to run it for a fixed time. Timed runs are counted down by the Shelly itself, so the relay still switches off on time even if FermentOS restarts or the network drops.
+
+The list refreshes every ten seconds. A red dot means FermentOS couldn't reach the relay on its last three tries — check it is powered and on Wi-Fi, and that its IP address hasn't changed.
+
+#### 5. Log the probe to a brew *(optional)*
+
+Once FermentOS sees a probe reading, a **Log probe to brew…** dropdown appears under the relay. Pick an active brew and the probe's temperature is added to that brew's fermentation chart every five minutes, labelled *Shelly probe*, and counts towards its temperature alerts — the same as an iSpindel would.
+
+#### Try it without hardware (development)
+
+`scripts/shelly-sim.ts` is a stand-in Shelly 1 for testing. Run it with `node scripts/shelly-sim.ts` (Node 24 or later), add `localhost:8081` as the relay address, and set the fake probe's temperature with `curl 'localhost:8081/sim?temp=21.5'`.
 
 ---
 
@@ -1528,6 +1563,23 @@ are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 | POST | `/api/integrations/ispindel/simulate` | Send a synthetic reading for development/testing — body needs `gravity` and `temperature`; optional `deviceId`, `brewSessionId`, `deviceName`, `temperatureUnit`, `battery`, `angle`, `rssi` |
 | GET | `/api/integrations/ispindel/status` | Status endpoint — `{ "devices": [...] }` with the latest reading from each enabled device |
 | GET | `/api/integrations/ispindel/devices/:deviceId/readings` | Paginated raw readings for a device — query params `limit`, `offset`, `sort` (`asc`/`desc`), `start`, `end`, `brewId` |
+
+---
+
+### Relay Devices (Shelly)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/devices` | List relay devices with their live state (`reachable`, `ison`, probe `tempC`, `rssi`, `lastError`) |
+| POST | `/api/devices/probe` | Check an address before adding it — body `{ "host": string, "username"?: string, "password"?: string }`. Always `200`; `ok` is `false` with an `error` when the device can't be reached, isn't a Shelly Gen1, or rejects the credentials |
+| POST | `/api/devices` | Add a relay — body `{ "name": string, "host": string, "channel"?: number, "username"?: string, "password"?: string }` |
+| GET | `/api/devices/:id` | Get one relay device |
+| PATCH | `/api/devices/:id` | Update any of `name`, `host`, `channel`, `username`, `password`, `enabled`. Omit `password` to keep it; send `null` to clear it |
+| DELETE | `/api/devices/:id` | Switch the relay off and remove it. The probe's sensor device and its readings are kept |
+| POST | `/api/devices/:id/relay` | Switch by hand — body `{ "on": boolean, "durationSec"?: number }`. With `durationSec` the Shelly switches itself back off after that many seconds. Returns `502` when the device can't be reached |
+| POST | `/api/devices/:id/safe-defaults` | Set the relay to come back off after a power cut. Returns `502` when the device can't be reached |
+
+Passwords are never returned; responses carry `hasPassword` instead. Once a relay's add-on probe reports a temperature, FermentOS registers it as a sensor device (`deviceType: "shelly_probe"`, linked by `probeSensorDeviceId`), so it can be assigned to a brew with the [Sensors](#sensors) endpoints.
 
 ---
 

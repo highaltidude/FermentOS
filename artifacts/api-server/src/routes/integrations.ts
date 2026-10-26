@@ -1,116 +1,14 @@
 import { Router } from "express";
-import { db, sensorDevicesTable, sensorReadingsTable, fermentationReadingsTable, brewSessionsTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable } from "@workspace/db";
 import { eq, desc, and, count, gte, lte } from "drizzle-orm";
-import { estimateBatteryPercent } from "../lib/batteryUtil";
 import { getConfigValue, setConfigValue, deleteConfigValue } from "../services/appConfig";
-import { buildDeviceSnapshot, getActiveAssignment } from "../services/sensorDevices";
+import { buildDeviceSnapshot } from "../services/sensorDevices";
+import { ingestReading } from "../services/sensorIngest";
 
 const router = Router();
 
 const CONFIG_ISPINDEL_ENABLED = "ispindel_enabled";
 const CONFIG_ISPINDEL_TOKEN = "ispindel_token";
-
-// ── Core ingest logic (reused by both POST /integrations/ispindel and simulate) ──
-
-async function ingestReading(opts: {
-  deviceName: string;
-  deviceKey: string;
-  gravity?: number | null;
-  temperature?: number | null;
-  temperatureUnit?: string | null;
-  angle?: number | null;
-  battery?: number | null;
-  rssi?: number | null;
-  interval?: number | null;
-  rawPayload?: unknown;
-  brewSessionId?: number | null;
-}): Promise<number> {
-  // Find or auto-create the device
-  let [device] = await db
-    .select()
-    .from(sensorDevicesTable)
-    .where(eq(sensorDevicesTable.deviceKey, opts.deviceKey));
-
-  if (!device) {
-    [device] = await db
-      .insert(sensorDevicesTable)
-      .values({
-        deviceType: "ispindel",
-        deviceName: opts.deviceName,
-        deviceKey: opts.deviceKey,
-        enabled: true,
-      })
-      .returning();
-  }
-
-  // Update lastSeenAt
-  await db
-    .update(sensorDevicesTable)
-    .set({ lastSeenAt: new Date(), updatedAt: new Date() })
-    .where(eq(sensorDevicesTable.id, device!.id));
-
-  // Resolve active brew assignment
-  let brewSessionId = opts.brewSessionId ?? null;
-  if (brewSessionId == null) {
-    const activeAssignment = await getActiveAssignment(device!.id);
-    brewSessionId = activeAssignment?.brewSessionId ?? null;
-  }
-
-  // Store sensor reading
-  const batteryPct = opts.battery != null ? estimateBatteryPercent(opts.battery) : null;
-  const [reading] = await db
-    .insert(sensorReadingsTable)
-    .values({
-      deviceId: device!.id,
-      brewSessionId,
-      gravity: opts.gravity ?? null,
-      temperature: opts.temperature ?? null,
-      temperatureUnit: opts.temperatureUnit ?? "C",
-      angle: opts.angle ?? null,
-      battery: opts.battery ?? null,
-      batteryPercentEstimate: batteryPct,
-      rssi: opts.rssi != null ? Math.round(opts.rssi) : null,
-      reportedInterval: opts.interval != null ? Math.round(opts.interval) : null,
-      rawPayload: opts.rawPayload ?? null,
-      receivedAt: new Date(),
-    })
-    .returning();
-
-  // Mirror to fermentation_readings so existing brew charts pick up device data.
-  // Skip mirroring if the assigned session is already packaged — raw sensor
-  // readings are still stored above for audit purposes, but we don't want to
-  // append to the fermentation chart of a finished batch.
-  let sessionIsPackaged = false;
-  if (brewSessionId) {
-    const [assignedSession] = await db
-      .select({ status: brewSessionsTable.status })
-      .from(brewSessionsTable)
-      .where(eq(brewSessionsTable.id, brewSessionId));
-    sessionIsPackaged = assignedSession?.status === "packaged";
-  }
-
-  if (!sessionIsPackaged && brewSessionId && (opts.gravity != null || opts.temperature != null)) {
-    // Convert temperature to °F for the fermentation_readings table (stored in °F)
-    let tempF: number | null = null;
-    if (opts.temperature != null) {
-      if ((opts.temperatureUnit ?? "C").toUpperCase() === "F") {
-        tempF = opts.temperature;
-      } else {
-        tempF = opts.temperature * 9 / 5 + 32;
-      }
-    }
-    await db.insert(fermentationReadingsTable).values({
-      brewSessionId,
-      readingAt: new Date(),
-      temperatureFahrenheit: tempF,
-      gravity: opts.gravity ?? null,
-      notes: opts.deviceName ?? null,
-      source: "ispindel",
-    });
-  }
-
-  return reading!.id;
-}
 
 // ── POST /integrations/ispindel ────────────────────────────────────────────
 // Whitelisted from apiAuth so real devices can POST without a Bearer token.

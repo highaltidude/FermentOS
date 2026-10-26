@@ -5,6 +5,115 @@
  * FermentOS API
  * OpenAPI spec version: 0.1.0
  */
+export type OutputDeviceDeviceType =
+  (typeof OutputDeviceDeviceType)[keyof typeof OutputDeviceDeviceType];
+
+export const OutputDeviceDeviceType = {
+  shelly_gen1: "shelly_gen1",
+} as const;
+
+export interface OutputDeviceLiveState {
+  reachable: boolean;
+  /** @nullable */
+  ison: boolean | null;
+  /**
+   * Add-on probe temperature in °C, null when no probe is fitted
+   * @nullable
+   */
+  tempC: number | null;
+  /** @nullable */
+  rssi: number | null;
+  /** @nullable */
+  lastError: string | null;
+}
+
+export interface OutputDevice {
+  id: number;
+  deviceType: OutputDeviceDeviceType;
+  name: string;
+  host: string;
+  channel: number;
+  /** @nullable */
+  username: string | null;
+  /** The password itself is never returned */
+  hasPassword: boolean;
+  enabled: boolean;
+  /**
+   * Sensor device that records the add-on probe's temperature, once one has been seen
+   * @nullable
+   */
+  probeSensorDeviceId: number | null;
+  /** @nullable */
+  lastSeenAt: string | null;
+  state: OutputDeviceLiveState;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOutputDeviceBody {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  host: string;
+  /** @minimum 0 */
+  channel?: number;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+}
+
+export interface UpdateOutputDeviceBody {
+  /** @minLength 1 */
+  name?: string;
+  /** @minLength 1 */
+  host?: string;
+  /** @minimum 0 */
+  channel?: number;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+  enabled?: boolean;
+}
+
+export interface ProbeOutputDeviceBody {
+  /** @minLength 1 */
+  host: string;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+}
+
+export interface ProbeOutputDeviceResult {
+  ok: boolean;
+  /** @nullable */
+  error: string | null;
+  /** The address as it will be stored */
+  host: string;
+  /**
+   * Shelly model code, e.g. SHSW-1
+   * @nullable
+   */
+  model: string | null;
+  authRequired: boolean;
+  /** @nullable */
+  ison: boolean | null;
+  /** @nullable */
+  tempC: number | null;
+}
+
+export interface SetOutputDeviceRelayBody {
+  on: boolean;
+  /**
+   * Turn back after this many seconds, enforced by the device itself
+   * @minimum 1
+   * @maximum 86400
+   */
+  durationSec?: number;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -812,6 +921,7 @@ export type FermentationReadingSource =
 export const FermentationReadingSource = {
   manual: "manual",
   ispindel: "ispindel",
+  shelly: "shelly",
 } as const;
 
 export interface FermentationReading {

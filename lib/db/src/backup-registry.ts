@@ -24,6 +24,7 @@ export const BACKUP_REGISTRY = [
   "sensor_readings",
   "sensor_device_brew_assignments",
   "system_health_samples",
+  "output_devices",
 ] as const;
 
 export type BackedUpTable = (typeof BACKUP_REGISTRY)[number];

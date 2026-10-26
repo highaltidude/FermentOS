@@ -32,6 +32,7 @@ import type {
   CreateEquipmentBody,
   CreateFermentationReadingBody,
   CreateInventoryItemBody,
+  CreateOutputDeviceBody,
   CreateRecipeBody,
   CreateRecipeIngredientBody,
   CreateRecipeStepBody,
@@ -69,6 +70,9 @@ import type {
   ListSensorReadingsParams,
   NotificationSettings,
   NotificationTestResult,
+  OutputDevice,
+  ProbeOutputDeviceBody,
+  ProbeOutputDeviceResult,
   ReadingRetentionBody,
   ReadingRetentionResponse,
   Recipe,
@@ -79,6 +83,7 @@ import type {
   SensorDevice,
   SensorDeviceWithStatus,
   SensorReading,
+  SetOutputDeviceRelayBody,
   SimulateISpindelReading200,
   SimulateReadingBody,
   SourceWater,
@@ -93,6 +98,7 @@ import type {
   UpdateBrewSessionBody,
   UpdateEquipmentBody,
   UpdateInventoryItemBody,
+  UpdateOutputDeviceBody,
   UpdateRecipeBody,
   UpdateRecipeIngredientBody,
   UpdateRecipeStepBody,
@@ -8528,4 +8534,812 @@ export const useDisableHttps = <
   TContext
 > => {
   return useMutation(getDisableHttpsMutationOptions(options));
+};
+
+export const getListOutputDevicesUrl = () => {
+  return `/api/devices`;
+};
+
+/**
+ * @summary List relay devices with their live state
+ */
+export const listOutputDevices = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice[]> => {
+  return customFetch<OutputDevice[]>(getListOutputDevicesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListOutputDevicesQueryKey = () => {
+  return [`/api/devices`] as const;
+};
+
+export const getListOutputDevicesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOutputDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOutputDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListOutputDevicesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOutputDevices>>
+  > = ({ signal }) => listOutputDevices({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOutputDevices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOutputDevicesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOutputDevices>>
+>;
+export type ListOutputDevicesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List relay devices with their live state
+ */
+
+export function useListOutputDevices<
+  TData = Awaited<ReturnType<typeof listOutputDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOutputDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOutputDevicesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getCreateOutputDeviceUrl = () => {
+  return `/api/devices`;
+};
+
+/**
+ * @summary Add a relay device
+ */
+export const createOutputDevice = async (
+  createOutputDeviceBody: CreateOutputDeviceBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<OutputDevice>(getCreateOutputDeviceUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(createOutputDeviceBody),
+  });
+};
+
+export const getCreateOutputDeviceMutationKey = () =>
+  ["createOutputDevice"] as const;
+
+export const getCreateOutputDeviceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOutputDevice>>,
+    TError,
+    CreateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOutputDevice>>,
+  TError,
+  CreateOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCreateOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOutputDevice>>,
+    CreateOutputDeviceMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createOutputDevice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOutputDevice>>
+>;
+export type CreateOutputDeviceMutationBody = BodyType<CreateOutputDeviceBody>;
+export type CreateOutputDeviceMutationError = ErrorType<ErrorResponse>;
+export type CreateOutputDeviceMutationVariables = {
+  data: BodyType<CreateOutputDeviceBody>;
+};
+
+/**
+ * @summary Add a relay device
+ */
+export const useCreateOutputDevice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOutputDevice>>,
+    TError,
+    CreateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOutputDevice>>,
+  TError,
+  CreateOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getCreateOutputDeviceMutationOptions(options));
+};
+
+export const getProbeOutputDeviceUrl = () => {
+  return `/api/devices/probe`;
+};
+
+/**
+ * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ */
+export const probeOutputDevice = async (
+  probeOutputDeviceBody: ProbeOutputDeviceBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<ProbeOutputDeviceResult> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<ProbeOutputDeviceResult>(getProbeOutputDeviceUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(probeOutputDeviceBody),
+  });
+};
+
+export const getProbeOutputDeviceMutationKey = () =>
+  ["probeOutputDevice"] as const;
+
+export const getProbeOutputDeviceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof probeOutputDevice>>,
+    TError,
+    ProbeOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof probeOutputDevice>>,
+  TError,
+  ProbeOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getProbeOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof probeOutputDevice>>,
+    ProbeOutputDeviceMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return probeOutputDevice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ProbeOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof probeOutputDevice>>
+>;
+export type ProbeOutputDeviceMutationBody = BodyType<ProbeOutputDeviceBody>;
+export type ProbeOutputDeviceMutationError = ErrorType<ErrorResponse>;
+export type ProbeOutputDeviceMutationVariables = {
+  data: BodyType<ProbeOutputDeviceBody>;
+};
+
+/**
+ * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ */
+export const useProbeOutputDevice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof probeOutputDevice>>,
+    TError,
+    ProbeOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof probeOutputDevice>>,
+  TError,
+  ProbeOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getProbeOutputDeviceMutationOptions(options));
+};
+
+export const getGetOutputDeviceUrl = (id: number) => {
+  return `/api/devices/${id}`;
+};
+
+/**
+ * @summary Get one relay device with its live state
+ */
+export const getOutputDevice = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  return customFetch<OutputDevice>(getGetOutputDeviceUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOutputDeviceQueryKey = (id: number) => {
+  return [`/api/devices/${id}`] as const;
+};
+
+export const getGetOutputDeviceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOutputDevice>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOutputDevice>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetOutputDeviceQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getOutputDevice>>> = ({
+    signal,
+  }) => getOutputDevice(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOutputDevice>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOutputDeviceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOutputDevice>>
+>;
+export type GetOutputDeviceQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get one relay device with its live state
+ */
+
+export function useGetOutputDevice<
+  TData = Awaited<ReturnType<typeof getOutputDevice>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOutputDevice>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOutputDeviceQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getUpdateOutputDeviceUrl = (id: number) => {
+  return `/api/devices/${id}`;
+};
+
+/**
+ * @summary Update a relay device. Omit password to keep it, send null to clear it.
+ */
+export const updateOutputDevice = async (
+  id: number,
+  updateOutputDeviceBody: UpdateOutputDeviceBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<OutputDevice>(getUpdateOutputDeviceUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(updateOutputDeviceBody),
+  });
+};
+
+export const getUpdateOutputDeviceMutationKey = () =>
+  ["updateOutputDevice"] as const;
+
+export const getUpdateOutputDeviceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOutputDevice>>,
+    TError,
+    UpdateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOutputDevice>>,
+  TError,
+  UpdateOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOutputDevice>>,
+    UpdateOutputDeviceMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateOutputDevice(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOutputDevice>>
+>;
+export type UpdateOutputDeviceMutationBody = BodyType<UpdateOutputDeviceBody>;
+export type UpdateOutputDeviceMutationError = ErrorType<ErrorResponse>;
+export type UpdateOutputDeviceMutationVariables = {
+  id: number;
+  data: BodyType<UpdateOutputDeviceBody>;
+};
+
+/**
+ * @summary Update a relay device. Omit password to keep it, send null to clear it.
+ */
+export const useUpdateOutputDevice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOutputDevice>>,
+    TError,
+    UpdateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOutputDevice>>,
+  TError,
+  UpdateOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateOutputDeviceMutationOptions(options));
+};
+
+export const getDeleteOutputDeviceUrl = (id: number) => {
+  return `/api/devices/${id}`;
+};
+
+/**
+ * @summary Remove a relay device. Its probe's sensor history is kept.
+ */
+export const deleteOutputDevice = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<void> => {
+  return customFetch<void>(getDeleteOutputDeviceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteOutputDeviceMutationKey = () =>
+  ["deleteOutputDevice"] as const;
+
+export const getDeleteOutputDeviceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOutputDevice>>,
+    TError,
+    DeleteOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteOutputDevice>>,
+  TError,
+  DeleteOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteOutputDevice>>,
+    DeleteOutputDeviceMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteOutputDevice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteOutputDevice>>
+>;
+
+export type DeleteOutputDeviceMutationError = ErrorType<unknown>;
+export type DeleteOutputDeviceMutationVariables = { id: number };
+
+/**
+ * @summary Remove a relay device. Its probe's sensor history is kept.
+ */
+export const useDeleteOutputDevice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOutputDevice>>,
+    TError,
+    DeleteOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteOutputDevice>>,
+  TError,
+  DeleteOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteOutputDeviceMutationOptions(options));
+};
+
+export const getSetOutputDeviceRelayUrl = (id: number) => {
+  return `/api/devices/${id}/relay`;
+};
+
+/**
+ * @summary Switch the relay on or off by hand, optionally for a fixed time
+ */
+export const setOutputDeviceRelay = async (
+  id: number,
+  setOutputDeviceRelayBody: SetOutputDeviceRelayBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<OutputDevice>(getSetOutputDeviceRelayUrl(id), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(setOutputDeviceRelayBody),
+  });
+};
+
+export const getSetOutputDeviceRelayMutationKey = () =>
+  ["setOutputDeviceRelay"] as const;
+
+export const getSetOutputDeviceRelayMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+    TError,
+    SetOutputDeviceRelayMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+  TError,
+  SetOutputDeviceRelayMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSetOutputDeviceRelayMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+    SetOutputDeviceRelayMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setOutputDeviceRelay(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetOutputDeviceRelayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setOutputDeviceRelay>>
+>;
+export type SetOutputDeviceRelayMutationBody =
+  BodyType<SetOutputDeviceRelayBody>;
+export type SetOutputDeviceRelayMutationError = ErrorType<ErrorResponse>;
+export type SetOutputDeviceRelayMutationVariables = {
+  id: number;
+  data: BodyType<SetOutputDeviceRelayBody>;
+};
+
+/**
+ * @summary Switch the relay on or off by hand, optionally for a fixed time
+ */
+export const useSetOutputDeviceRelay = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+    TError,
+    SetOutputDeviceRelayMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+  TError,
+  SetOutputDeviceRelayMutationVariables,
+  TContext
+> => {
+  return useMutation(getSetOutputDeviceRelayMutationOptions(options));
+};
+
+export const getApplyOutputDeviceSafeDefaultsUrl = (id: number) => {
+  return `/api/devices/${id}/safe-defaults`;
+};
+
+/**
+ * @summary Set the relay to come back off after a power cut
+ */
+export const applyOutputDeviceSafeDefaults = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  return customFetch<OutputDevice>(getApplyOutputDeviceSafeDefaultsUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getApplyOutputDeviceSafeDefaultsMutationKey = () =>
+  ["applyOutputDeviceSafeDefaults"] as const;
+
+export const getApplyOutputDeviceSafeDefaultsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+    TError,
+    ApplyOutputDeviceSafeDefaultsMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+  TError,
+  ApplyOutputDeviceSafeDefaultsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getApplyOutputDeviceSafeDefaultsMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+    ApplyOutputDeviceSafeDefaultsMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return applyOutputDeviceSafeDefaults(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyOutputDeviceSafeDefaultsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>
+>;
+
+export type ApplyOutputDeviceSafeDefaultsMutationError =
+  ErrorType<ErrorResponse>;
+export type ApplyOutputDeviceSafeDefaultsMutationVariables = { id: number };
+
+/**
+ * @summary Set the relay to come back off after a power cut
+ */
+export const useApplyOutputDeviceSafeDefaults = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+    TError,
+    ApplyOutputDeviceSafeDefaultsMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+  TError,
+  ApplyOutputDeviceSafeDefaultsMutationVariables,
+  TContext
+> => {
+  return useMutation(getApplyOutputDeviceSafeDefaultsMutationOptions(options));
 };

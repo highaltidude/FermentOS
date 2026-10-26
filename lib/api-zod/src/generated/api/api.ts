@@ -2137,7 +2137,7 @@ export const GetBrewSessionResponse = zod
           gravity: zod.number().nullish(),
           ph: zod.number().nullish(),
           notes: zod.string().nullish(),
-          source: zod.enum(["manual", "ispindel"]),
+          source: zod.enum(["manual", "ispindel", "shelly"]),
         }),
       ),
       statusLog: zod.array(
@@ -2972,7 +2972,7 @@ export const ListFermentationReadingsResponseItem = zod.object({
   gravity: zod.number().nullish(),
   ph: zod.number().nullish(),
   notes: zod.string().nullish(),
-  source: zod.enum(["manual", "ispindel"]),
+  source: zod.enum(["manual", "ispindel", "shelly"]),
 });
 export const ListFermentationReadingsResponse = zod.array(
   ListFermentationReadingsResponseItem,
@@ -3001,7 +3001,7 @@ export const AddFermentationReadingResponse = zod.object({
   gravity: zod.number().nullish(),
   ph: zod.number().nullish(),
   notes: zod.string().nullish(),
-  source: zod.enum(["manual", "ispindel"]),
+  source: zod.enum(["manual", "ispindel", "shelly"]),
 });
 
 /**
@@ -4805,4 +4805,293 @@ export const EnableHttpsResponse = zod.object({
  */
 export const DisableHttpsResponse = zod.object({
   started: zod.boolean(),
+});
+
+/**
+ * @summary List relay devices with their live state
+ */
+export const ListOutputDevicesResponseItem = zod.object({
+  id: zod.number().int(),
+  deviceType: zod.enum(["shelly_gen1"]),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+export const ListOutputDevicesResponse = zod.array(
+  ListOutputDevicesResponseItem,
+);
+
+/**
+ * @summary Add a relay device
+ */
+
+export const createOutputDeviceBodyChannelMin = 0;
+
+export const CreateOutputDeviceBody = zod.object({
+  name: zod.string().min(1),
+  host: zod.string().min(1),
+  channel: zod.number().int().min(createOutputDeviceBodyChannelMin).optional(),
+  username: zod.string().nullish(),
+  password: zod.string().nullish(),
+});
+
+export const CreateOutputDeviceResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod.enum(["shelly_gen1"]),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ */
+
+export const ProbeOutputDeviceBody = zod.object({
+  host: zod.string().min(1),
+  username: zod.string().nullish(),
+  password: zod.string().nullish(),
+});
+
+export const ProbeOutputDeviceResponse = zod.object({
+  ok: zod.boolean(),
+  error: zod.string().nullable(),
+  host: zod.string().describe("The address as it will be stored"),
+  model: zod.string().nullable().describe("Shelly model code, e.g. SHSW-1"),
+  authRequired: zod.boolean(),
+  ison: zod.boolean().nullable(),
+  tempC: zod.number().nullable(),
+});
+
+/**
+ * @summary Get one relay device with its live state
+ */
+export const GetOutputDeviceParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetOutputDeviceResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod.enum(["shelly_gen1"]),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Update a relay device. Omit password to keep it, send null to clear it.
+ */
+export const UpdateOutputDeviceParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const updateOutputDeviceBodyChannelMin = 0;
+
+export const UpdateOutputDeviceBody = zod.object({
+  name: zod.string().min(1).optional(),
+  host: zod.string().min(1).optional(),
+  channel: zod.number().int().min(updateOutputDeviceBodyChannelMin).optional(),
+  username: zod.string().nullish(),
+  password: zod.string().nullish(),
+  enabled: zod.boolean().optional(),
+});
+
+export const UpdateOutputDeviceResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod.enum(["shelly_gen1"]),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Remove a relay device. Its probe's sensor history is kept.
+ */
+export const DeleteOutputDeviceParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const DeleteOutputDeviceResponse = zod.void();
+
+/**
+ * @summary Switch the relay on or off by hand, optionally for a fixed time
+ */
+export const SetOutputDeviceRelayParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const setOutputDeviceRelayBodyDurationSecMax = 86400;
+
+export const SetOutputDeviceRelayBody = zod.object({
+  on: zod.boolean(),
+  durationSec: zod
+    .number()
+    .int()
+    .min(1)
+    .max(setOutputDeviceRelayBodyDurationSecMax)
+    .optional()
+    .describe(
+      "Turn back after this many seconds, enforced by the device itself",
+    ),
+});
+
+export const SetOutputDeviceRelayResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod.enum(["shelly_gen1"]),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Set the relay to come back off after a power cut
+ */
+export const ApplyOutputDeviceSafeDefaultsParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod.enum(["shelly_gen1"]),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
 });

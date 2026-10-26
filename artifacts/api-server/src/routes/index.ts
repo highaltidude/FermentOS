@@ -14,6 +14,7 @@ import haRouter from "./ha";
 import sensorsRouter from "./sensors";
 import integrationsRouter from "./integrations";
 import httpsRouter from "./https";
+import devicesRouter from "./devices";
 import { apiAuth } from "../middlewares/apiAuth";
 
 const router: IRouter = Router();
@@ -39,5 +40,6 @@ router.use(backupRouter);
 router.use("/ha", haRouter);
 router.use(sensorsRouter);
 router.use("/integrations", integrationsRouter);
+router.use("/devices", devicesRouter);
 
 export default router;

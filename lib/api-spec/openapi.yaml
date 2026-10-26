@@ -30,6 +30,8 @@ tags:
     description: Sensor device management (iSpindel, Tilt, RAPT Pill, etc.)
   - name: integrations
     description: Third-party device integrations and telemetry ingest
+  - name: devices
+    description: Relay devices FermentOS switches (Shelly Gen1)
   - name: system
     description: Host system stats and health history
 paths:
@@ -1615,6 +1617,196 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /devices:
+    get:
+      operationId: listOutputDevices
+      tags: [devices]
+      summary: List relay devices with their live state
+      responses:
+        "200":
+          description: Device list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OutputDevice"
+    post:
+      operationId: createOutputDevice
+      tags: [devices]
+      summary: Add a relay device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOutputDeviceBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutputDevice"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /devices/probe:
+    post:
+      operationId: probeOutputDevice
+      tags: [devices]
+      summary: Check that an address answers as a Shelly Gen1 device, before adding it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProbeOutputDeviceBody"
+      responses:
+        "200":
+          description: Probe result. `ok` is false when the device can't be reached, isn't a Shelly, or rejects the credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeOutputDeviceResult"
+        "400":
+          description: Invalid address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /devices/{id}:
+    get:
+      operationId: getOutputDevice
+      tags: [devices]
+      summary: Get one relay device with its live state
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutputDevice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateOutputDevice
+      tags: [devices]
+      summary: Update a relay device. Omit password to keep it, send null to clear it.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOutputDeviceBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutputDevice"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteOutputDevice
+      tags: [devices]
+      summary: Remove a relay device. Its probe's sensor history is kept.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+
+  /devices/{id}/relay:
+    post:
+      operationId: setOutputDeviceRelay
+      tags: [devices]
+      summary: Switch the relay on or off by hand, optionally for a fixed time
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetOutputDeviceRelayBody"
+      responses:
+        "200":
+          description: Relay switched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutputDevice"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The device could not be reached or refused the command
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /devices/{id}/safe-defaults:
+    post:
+      operationId: applyOutputDeviceSafeDefaults
+      tags: [devices]
+      summary: Set the relay to come back off after a power cut
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutputDevice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The device could not be reached or refused the command
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     IdParam:
@@ -1624,6 +1816,158 @@ components:
       schema:
         type: integer
   schemas:
+    OutputDevice:
+      type: object
+      properties:
+        id:
+          type: integer
+        deviceType:
+          type: string
+          enum: [shelly_gen1]
+        name:
+          type: string
+        host:
+          type: string
+        channel:
+          type: integer
+        username:
+          type: string
+          nullable: true
+        hasPassword:
+          type: boolean
+          description: The password itself is never returned
+        enabled:
+          type: boolean
+        probeSensorDeviceId:
+          type: integer
+          nullable: true
+          description: Sensor device that records the add-on probe's temperature, once one has been seen
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        state:
+          $ref: "#/components/schemas/OutputDeviceLiveState"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, deviceType, name, host, channel, username, hasPassword, enabled, probeSensorDeviceId, lastSeenAt, state, createdAt, updatedAt]
+
+    OutputDeviceLiveState:
+      type: object
+      properties:
+        reachable:
+          type: boolean
+        ison:
+          type: boolean
+          nullable: true
+        tempC:
+          type: number
+          nullable: true
+          description: Add-on probe temperature in °C, null when no probe is fitted
+        rssi:
+          type: integer
+          nullable: true
+        lastError:
+          type: string
+          nullable: true
+      required: [reachable, ison, tempC, rssi, lastError]
+
+    CreateOutputDeviceBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        host:
+          type: string
+          minLength: 1
+        channel:
+          type: integer
+          minimum: 0
+        username:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+      required: [name, host]
+
+    UpdateOutputDeviceBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        host:
+          type: string
+          minLength: 1
+        channel:
+          type: integer
+          minimum: 0
+        username:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+
+    ProbeOutputDeviceBody:
+      type: object
+      properties:
+        host:
+          type: string
+          minLength: 1
+        username:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+      required: [host]
+
+    ProbeOutputDeviceResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+        host:
+          type: string
+          description: The address as it will be stored
+        model:
+          type: string
+          nullable: true
+          description: Shelly model code, e.g. SHSW-1
+        authRequired:
+          type: boolean
+        ison:
+          type: boolean
+          nullable: true
+        tempC:
+          type: number
+          nullable: true
+      required: [ok, error, host, model, authRequired, ison, tempC]
+
+    SetOutputDeviceRelayBody:
+      type: object
+      properties:
+        on:
+          type: boolean
+        durationSec:
+          type: integer
+          minimum: 1
+          maximum: 86400
+          description: Turn back after this many seconds, enforced by the device itself
+      required: [on]
+
     HealthStatus:
       type: object
       properties:
@@ -2806,7 +3150,7 @@ components:
           nullable: true
         source:
           type: string
-          enum: [manual, ispindel]
+          enum: [manual, ispindel, shelly]
       required: [id, brewSessionId, readingAt, source]
 
     CreateFermentationReadingBody:

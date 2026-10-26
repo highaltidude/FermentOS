@@ -57,7 +57,9 @@ export function ISpindelPanel() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
 
   const { data: settings } = useGetISpindelSettings();
-  const { data: devices = [] } = useListSensorDevices();
+  // Shelly add-on probes are sensor devices too, but they are managed in the Shelly panel.
+  const { data: allDevices = [] } = useListSensorDevices();
+  const devices = allDevices.filter((d) => d.device.deviceType !== "shelly_probe");
   const { data: brewSessions = [] } = useListBrewSessions();
 
   const activeSessions = (brewSessions as any[]).filter((s: any) =>

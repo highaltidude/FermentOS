@@ -246,3 +246,18 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+/* Brew Flow canvas: map xyflow's theme variables onto the app's tokens so the
+   editor follows light/dark mode with everything else. */
+.react-flow {
+  --xy-background-color: hsl(var(--background));
+  --xy-background-pattern-color: hsl(var(--border));
+  --xy-edge-stroke: hsl(var(--muted-foreground));
+  --xy-edge-stroke-selected: hsl(var(--primary));
+  --xy-connectionline-stroke: hsl(var(--primary));
+  --xy-controls-button-background-color: hsl(var(--card));
+  --xy-controls-button-background-color-hover: hsl(var(--muted));
+  --xy-controls-button-color: hsl(var(--foreground));
+  --xy-controls-button-color-hover: hsl(var(--foreground));
+  --xy-controls-button-border-color: hsl(var(--border));
+  --xy-attribution-background-color: transparent;
+}

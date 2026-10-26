@@ -1295,7 +1295,7 @@ export default function BrewSessionDetail() {
             const allReadings = session.readings ?? [];
             const filtered = readingFilter === "all"
               ? allReadings
-              : allReadings.filter((r) => r.source === (readingFilter === "sensor" ? "ispindel" : "manual"));
+              : allReadings.filter((r) => (readingFilter === "sensor") === (r.source !== "manual"));
             const reversed = [...filtered].reverse();
 
             if (reversed.length === 0) {
@@ -1319,11 +1319,11 @@ export default function BrewSessionDetail() {
                         <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
                           <span className="text-xs text-muted-foreground">{formatDateTime(reading.readingAt)}</span>
                           <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
-                            src === "ispindel"
+                            src !== "manual"
                               ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
                               : "bg-muted text-muted-foreground"
                           }`}>
-                            {src === "ispindel" ? "📡 iSpindel" : "✍️ Manual"}
+                            {src === "ispindel" ? "📡 iSpindel" : src === "shelly" ? "🌡️ Shelly probe" : "✍️ Manual"}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 flex-1 flex-wrap">
@@ -1357,7 +1357,7 @@ export default function BrewSessionDetail() {
                           )}
                           {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
                           {reading.notes && (
-                            <span className={cn("text-muted-foreground text-xs truncate", src === "ispindel" && "font-mono")}>{reading.notes}</span>
+                            <span className={cn("text-muted-foreground text-xs truncate", src !== "manual" && "font-mono")}>{reading.notes}</span>
                           )}
                         </div>
                         <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">

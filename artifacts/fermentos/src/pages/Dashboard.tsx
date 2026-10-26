@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Beer, BookOpen, Package, Thermometer, Droplets, ArrowRight, Plus, Flame } from "lucide-react";
+import { Beer, BookOpen, Package, Thermometer, Droplets, ArrowRight, Plus, Flame, Workflow, ShieldAlert } from "lucide-react";
 import {
   useGetDashboardSummary,
   useGetActiveBrews,
@@ -7,6 +7,8 @@ import {
   getListBrewSessionsQueryKey,
   useGetHaStatus,
   getGetHaStatusQueryKey,
+  useListFlows,
+  getListFlowsQueryKey,
 } from "@workspace/api-client-react";
 import { boilPhase, boilRemainingMs, formatCountdown } from "@/lib/boil";
 import { STATUS_LABELS } from "@/lib/brewStatus";
@@ -83,6 +85,37 @@ function BoilCard() {
   );
 }
 
+/**
+ * Brew Flows at a glance, and the way into Flows on a phone, where the bottom
+ * nav has no room for it. Hidden until there is a flow.
+ */
+function FlowsCard() {
+  const { data: flows } = useListFlows({ query: { refetchInterval: 60_000, queryKey: getListFlowsQueryKey() } });
+  if (!flows?.length) return null;
+  const enabled = flows.filter((f) => f.enabled);
+  const tripped = enabled.filter((f) => f.lastRun?.status === "failsafe" || f.lastRun?.status === "error");
+
+  return (
+    <Link href="/flows" className="block">
+      <div className="bg-card border border-card-border rounded-lg px-4 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors cursor-pointer">
+        <Workflow className="w-4 h-4 text-muted-foreground shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground">Brew Flows</p>
+          <p className="text-xs text-muted-foreground truncate">
+            {enabled.length === 0 ? "None running" : `${enabled.length} running: ${enabled.map((f) => f.name).join(", ")}`}
+          </p>
+        </div>
+        {tripped.length > 0 && (
+          <span className="text-xs text-destructive flex items-center gap-1 shrink-0">
+            <ShieldAlert className="w-3.5 h-3.5" />{tripped.length} need{tripped.length === 1 ? "s" : ""} attention
+          </span>
+        )}
+        <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+      </div>
+    </Link>
+  );
+}
+
 export default function Dashboard() {
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
   const { data: activeBrews, isLoading: brewsLoading } = useGetActiveBrews();
@@ -107,6 +140,7 @@ export default function Dashboard() {
       </div>
 
       <BoilCard />
+      <FlowsCard />
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

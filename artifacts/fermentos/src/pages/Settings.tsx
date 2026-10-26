@@ -34,6 +34,7 @@ import { ApiAccessPanel } from "./settings/system/ApiAccessPanel";
 import { HttpsPanel } from "./settings/system/HttpsPanel";
 import { ISpindelPanel } from "./settings/system/integrations/ISpindelPanel";
 import { HomeAssistantPanel } from "./settings/system/integrations/HomeAssistantPanel";
+import { ShellyPanel } from "./settings/system/integrations/ShellyPanel";
 import { DatabaseBackupPanel } from "./settings/system/DatabaseBackupPanel";
 import { RestartAppPanel } from "./settings/system/RestartAppPanel";
 import { RebootPanel } from "./settings/system/RebootPanel";
@@ -322,6 +323,9 @@ export default function Settings() {
 
               {/* iSpindel — functional panel */}
               <ISpindelPanel />
+
+              {/* Shelly — relays and their add-on temperature probe */}
+              <ShellyPanel />
 
               {/* Home Assistant — REST sensor */}
               <HomeAssistantPanel />

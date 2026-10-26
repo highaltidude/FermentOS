@@ -6,6 +6,8 @@ import { migrateLegacyStatuses, migrateInventorySuppliers } from "./lib/dataMigr
 import { startSystemHealthSampler } from "./services/systemHealthSampler";
 import { startAlertMonitor } from "./services/alertMonitor";
 import { resumeBoilAlerts } from "./services/boilScheduler";
+import { startDevicePoller } from "./services/devicePoller";
+import { startFlowEngine } from "./services/flowEngine";
 
 const rawPort = process.env["PORT"];
 
@@ -38,5 +40,7 @@ app.listen(port, (err) => {
   migrateInventorySuppliers().catch((e) => logger.error({ e }, "Inventory suppliers migration failed"));
   startSystemHealthSampler();
   startAlertMonitor();
+  startDevicePoller();
+  startFlowEngine().catch((e) => logger.error({ e }, "Flow engine start failed"));
   resumeBoilAlerts().catch((e) => logger.error({ e }, "Boil timer resume failed"));
 });

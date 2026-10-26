@@ -90,7 +90,7 @@ export const brewSessionsTable = pgTable("brew_sessions", {
 
 export type BrewSession = typeof brewSessionsTable.$inferSelect;
 
-export const fermentationReadingSourceEnum = ["manual", "ispindel"] as const;
+export const fermentationReadingSourceEnum = ["manual", "ispindel", "shelly"] as const;
 
 export const fermentationReadingsTable = pgTable("fermentation_readings", {
   id: serial("id").primaryKey(),

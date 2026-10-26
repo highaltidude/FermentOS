@@ -31,7 +31,9 @@ import type {
   CreateBrewSessionBody,
   CreateEquipmentBody,
   CreateFermentationReadingBody,
+  CreateFlowBody,
   CreateInventoryItemBody,
+  CreateOutputDeviceBody,
   CreateRecipeBody,
   CreateRecipeIngredientBody,
   CreateRecipeStepBody,
@@ -45,6 +47,10 @@ import type {
   FermentTempUnitBody,
   FermentTempUnitResponse,
   FermentationReading,
+  Flow,
+  FlowRun,
+  FlowStatus,
+  FlowValidationError,
   GetISpindelStatus200,
   GetSystemHealthHistoryParams,
   GetUpcomingBrewsParams,
@@ -63,12 +69,16 @@ import type {
   KitSheetParseError,
   ListBrewSessionsParams,
   ListEquipmentParams,
+  ListFlowRunsParams,
   ListISpindelDeviceReadingsParams,
   ListInventoryParams,
   ListRecipesParams,
   ListSensorReadingsParams,
   NotificationSettings,
   NotificationTestResult,
+  OutputDevice,
+  ProbeOutputDeviceBody,
+  ProbeOutputDeviceResult,
   ReadingRetentionBody,
   ReadingRetentionResponse,
   Recipe,
@@ -76,9 +86,11 @@ import type {
   RecipeStep,
   RecipeWithIngredients,
   ReorderRecipeStepsBody,
+  RunFlowResult,
   SensorDevice,
   SensorDeviceWithStatus,
   SensorReading,
+  SetOutputDeviceRelayBody,
   SimulateISpindelReading200,
   SimulateReadingBody,
   SourceWater,
@@ -92,7 +104,9 @@ import type {
   UpcomingBrew,
   UpdateBrewSessionBody,
   UpdateEquipmentBody,
+  UpdateFlowBody,
   UpdateInventoryItemBody,
+  UpdateOutputDeviceBody,
   UpdateRecipeBody,
   UpdateRecipeIngredientBody,
   UpdateRecipeStepBody,
@@ -8529,3 +8543,1730 @@ export const useDisableHttps = <
 > => {
   return useMutation(getDisableHttpsMutationOptions(options));
 };
+
+export const getListOutputDevicesUrl = () => {
+  return `/api/devices`;
+};
+
+/**
+ * @summary List relay devices with their live state
+ */
+export const listOutputDevices = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice[]> => {
+  return customFetch<OutputDevice[]>(getListOutputDevicesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListOutputDevicesQueryKey = () => {
+  return [`/api/devices`] as const;
+};
+
+export const getListOutputDevicesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOutputDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOutputDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListOutputDevicesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOutputDevices>>
+  > = ({ signal }) => listOutputDevices({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOutputDevices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOutputDevicesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOutputDevices>>
+>;
+export type ListOutputDevicesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List relay devices with their live state
+ */
+
+export function useListOutputDevices<
+  TData = Awaited<ReturnType<typeof listOutputDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOutputDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOutputDevicesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getCreateOutputDeviceUrl = () => {
+  return `/api/devices`;
+};
+
+/**
+ * @summary Add a relay device
+ */
+export const createOutputDevice = async (
+  createOutputDeviceBody: CreateOutputDeviceBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<OutputDevice>(getCreateOutputDeviceUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(createOutputDeviceBody),
+  });
+};
+
+export const getCreateOutputDeviceMutationKey = () =>
+  ["createOutputDevice"] as const;
+
+export const getCreateOutputDeviceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOutputDevice>>,
+    TError,
+    CreateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOutputDevice>>,
+  TError,
+  CreateOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCreateOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOutputDevice>>,
+    CreateOutputDeviceMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createOutputDevice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOutputDevice>>
+>;
+export type CreateOutputDeviceMutationBody = BodyType<CreateOutputDeviceBody>;
+export type CreateOutputDeviceMutationError = ErrorType<ErrorResponse>;
+export type CreateOutputDeviceMutationVariables = {
+  data: BodyType<CreateOutputDeviceBody>;
+};
+
+/**
+ * @summary Add a relay device
+ */
+export const useCreateOutputDevice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOutputDevice>>,
+    TError,
+    CreateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOutputDevice>>,
+  TError,
+  CreateOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getCreateOutputDeviceMutationOptions(options));
+};
+
+export const getProbeOutputDeviceUrl = () => {
+  return `/api/devices/probe`;
+};
+
+/**
+ * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ */
+export const probeOutputDevice = async (
+  probeOutputDeviceBody: ProbeOutputDeviceBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<ProbeOutputDeviceResult> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<ProbeOutputDeviceResult>(getProbeOutputDeviceUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(probeOutputDeviceBody),
+  });
+};
+
+export const getProbeOutputDeviceMutationKey = () =>
+  ["probeOutputDevice"] as const;
+
+export const getProbeOutputDeviceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof probeOutputDevice>>,
+    TError,
+    ProbeOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof probeOutputDevice>>,
+  TError,
+  ProbeOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getProbeOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof probeOutputDevice>>,
+    ProbeOutputDeviceMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return probeOutputDevice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ProbeOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof probeOutputDevice>>
+>;
+export type ProbeOutputDeviceMutationBody = BodyType<ProbeOutputDeviceBody>;
+export type ProbeOutputDeviceMutationError = ErrorType<ErrorResponse>;
+export type ProbeOutputDeviceMutationVariables = {
+  data: BodyType<ProbeOutputDeviceBody>;
+};
+
+/**
+ * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ */
+export const useProbeOutputDevice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof probeOutputDevice>>,
+    TError,
+    ProbeOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof probeOutputDevice>>,
+  TError,
+  ProbeOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getProbeOutputDeviceMutationOptions(options));
+};
+
+export const getGetOutputDeviceUrl = (id: number) => {
+  return `/api/devices/${id}`;
+};
+
+/**
+ * @summary Get one relay device with its live state
+ */
+export const getOutputDevice = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  return customFetch<OutputDevice>(getGetOutputDeviceUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOutputDeviceQueryKey = (id: number) => {
+  return [`/api/devices/${id}`] as const;
+};
+
+export const getGetOutputDeviceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOutputDevice>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOutputDevice>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetOutputDeviceQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getOutputDevice>>> = ({
+    signal,
+  }) => getOutputDevice(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOutputDevice>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOutputDeviceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOutputDevice>>
+>;
+export type GetOutputDeviceQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get one relay device with its live state
+ */
+
+export function useGetOutputDevice<
+  TData = Awaited<ReturnType<typeof getOutputDevice>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOutputDevice>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOutputDeviceQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getUpdateOutputDeviceUrl = (id: number) => {
+  return `/api/devices/${id}`;
+};
+
+/**
+ * @summary Update a relay device. Omit password to keep it, send null to clear it.
+ */
+export const updateOutputDevice = async (
+  id: number,
+  updateOutputDeviceBody: UpdateOutputDeviceBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<OutputDevice>(getUpdateOutputDeviceUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(updateOutputDeviceBody),
+  });
+};
+
+export const getUpdateOutputDeviceMutationKey = () =>
+  ["updateOutputDevice"] as const;
+
+export const getUpdateOutputDeviceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOutputDevice>>,
+    TError,
+    UpdateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOutputDevice>>,
+  TError,
+  UpdateOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOutputDevice>>,
+    UpdateOutputDeviceMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateOutputDevice(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOutputDevice>>
+>;
+export type UpdateOutputDeviceMutationBody = BodyType<UpdateOutputDeviceBody>;
+export type UpdateOutputDeviceMutationError = ErrorType<ErrorResponse>;
+export type UpdateOutputDeviceMutationVariables = {
+  id: number;
+  data: BodyType<UpdateOutputDeviceBody>;
+};
+
+/**
+ * @summary Update a relay device. Omit password to keep it, send null to clear it.
+ */
+export const useUpdateOutputDevice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOutputDevice>>,
+    TError,
+    UpdateOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOutputDevice>>,
+  TError,
+  UpdateOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateOutputDeviceMutationOptions(options));
+};
+
+export const getDeleteOutputDeviceUrl = (id: number) => {
+  return `/api/devices/${id}`;
+};
+
+/**
+ * @summary Remove a relay device. Its probe's sensor history is kept.
+ */
+export const deleteOutputDevice = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<void> => {
+  return customFetch<void>(getDeleteOutputDeviceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteOutputDeviceMutationKey = () =>
+  ["deleteOutputDevice"] as const;
+
+export const getDeleteOutputDeviceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOutputDevice>>,
+    TError,
+    DeleteOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteOutputDevice>>,
+  TError,
+  DeleteOutputDeviceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteOutputDeviceMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteOutputDevice>>,
+    DeleteOutputDeviceMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteOutputDevice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteOutputDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteOutputDevice>>
+>;
+
+export type DeleteOutputDeviceMutationError = ErrorType<ErrorResponse>;
+export type DeleteOutputDeviceMutationVariables = { id: number };
+
+/**
+ * @summary Remove a relay device. Its probe's sensor history is kept.
+ */
+export const useDeleteOutputDevice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOutputDevice>>,
+    TError,
+    DeleteOutputDeviceMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteOutputDevice>>,
+  TError,
+  DeleteOutputDeviceMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteOutputDeviceMutationOptions(options));
+};
+
+export const getSetOutputDeviceRelayUrl = (id: number) => {
+  return `/api/devices/${id}/relay`;
+};
+
+/**
+ * @summary Switch the relay on or off by hand, optionally for a fixed time
+ */
+export const setOutputDeviceRelay = async (
+  id: number,
+  setOutputDeviceRelayBody: SetOutputDeviceRelayBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<OutputDevice>(getSetOutputDeviceRelayUrl(id), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(setOutputDeviceRelayBody),
+  });
+};
+
+export const getSetOutputDeviceRelayMutationKey = () =>
+  ["setOutputDeviceRelay"] as const;
+
+export const getSetOutputDeviceRelayMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+    TError,
+    SetOutputDeviceRelayMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+  TError,
+  SetOutputDeviceRelayMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSetOutputDeviceRelayMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+    SetOutputDeviceRelayMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setOutputDeviceRelay(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetOutputDeviceRelayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setOutputDeviceRelay>>
+>;
+export type SetOutputDeviceRelayMutationBody =
+  BodyType<SetOutputDeviceRelayBody>;
+export type SetOutputDeviceRelayMutationError = ErrorType<ErrorResponse>;
+export type SetOutputDeviceRelayMutationVariables = {
+  id: number;
+  data: BodyType<SetOutputDeviceRelayBody>;
+};
+
+/**
+ * @summary Switch the relay on or off by hand, optionally for a fixed time
+ */
+export const useSetOutputDeviceRelay = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+    TError,
+    SetOutputDeviceRelayMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setOutputDeviceRelay>>,
+  TError,
+  SetOutputDeviceRelayMutationVariables,
+  TContext
+> => {
+  return useMutation(getSetOutputDeviceRelayMutationOptions(options));
+};
+
+export const getApplyOutputDeviceSafeDefaultsUrl = (id: number) => {
+  return `/api/devices/${id}/safe-defaults`;
+};
+
+/**
+ * @summary Set the relay to come back off after a power cut
+ */
+export const applyOutputDeviceSafeDefaults = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<OutputDevice> => {
+  return customFetch<OutputDevice>(getApplyOutputDeviceSafeDefaultsUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getApplyOutputDeviceSafeDefaultsMutationKey = () =>
+  ["applyOutputDeviceSafeDefaults"] as const;
+
+export const getApplyOutputDeviceSafeDefaultsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+    TError,
+    ApplyOutputDeviceSafeDefaultsMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+  TError,
+  ApplyOutputDeviceSafeDefaultsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getApplyOutputDeviceSafeDefaultsMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+    ApplyOutputDeviceSafeDefaultsMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return applyOutputDeviceSafeDefaults(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyOutputDeviceSafeDefaultsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>
+>;
+
+export type ApplyOutputDeviceSafeDefaultsMutationError =
+  ErrorType<ErrorResponse>;
+export type ApplyOutputDeviceSafeDefaultsMutationVariables = { id: number };
+
+/**
+ * @summary Set the relay to come back off after a power cut
+ */
+export const useApplyOutputDeviceSafeDefaults = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+    TError,
+    ApplyOutputDeviceSafeDefaultsMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyOutputDeviceSafeDefaults>>,
+  TError,
+  ApplyOutputDeviceSafeDefaultsMutationVariables,
+  TContext
+> => {
+  return useMutation(getApplyOutputDeviceSafeDefaultsMutationOptions(options));
+};
+
+export const getListFlowsUrl = () => {
+  return `/api/flows`;
+};
+
+/**
+ * @summary List Brew Flows with any problems and their latest run
+ */
+export const listFlows = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Flow[]> => {
+  return customFetch<Flow[]>(getListFlowsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFlowsQueryKey = () => {
+  return [`/api/flows`] as const;
+};
+
+export const getListFlowsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFlows>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listFlows>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListFlowsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlows>>> = ({
+    signal,
+  }) => listFlows({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFlows>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFlowsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFlows>>
+>;
+export type ListFlowsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List Brew Flows with any problems and their latest run
+ */
+
+export function useListFlows<
+  TData = Awaited<ReturnType<typeof listFlows>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listFlows>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFlowsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getCreateFlowUrl = () => {
+  return `/api/flows`;
+};
+
+/**
+ * @summary Create a flow. It starts disabled; enable it once it has no problems.
+ */
+export const createFlow = async (
+  createFlowBody: CreateFlowBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Flow> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<Flow>(getCreateFlowUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(createFlowBody),
+  });
+};
+
+export const getCreateFlowMutationKey = () => ["createFlow"] as const;
+
+export const getCreateFlowMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFlow>>,
+    TError,
+    CreateFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createFlow>>,
+  TError,
+  CreateFlowMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCreateFlowMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createFlow>>,
+    CreateFlowMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createFlow(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateFlowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createFlow>>
+>;
+export type CreateFlowMutationBody = BodyType<CreateFlowBody>;
+export type CreateFlowMutationError = ErrorType<ErrorResponse>;
+export type CreateFlowMutationVariables = { data: BodyType<CreateFlowBody> };
+
+/**
+ * @summary Create a flow. It starts disabled; enable it once it has no problems.
+ */
+export const useCreateFlow = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFlow>>,
+    TError,
+    CreateFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createFlow>>,
+  TError,
+  CreateFlowMutationVariables,
+  TContext
+> => {
+  return useMutation(getCreateFlowMutationOptions(options));
+};
+
+export const getGetFlowUrl = (id: number) => {
+  return `/api/flows/${id}`;
+};
+
+/**
+ * @summary Get one flow
+ */
+export const getFlow = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Flow> => {
+  return customFetch<Flow>(getGetFlowUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFlowQueryKey = (id: number) => {
+  return [`/api/flows/${id}`] as const;
+};
+
+export const getGetFlowQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFlow>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getFlow>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFlowQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFlow>>> = ({
+    signal,
+  }) => getFlow(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getFlow>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetFlowQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFlow>>
+>;
+export type GetFlowQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get one flow
+ */
+
+export function useGetFlow<
+  TData = Awaited<ReturnType<typeof getFlow>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getFlow>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFlowQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getUpdateFlowUrl = (id: number) => {
+  return `/api/flows/${id}`;
+};
+
+/**
+ * @summary Update a flow's name, description or graph. An enabled flow only accepts a graph with no problems.
+ */
+export const updateFlow = async (
+  id: number,
+  updateFlowBody: UpdateFlowBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Flow> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<Flow>(getUpdateFlowUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(updateFlowBody),
+  });
+};
+
+export const getUpdateFlowMutationKey = () => ["updateFlow"] as const;
+
+export const getUpdateFlowMutationOptions = <
+  TError = ErrorType<FlowValidationError | ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateFlow>>,
+    TError,
+    UpdateFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateFlow>>,
+  TError,
+  UpdateFlowMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateFlowMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateFlow>>,
+    UpdateFlowMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateFlow(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateFlowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateFlow>>
+>;
+export type UpdateFlowMutationBody = BodyType<UpdateFlowBody>;
+export type UpdateFlowMutationError = ErrorType<
+  FlowValidationError | ErrorResponse
+>;
+export type UpdateFlowMutationVariables = {
+  id: number;
+  data: BodyType<UpdateFlowBody>;
+};
+
+/**
+ * @summary Update a flow's name, description or graph. An enabled flow only accepts a graph with no problems.
+ */
+export const useUpdateFlow = <
+  TError = ErrorType<FlowValidationError | ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateFlow>>,
+    TError,
+    UpdateFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateFlow>>,
+  TError,
+  UpdateFlowMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateFlowMutationOptions(options));
+};
+
+export const getDeleteFlowUrl = (id: number) => {
+  return `/api/flows/${id}`;
+};
+
+/**
+ * @summary Delete a flow. Relays it controlled are switched off.
+ */
+export const deleteFlow = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<void> => {
+  return customFetch<void>(getDeleteFlowUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteFlowMutationKey = () => ["deleteFlow"] as const;
+
+export const getDeleteFlowMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteFlow>>,
+    TError,
+    DeleteFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteFlow>>,
+  TError,
+  DeleteFlowMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteFlowMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteFlow>>,
+    DeleteFlowMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteFlow(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteFlowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteFlow>>
+>;
+
+export type DeleteFlowMutationError = ErrorType<unknown>;
+export type DeleteFlowMutationVariables = { id: number };
+
+/**
+ * @summary Delete a flow. Relays it controlled are switched off.
+ */
+export const useDeleteFlow = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteFlow>>,
+    TError,
+    DeleteFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteFlow>>,
+  TError,
+  DeleteFlowMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteFlowMutationOptions(options));
+};
+
+export const getEnableFlowUrl = (id: number) => {
+  return `/api/flows/${id}/enable`;
+};
+
+/**
+ * @summary Turn a flow on
+ */
+export const enableFlow = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Flow> => {
+  return customFetch<Flow>(getEnableFlowUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getEnableFlowMutationKey = () => ["enableFlow"] as const;
+
+export const getEnableFlowMutationOptions = <
+  TError = ErrorType<FlowValidationError | ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enableFlow>>,
+    TError,
+    EnableFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof enableFlow>>,
+  TError,
+  EnableFlowMutationVariables,
+  TContext
+> => {
+  const mutationKey = getEnableFlowMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof enableFlow>>,
+    EnableFlowMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return enableFlow(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EnableFlowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof enableFlow>>
+>;
+
+export type EnableFlowMutationError = ErrorType<
+  FlowValidationError | ErrorResponse
+>;
+export type EnableFlowMutationVariables = { id: number };
+
+/**
+ * @summary Turn a flow on
+ */
+export const useEnableFlow = <
+  TError = ErrorType<FlowValidationError | ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enableFlow>>,
+    TError,
+    EnableFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof enableFlow>>,
+  TError,
+  EnableFlowMutationVariables,
+  TContext
+> => {
+  return useMutation(getEnableFlowMutationOptions(options));
+};
+
+export const getDisableFlowUrl = (id: number) => {
+  return `/api/flows/${id}/disable`;
+};
+
+/**
+ * @summary Turn a flow off. Relays it controlled are switched off.
+ */
+export const disableFlow = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Flow> => {
+  return customFetch<Flow>(getDisableFlowUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDisableFlowMutationKey = () => ["disableFlow"] as const;
+
+export const getDisableFlowMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disableFlow>>,
+    TError,
+    DisableFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof disableFlow>>,
+  TError,
+  DisableFlowMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDisableFlowMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof disableFlow>>,
+    DisableFlowMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return disableFlow(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DisableFlowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof disableFlow>>
+>;
+
+export type DisableFlowMutationError = ErrorType<ErrorResponse>;
+export type DisableFlowMutationVariables = { id: number };
+
+/**
+ * @summary Turn a flow off. Relays it controlled are switched off.
+ */
+export const useDisableFlow = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disableFlow>>,
+    TError,
+    DisableFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof disableFlow>>,
+  TError,
+  DisableFlowMutationVariables,
+  TContext
+> => {
+  return useMutation(getDisableFlowMutationOptions(options));
+};
+
+export const getRunFlowUrl = (id: number) => {
+  return `/api/flows/${id}/run`;
+};
+
+/**
+ * @summary Run an enabled schedule flow now, without waiting for its schedule
+ */
+export const runFlow = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RunFlowResult> => {
+  return customFetch<RunFlowResult>(getRunFlowUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunFlowMutationKey = () => ["runFlow"] as const;
+
+export const getRunFlowMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runFlow>>,
+    TError,
+    RunFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runFlow>>,
+  TError,
+  RunFlowMutationVariables,
+  TContext
+> => {
+  const mutationKey = getRunFlowMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runFlow>>,
+    RunFlowMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return runFlow(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunFlowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runFlow>>
+>;
+
+export type RunFlowMutationError = ErrorType<ErrorResponse>;
+export type RunFlowMutationVariables = { id: number };
+
+/**
+ * @summary Run an enabled schedule flow now, without waiting for its schedule
+ */
+export const useRunFlow = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runFlow>>,
+    TError,
+    RunFlowMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runFlow>>,
+  TError,
+  RunFlowMutationVariables,
+  TContext
+> => {
+  return useMutation(getRunFlowMutationOptions(options));
+};
+
+export const getListFlowRunsUrl = (id: number, params?: ListFlowRunsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/flows/${id}/runs?${stringifiedParams}`
+    : `/api/flows/${id}/runs`;
+};
+
+/**
+ * @summary What a flow has done, newest first (kept for 14 days)
+ */
+export const listFlowRuns = async (
+  id: number,
+  params?: ListFlowRunsParams,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<FlowRun[]> => {
+  return customFetch<FlowRun[]>(getListFlowRunsUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFlowRunsQueryKey = (
+  id: number,
+  params?: ListFlowRunsParams,
+) => {
+  return [`/api/flows/${id}/runs`, ...(params ? [params] : [])] as const;
+};
+
+export const getListFlowRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFlowRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: ListFlowRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listFlowRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListFlowRunsQueryKey(id, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlowRuns>>> = ({
+    signal,
+  }) => listFlowRuns(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFlowRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFlowRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFlowRuns>>
+>;
+export type ListFlowRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary What a flow has done, newest first (kept for 14 days)
+ */
+
+export function useListFlowRuns<
+  TData = Awaited<ReturnType<typeof listFlowRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: ListFlowRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listFlowRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFlowRunsQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getGetFlowStatusUrl = (id: number) => {
+  return `/api/flows/${id}/status`;
+};
+
+/**
+ * @summary Live state of a flow — current temperature, which steps are active, fail-safe reason
+ */
+export const getFlowStatus = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<FlowStatus> => {
+  return customFetch<FlowStatus>(getGetFlowStatusUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFlowStatusQueryKey = (id: number) => {
+  return [`/api/flows/${id}/status`] as const;
+};
+
+export const getGetFlowStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFlowStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFlowStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFlowStatusQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFlowStatus>>> = ({
+    signal,
+  }) => getFlowStatus(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFlowStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFlowStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFlowStatus>>
+>;
+export type GetFlowStatusQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Live state of a flow — current temperature, which steps are active, fail-safe reason
+ */
+
+export function useGetFlowStatus<
+  TData = Awaited<ReturnType<typeof getFlowStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFlowStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFlowStatusQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

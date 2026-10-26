@@ -1,6 +1,6 @@
 import { Link, useRoute } from "wouter";
 import { useEffect, useState } from "react";
-import { Beer, BookOpen, Package, LayoutDashboard, Wrench, Settings, Sun, Moon, Calculator } from "lucide-react";
+import { Beer, BookOpen, Package, LayoutDashboard, Wrench, Settings, Sun, Moon, Calculator, Workflow } from "lucide-react";
 import { useSystemHealth } from "@/hooks/useSystemHealth";
 
 const logoUrl = `${import.meta.env.BASE_URL}fermentos-logo.png`;
@@ -41,11 +41,12 @@ const navItems = [
   { href: "/brew-sessions", label: "Brew Log", icon: Beer },
   { href: "/ingredients", label: "Ingredients", icon: Package },
   { href: "/equipment", label: "Equipment", icon: Wrench },
+  { href: "/flows", label: "Flows", icon: Workflow },
   { href: "/calculators", label: "Calculators", icon: Calculator },
 ];
 
-// The bottom bar has no room for Calculators.
-const bottomNavItems = navItems.filter((item) => item.href !== "/calculators");
+// The bottom bar has no room for Calculators or Flows; the Dashboard links to Flows instead.
+const bottomNavItems = navItems.filter((item) => item.href !== "/calculators" && item.href !== "/flows");
 
 type Indicator = "warning" | "critical";
 

@@ -18,6 +18,7 @@ import {
   type ProbeOutputDeviceResult,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -110,6 +111,8 @@ export function ShellyPanel() {
           {devices.map((d: OutputDevice) => {
             const sensor = sensors.find((s) => s.device.id === d.probeSensorDeviceId);
             const busy = setRelay.isPending && setRelay.variables?.id === d.id;
+            // A flow owns this relay; switching by hand would be undone on its next tick.
+            const locked = d.controlledBy != null;
             const minutes = timedMinutes[d.id] ?? "";
             return (
               <div key={d.id} className="bg-muted/30 rounded-lg p-3 border border-border">
@@ -155,6 +158,13 @@ export function ShellyPanel() {
                     </div>
 
                     {/* Manual control */}
+                    {locked ? (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Controlled by the flow{" "}
+                        <Link href="/flows" className="text-primary underline underline-offset-2">{d.controlledBy!.name}</Link>
+                        . Turn the flow off to switch it by hand.
+                      </p>
+                    ) : (
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <Button
                         type="button"
@@ -190,6 +200,7 @@ export function ShellyPanel() {
                         </Button>
                       </form>
                     </div>
+                    )}
 
                     {/* The add-on probe is a sensor device, so it can feed a brew's chart and alerts. */}
                     {sensor && (

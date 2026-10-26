@@ -69,6 +69,7 @@ install to a tracked first batch.
 - **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is checked in the background every five minutes, whether or not anyone has the app open, can notify you when it happens, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
 - **Shelly relays** — Switch a heat wrap, fridge or pump with a Shelly 1 (SHSW-1) over your local network, by hand or for a set number of minutes that the relay itself counts down. A temperature add-on probe on the Shelly is read too and can be logged to a brew like an iSpindel. See [Connect a Shelly relay](#connect-a-shelly-relay)
+- **Brew Flows** — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
@@ -646,6 +647,59 @@ Once FermentOS sees a probe reading, a **Log probe to brew…** dropdown appears
 
 `scripts/shelly-sim.ts` is a stand-in Shelly 1 for testing. Run it with `node scripts/shelly-sim.ts` (Node 24 or later), add `localhost:8081` as the relay address, and set the fake probe's temperature with `curl 'localhost:8081/sim?temp=21.5'`.
 
+### Automate with Brew Flows
+
+A Brew Flow switches your [Shelly relays](#connect-a-shelly-relay) for you, either to hold a fermenter at a temperature or on a schedule. Open **Flows** in the sidebar (on a phone, tap the **Brew Flows** card on the Dashboard) and click **New flow**.
+
+#### Hold a fermenter at temperature
+
+Choose **Fermentation temperature**, then:
+
+- **Relay**: the Shelly switching your heat wrap or fridge.
+- **Temperature from**: an iSpindel, or a Shelly's own probe. A probe updates every few seconds, while an iSpindel reports every 15 minutes or so, so a probe gives much tighter control.
+- **Mode, Target and Swing**:
+  - In **Heat** mode, the relay turns on once the temperature drops *Swing* below the target, and turns off again when it reaches the target.
+  - **Cool** mirrors that above the target. It also keeps the relay off for at least 5 minutes between runs, to protect a fridge compressor.
+- **Only while the sensor's brew is fermenting or conditioning**: lets the flow stand down by itself once you mark the batch Packaged.
+
+Leave **Turn on now** ticked and click **Create flow**. The flow checks the temperature every 30 seconds. The card on the Flows page shows the current reading and whether the relay is on. Expand it to see each step and a log of every switch.
+
+#### Run a relay on a timer
+
+Choose **Timed relay**, pick a relay, choose a time of day (and optionally which days) or every few hours, and set how many minutes it should run. **Run now** on the flow's card tests it straight away.
+
+#### Build or change a flow on the canvas
+
+Click **Open** on a flow's card to see it as a diagram, or choose **Blank flow** under **New flow** to start from nothing. Steps run top to bottom:
+
+- **Start with** a trigger. **Temperature** re-checks a sensor every 30 seconds; **Schedule** runs at set times. A flow has exactly one.
+- **Only if** steps let the flow continue only while something is true: the temperature is above, below or between values, the time is inside a window (which may cross midnight), or the sensor's brew is at a given stage.
+- **Control** holds a temperature with a thermostat. It must be the last step on its branch.
+- **Then** steps act: switch a relay, send a notification, or (in schedule flows) wait.
+
+Click a step in the left-hand list to add it under the selected step, or drag it onto the canvas. To join two steps, drag from the dot at the bottom of one to the dot at the top of the next. A step can branch into several steps, but each step follows only one. Select a step to change its settings on the right; press **Delete** to remove a step or a line.
+
+Save with **Save** or Ctrl+S. A flow that's turned off saves even when it's unfinished, and any problems are shown in red on the steps they concern. A flow that's on only saves once every step is valid. Steps that don't suit the trigger are greyed out: a schedule can't hold a temperature, and a temperature flow can't wait.
+
+While the flow is on, a green dot marks each step that was reached on the last check, and the lines leading to them move. The temperature step shows the current reading and the thermostat shows whether its relay is on.
+
+On a phone the diagram is read-only. You can still turn the flow on or off and see its activity there.
+
+#### What keeps it safe
+
+FermentOS fails **off**. While a flow holds a relay on, it renews a short countdown on the Shelly every 30 seconds. If the countdown isn't renewed for 90 seconds, the Shelly switches itself off, whatever has happened to FermentOS, the Pi or the Wi-Fi. A timed run is counted down by the Shelly in the same way.
+
+A flow also switches its relays off and sends you a notification when it can no longer tell what to do:
+- the temperature reading goes stale (a probe unplugged, an iSpindel that has stopped reporting);
+- a relay can't be reached;
+- the flow hits an error.
+
+It picks up again by itself once the problem clears. These alerts go to the channel you set up in [Get alerts on your phone](#get-alerts-on-your-phone); set one up if you rely on flows.
+
+After FermentOS restarts, every relay a flow controls is switched off first, then the flows take over again.
+
+A relay can belong to only one flow that's turned on, so two flows can never fight over it. While a flow controls a relay, the relay's manual buttons in Settings are replaced by a link to that flow. Turn the flow off to switch the relay by hand.
+
 ---
 
 ### Everyday use
@@ -940,6 +994,23 @@ conditioning), plus `event: "dry_hop_due"` and `day`:
   "alertType": "dry_hop_day_3",
   "event": "dry_hop_due",
   "day": 3
+}
+```
+
+Brew Flows use the same envelope with `event` `flow_action` (a Notify step) or
+`flow_failsafe` (a flow switched its relays off because a reading went stale, a
+relay was unreachable or the flow failed), plus `flowId` and `flowName`:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Fermenter 1 heat: relays switched off",
+  "message": "Heat wrap probe reading is out of date. Its relays have been switched off until this is fixed.",
+  "priority": "high",
+  "triggeredAt": "2026-10-26T20:13:00.000Z",
+  "event": "flow_failsafe",
+  "flowId": 1,
+  "flowName": "Fermenter 1 heat"
 }
 ```
 ---
@@ -1580,6 +1651,54 @@ are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 | POST | `/api/devices/:id/safe-defaults` | Set the relay to come back off after a power cut. Returns `502` when the device can't be reached |
 
 Passwords are never returned; responses carry `hasPassword` instead. Once a relay's add-on probe reports a temperature, FermentOS registers it as a sensor device (`deviceType: "shelly_probe"`, linked by `probeSensorDeviceId`), so it can be assigned to a brew with the [Sensors](#sensors) endpoints.
+
+---
+
+### Brew Flows
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/flows` | List flows. Each includes `kind` (`temperature` \| `schedule`, or `null` while invalid), `problems` (`[{ nodeId, message }]`), the relays it switches (`relayDeviceIds`), `lastError` and `lastRun` |
+| POST | `/api/flows` | Create a flow — body `{ "name": string, "description"?: string, "graph": FlowGraph }`. New flows start turned off, so a half-built graph can be saved |
+| GET | `/api/flows/:id` | Get one flow |
+| PUT | `/api/flows/:id` | Update any of `name`, `description`, `graph`. A flow that is on only accepts a graph with no problems (`400` with `problems`) |
+| DELETE | `/api/flows/:id` | Delete a flow; relays it controlled are switched off |
+| POST | `/api/flows/:id/enable` | Turn a flow on. `400` with `problems` if the graph is invalid or a relay it switches belongs to another flow that's on |
+| POST | `/api/flows/:id/disable` | Turn a flow off; relays it controlled are switched off |
+| POST | `/api/flows/:id/run` | Run a schedule flow now (`202`); the outcome lands in its runs |
+| GET | `/api/flows/:id/runs` | What the flow has done, newest first — query param `limit` (default 50, max 200). Kept for 14 days |
+| GET | `/api/flows/:id/status` | Live state: `running`, `tempC`, `failsafe` (why relays are being held off, or `null`), `waiting`, `nextRunAt`, and per-node `{ active, relayOn?, reason? }` |
+
+While a flow controls a relay, `POST /api/devices/:id/relay` and `DELETE /api/devices/:id` return `409`, and the device's `controlledBy` names the flow.
+
+**FlowGraph** is a tree: one trigger node, and every other node fed by exactly one edge.
+
+```json
+{
+  "version": 1,
+  "nodes": [
+    { "id": "t", "type": "trigger.temperature", "position": { "x": 0, "y": 0 },
+      "data": { "config": { "source": { "kind": "shelly", "outputDeviceId": 3 } } } },
+    { "id": "th", "type": "control.thermostat", "position": { "x": 0, "y": 120 },
+      "data": { "config": { "outputDeviceId": 3, "mode": "heat", "setpointC": 20, "hysteresisC": 0.5 } } }
+  ],
+  "edges": [{ "id": "e1", "source": "t", "target": "th" }]
+}
+```
+
+Node types and their `config` (temperatures are always °C):
+
+| Type | Config | Notes |
+|------|--------|-------|
+| `trigger.temperature` | `source`: `{ "kind": "sensor", "sensorDeviceId" }` or `{ "kind": "shelly", "outputDeviceId" }` | Re-evaluated every 30 s. Relays downstream are on while the path to them passes, off otherwise |
+| `trigger.schedule` | `cron` (five fields, server local time) | Runs top to bottom once per firing |
+| `condition.compare` | `op` (`lt`, `gt`, `between`), `valueC`, `value2C` (for `between`) | Temperature flows only |
+| `condition.timeWindow` | `from`, `to` (`HH:MM`), `days` (0 = Sunday; empty = every day) | Windows may cross midnight |
+| `condition.brewStatus` | `statuses` (any of `brew_day`, `fermenting`, `conditioning`, `packaged`) | The brew the temperature sensor is assigned to; temperature flows only |
+| `control.thermostat` | `outputDeviceId`, `mode` (`heat`/`cool`), `setpointC`, `hysteresisC` (default 0.5), `minOnSec`, `minOffSec` (default 300 when cooling) | Temperature flows only; must end its branch; one per relay |
+| `action.relay` | `outputDeviceId`, `action` (`on`, `off`, `onFor`), `minutes` (for `onFor`) | Temperature flows use `on`; schedule flows use `onFor` or `off`, never an open-ended `on` |
+| `action.notify` | `message` — `{flow}` and `{temp}` are filled in | Sent each time the step is newly reached |
+| `action.delay` | `minutes` | Schedule flows only |
 
 ---
 

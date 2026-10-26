@@ -7,6 +7,7 @@ import { startSystemHealthSampler } from "./services/systemHealthSampler";
 import { startAlertMonitor } from "./services/alertMonitor";
 import { resumeBoilAlerts } from "./services/boilScheduler";
 import { startDevicePoller } from "./services/devicePoller";
+import { startFlowEngine } from "./services/flowEngine";
 
 const rawPort = process.env["PORT"];
 
@@ -40,5 +41,6 @@ app.listen(port, (err) => {
   startSystemHealthSampler();
   startAlertMonitor();
   startDevicePoller();
+  startFlowEngine().catch((e) => logger.error({ e }, "Flow engine start failed"));
   resumeBoilAlerts().catch((e) => logger.error({ e }, "Boil timer resume failed"));
 });

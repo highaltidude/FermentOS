@@ -35,3 +35,51 @@ export const outputDevicesTable = pgTable("output_devices", {
 });
 
 export type OutputDevice = typeof outputDevicesTable.$inferSelect;
+
+// ── Brew Flows ───────────────────────────────────────────────────────────────
+// A flow is a trigger → condition → action graph. The graph is stored as one
+// JSON document in the same node/edge shape the editor's canvas uses, so it
+// round-trips without translation; the API server validates it.
+
+export type FlowGraphNode = {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  data: { config: Record<string, unknown> };
+};
+
+export type FlowGraphEdge = { id: string; source: string; target: string };
+
+export type FlowGraph = { version: 1; nodes: FlowGraphNode[]; edges: FlowGraphEdge[] };
+
+export const flowsTable = pgTable("flows", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  enabled: boolean("enabled").notNull().default(false),
+  graph: jsonb("graph").$type<FlowGraph>().notNull(),
+  // Last runtime error, cleared on the next clean run. Shown on the flow list.
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Flow = typeof flowsTable.$inferSelect;
+
+export const flowRunStatusEnum = ["ok", "skipped", "error", "failsafe"] as const;
+
+// What a flow did: relay switches, notifications, fail-safe trips. Ticks that
+// change nothing are not logged.
+export const flowRunsTable = pgTable("flow_runs", {
+  id: serial("id").primaryKey(),
+  flowId: integer("flow_id")
+    .notNull()
+    .references(() => flowsTable.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  trigger: text("trigger").notNull(),
+  status: text("status", { enum: flowRunStatusEnum }).notNull(),
+  message: text("message").notNull(),
+  detail: jsonb("detail").$type<Record<string, unknown>>(),
+});
+
+export type FlowRun = typeof flowRunsTable.$inferSelect;

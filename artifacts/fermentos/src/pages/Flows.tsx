@@ -1,7 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "wouter";
+import { useState, type FormEvent } from "react";
+import { Link, useLocation } from "wouter";
 import {
-  Plus, Trash2, Play, ChevronDown, ChevronRight, Thermometer, Clock, AlertTriangle, ShieldAlert, Loader2, Workflow,
+  Plus, Trash2, Play, ChevronDown, ChevronRight, Thermometer, Clock, AlertTriangle, Loader2, Workflow, Pencil,
 } from "lucide-react";
 import {
   useListFlows,
@@ -26,6 +26,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { FlowStatusLine } from "@/components/flows/FlowStatusLine";
 import { useToast } from "@/hooks/use-toast";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { getErrorMessage, cn } from "@/lib/utils";
@@ -35,36 +37,16 @@ import {
   deltaFromUnit,
   describeNode,
   fermentationTemplate,
-  formatTemp,
   fromUnit,
   outline,
+  tempSourceOptions,
   timedRelayTemplate,
-  type TempSourceChoice,
 } from "@/lib/flows";
 
 /** The server's own message (e.g. the list of problems) rather than "HTTP 400 …". */
-function apiError(err: unknown): string {
+export function apiError(err: unknown): string {
   const data = (err as { data?: { error?: unknown } } | null)?.data;
   return typeof data?.error === "string" ? data.error : getErrorMessage(err);
-}
-
-function Switch({ checked, onChange, disabled, title }: { checked: boolean; onChange: () => void; disabled?: boolean; title: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      disabled={disabled}
-      className={cn(
-        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50",
-        checked ? "bg-primary" : "bg-muted border border-border",
-      )}
-      role="switch"
-      aria-checked={checked}
-      title={title}
-    >
-      <span className={cn("inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform", checked ? "translate-x-4" : "translate-x-0.5")} />
-    </button>
-  );
 }
 
 export default function Flows() {
@@ -145,26 +127,7 @@ function FlowCard({ flow }: { flow: Flow }) {
   const steps = outline(flow.graph);
   const busy = enable.isPending || disable.isPending;
 
-  let statusLine: ReactNode = null;
-  if (flow.enabled && status) {
-    if (status.failsafe) {
-      statusLine = (
-        <span className="text-destructive flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5" />Relays off: {status.failsafe}</span>
-      );
-    } else if (status.waiting) {
-      statusLine = <span>Waiting for the first readings…</span>;
-    } else if (status.kind === "temperature" && status.tempC != null) {
-      const relayStates = Object.values(status.nodes).filter((n) => n.relayOn !== undefined || n.reason);
-      const on = relayStates.some((n) => n.relayOn);
-      statusLine = (
-        <span>
-          Now {formatTemp(status.tempC, unit)} · relay {on ? <span className="text-green-600 dark:text-green-400 font-medium">on</span> : "off"}
-        </span>
-      );
-    } else if (status.kind === "schedule" && status.nextRunAt) {
-      statusLine = <span>Next run {formatShortDateTime(status.nextRunAt)}</span>;
-    }
-  }
+  const statusLine = flow.enabled ? <FlowStatusLine status={status} unit={unit} /> : null;
 
   return (
     <div className="bg-card border border-card-border rounded-lg">
@@ -184,7 +147,7 @@ function FlowCard({ flow }: { flow: Flow }) {
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {(steps.length > 1 ? steps.slice(1) : steps).map((s) => describeNode(s.node, lookups)).join(" → ") || "No steps"}
           </p>
-          {(statusLine || flow.lastError) && (
+          {((flow.enabled && status) || flow.lastError) && (
             <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
               {statusLine}
               {flow.lastError && !status?.failsafe && <p className="text-destructive">Last error: {flow.lastError}</p>}
@@ -253,6 +216,9 @@ function FlowCard({ flow }: { flow: Flow }) {
           </div>
 
           <div className="flex flex-wrap gap-2 justify-end">
+            <Link href={`/flows/${flow.id}`}>
+              <Button size="sm" variant="outline"><Pencil className="w-3.5 h-3.5" />Open</Button>
+            </Link>
             {flow.enabled && flow.kind === "schedule" && (
               <Button size="sm" variant="outline" onClick={() => run.mutate({ id: flow.id })} disabled={run.isPending}>
                 <Play className="w-3.5 h-3.5" />Run now
@@ -283,6 +249,7 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
   const unit = useFermentTempUnit();
   const { data: devices = [] } = useListOutputDevices({ query: { queryKey: getListOutputDevicesQueryKey() } });
   const { data: sensors = [] } = useListSensorDevices();
+  const [, navigate] = useLocation();
   const [template, setTemplate] = useState<Template | null>(null);
   const [name, setName] = useState("");
   const [enableNow, setEnableNow] = useState(true);
@@ -323,15 +290,7 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
     },
   });
 
-  // Sources: any sensor that reports temperature (iSpindels, probes), keyed for the select.
-  const sourceOptions = sensors.map((s) => ({
-    key: `sensor:${s.device.id}`,
-    label: s.device.deviceType === "shelly_probe" ? `${s.device.deviceName} (Shelly probe)` : `${s.device.deviceName} (iSpindel)`,
-    value: s.device.deviceType === "shelly_probe" && devices.some((d) => d.probeSensorDeviceId === s.device.id)
-      // Prefer the live 10-second probe value over the five-minute logged readings.
-      ? { kind: "shelly", outputDeviceId: devices.find((d) => d.probeSensorDeviceId === s.device.id)!.id } as TempSourceChoice
-      : { kind: "sensor", sensorDeviceId: s.device.id } as TempSourceChoice,
-  }));
+  const sourceOptions = tempSourceOptions(sensors, devices);
   const freeRelays = devices.filter((d) => !d.controlledBy);
 
   const submit = (e: FormEvent) => {
@@ -384,6 +343,14 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
             <button type="button" onClick={() => setTemplate("timer")} className="text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors">
               <p className="text-sm font-medium flex items-center gap-1.5"><Clock className="w-4 h-4" />Timed relay</p>
               <p className="text-xs text-muted-foreground mt-0.5">Run a relay for a set time on a schedule — a recirculation pump, a crash-chill window.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => { close(); navigate("/flows/new"); }}
+              className="hidden md:block text-left border border-dashed border-border rounded-lg p-3 hover:bg-muted/50 transition-colors"
+            >
+              <p className="text-sm font-medium flex items-center gap-1.5"><Workflow className="w-4 h-4" />Blank flow</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Build your own from triggers, conditions and actions on the canvas.</p>
             </button>
           </div>
         ) : (

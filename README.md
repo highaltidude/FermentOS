@@ -69,7 +69,7 @@ install to a tracked first batch.
 - **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is checked in the background every five minutes, whether or not anyone has the app open, can notify you when it happens, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
 - **Shelly relays** — Switch a heat wrap, fridge or pump with a Shelly 1 (SHSW-1) over your local network, by hand or for a set number of minutes that the relay itself counts down. A temperature add-on probe on the Shelly is read too and can be logged to a brew like an iSpindel. See [Connect a Shelly relay](#connect-a-shelly-relay)
-- **Brew Flows** — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
+- **Brew Flows** — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
@@ -667,6 +667,23 @@ Leave **Turn on now** ticked and click **Create flow**. The flow checks the temp
 #### Run a relay on a timer
 
 Choose **Timed relay**, pick a relay, choose a time of day (and optionally which days) or every few hours, and set how many minutes it should run. **Run now** on the flow's card tests it straight away.
+
+#### Build or change a flow on the canvas
+
+Click **Open** on a flow's card to see it as a diagram, or choose **Blank flow** under **New flow** to start from nothing. Steps run top to bottom:
+
+- **Start with** a trigger. **Temperature** re-checks a sensor every 30 seconds; **Schedule** runs at set times. A flow has exactly one.
+- **Only if** steps let the flow continue only while something is true: the temperature is above, below or between values, the time is inside a window (which may cross midnight), or the sensor's brew is at a given stage.
+- **Control** holds a temperature with a thermostat. It must be the last step on its branch.
+- **Then** steps act: switch a relay, send a notification, or (in schedule flows) wait.
+
+Click a step in the left-hand list to add it under the selected step, or drag it onto the canvas. To join two steps, drag from the dot at the bottom of one to the dot at the top of the next. A step can branch into several steps, but each step follows only one. Select a step to change its settings on the right; press **Delete** to remove a step or a line.
+
+Save with **Save** or Ctrl+S. A flow that's turned off saves even when it's unfinished, and any problems are shown in red on the steps they concern. A flow that's on only saves once every step is valid. Steps that don't suit the trigger are greyed out: a schedule can't hold a temperature, and a temperature flow can't wait.
+
+While the flow is on, a green dot marks each step that was reached on the last check, and the lines leading to them move. The temperature step shows the current reading and the thermostat shows whether its relay is on.
+
+On a phone the diagram is read-only. You can still turn the flow on or off and see its activity there.
 
 #### What keeps it safe
 

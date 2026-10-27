@@ -635,7 +635,7 @@ Click the shield icon next to the relay. This sets the Shelly to come back **off
 
 #### 4. Switch it
 
-Use **Turn on / Turn off**, or type a number of minutes and click **On for…** to run it for a fixed time. Timed runs are counted down by the Shelly itself, so the relay still switches off on time even if FermentOS restarts or the network drops.
+Use **Turn on / Turn off**, or set **or run for … min** and click **Start timer** to turn it on for a fixed time. Timed runs are counted down by the Shelly itself, so the relay still switches off on time even if FermentOS restarts or the network drops.
 
 The list refreshes every ten seconds. A red dot means FermentOS couldn't reach the relay on its last three tries — check it is powered and on Wi-Fi, and that its IP address hasn't changed.
 

@@ -12,7 +12,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { validateFlowGraph, type CompiledFlow, type FlowProblem } from "../lib/flows/graph.js";
-import { evaluateTemperatureTick, renderMessage, type NodeState } from "../lib/flows/evaluate.js";
+import { evaluateTemperatureTick, renderMessage, type BrewContext, type NodeState } from "../lib/flows/evaluate.js";
 import { inTimeWindow, type FlowNode, type TempSource } from "../lib/flows/nodes.js";
 import type { RelayTiming } from "../lib/flows/thermostat.js";
 import { setShellyRelay } from "./shelly.js";
@@ -20,6 +20,7 @@ import { getLiveState, isReachable, noteRelayState } from "./devicePoller.js";
 import { getLatestReading, getActiveAssignment } from "./sensorDevices.js";
 import { sendNotification } from "./notifications.js";
 import { getConfigValue } from "./appConfig.js";
+import { stageStartedAt } from "./brewStage.js";
 
 /**
  * Brew Flow runtime.
@@ -174,53 +175,58 @@ async function allOff(deviceIds: number[]): Promise<void> {
 
 // ── Temperature flows ───────────────────────────────────────────────────────
 
-type SourceReading = { tempC: number | null; stale: string | null; brewStatus: string | null };
+type SourceReading = { tempC: number | null; stale: string | null; brew: BrewContext | null };
 
-async function brewStatusFor(sensorDeviceId: number | null): Promise<string | null> {
+/** The brew a sensor is assigned to: its stage, and since when. */
+async function brewContextFor(sensorDeviceId: number | null): Promise<BrewContext | null> {
   if (sensorDeviceId == null) return null;
   const assignment = await getActiveAssignment(sensorDeviceId);
   if (!assignment) return null;
   const [session] = await db
-    .select({ status: brewSessionsTable.status })
+    .select({ id: brewSessionsTable.id, status: brewSessionsTable.status, updatedAt: brewSessionsTable.updatedAt })
     .from(brewSessionsTable)
     .where(eq(brewSessionsTable.id, assignment.brewSessionId));
-  return session?.status ?? null;
+  if (!session) return null;
+  // Brews from before stage history was kept have no log entry; their last
+  // edit is the best guess at when the stage began.
+  const stageStart = (await stageStartedAt(session.id, session.status)) ?? session.updatedAt;
+  return { status: session.status, stageStartedAt: stageStart };
 }
 
-async function readSource(source: TempSource, wantsBrewStatus: boolean): Promise<SourceReading> {
+async function readSource(source: TempSource, wantsBrew: boolean): Promise<SourceReading> {
   if (source.kind === "shelly") {
     const [device] = await db.select().from(outputDevicesTable).where(eq(outputDevicesTable.id, source.outputDeviceId));
-    if (!device) return { tempC: null, stale: "The temperature source relay has been removed", brewStatus: null };
-    const brewStatus = wantsBrewStatus ? await brewStatusFor(device.probeSensorDeviceId) : null;
+    if (!device) return { tempC: null, stale: "The temperature source relay has been removed", brew: null };
+    const brew = wantsBrew ? await brewContextFor(device.probeSensorDeviceId) : null;
     const live = getLiveState(device.id);
-    if (!live || !isReachable(live)) return { tempC: null, stale: `Can't reach ${device.name} to read its probe`, brewStatus };
-    if (live.tempC == null) return { tempC: null, stale: `${device.name} has no temperature probe reading`, brewStatus };
+    if (!live || !isReachable(live)) return { tempC: null, stale: `Can't reach ${device.name} to read its probe`, brew };
+    if (live.tempC == null) return { tempC: null, stale: `${device.name} has no temperature probe reading`, brew };
     if (!live.at || Date.now() - live.at.getTime() > SHELLY_TEMP_MAX_AGE_MS) {
-      return { tempC: null, stale: `${device.name}'s probe reading is out of date`, brewStatus };
+      return { tempC: null, stale: `${device.name}'s probe reading is out of date`, brew };
     }
-    return { tempC: live.tempC, stale: null, brewStatus };
+    return { tempC: live.tempC, stale: null, brew };
   }
 
   const [sensor] = await db.select().from(sensorDevicesTable).where(eq(sensorDevicesTable.id, source.sensorDeviceId));
-  if (!sensor) return { tempC: null, stale: "The temperature sensor has been removed", brewStatus: null };
-  const brewStatus = wantsBrewStatus ? await brewStatusFor(sensor.id) : null;
+  if (!sensor) return { tempC: null, stale: "The temperature sensor has been removed", brew: null };
+  const brew = wantsBrew ? await brewContextFor(sensor.id) : null;
   const reading = await getLatestReading(sensor.id);
-  if (!reading || reading.temperature == null) return { tempC: null, stale: `${sensor.deviceName} hasn't reported a temperature`, brewStatus };
+  if (!reading || reading.temperature == null) return { tempC: null, stale: `${sensor.deviceName} hasn't reported a temperature`, brew };
   const maxAge = reading.reportedInterval
     ? Math.max(SENSOR_STALE_MIN_MS, reading.reportedInterval * 1000 * SENSOR_STALE_INTERVALS)
     : SENSOR_STALE_DEFAULT_MS;
   if (Date.now() - reading.receivedAt.getTime() > maxAge) {
-    return { tempC: null, stale: `${sensor.deviceName} hasn't reported for ${Math.round((Date.now() - reading.receivedAt.getTime()) / 60_000)} minutes`, brewStatus };
+    return { tempC: null, stale: `${sensor.deviceName} hasn't reported for ${Math.round((Date.now() - reading.receivedAt.getTime()) / 60_000)} minutes`, brew };
   }
   const tempC = (reading.temperatureUnit ?? "C").toUpperCase() === "F" ? (reading.temperature - 32) * 5 / 9 : reading.temperature;
-  return { tempC, stale: null, brewStatus };
+  return { tempC, stale: null, brew };
 }
 
 async function tickTemperatureFlow({ flow, compiled }: ActiveFlow): Promise<void> {
   const prev = status.get(flow.id);
   const now = new Date();
-  const wantsBrewStatus = [...compiled.nodes.values()].some((n) => n.type === "condition.brewStatus");
-  const reading = await readSource(compiled.source!, wantsBrewStatus);
+  const wantsBrew = [...compiled.nodes.values()].some((n) => n.type === "condition.brewStatus" || n.type === "condition.stageAge");
+  const reading = await readSource(compiled.source!, wantsBrew);
   const devices = await loadDevices(compiled.relays);
 
   let failsafe = reading.stale;
@@ -241,24 +247,37 @@ async function tickTemperatureFlow({ flow, compiled }: ActiveFlow): Promise<void
     nextRunAt: null,
   };
 
-  if (failsafe) {
+  const holdOff = async (reason: string, quiet: boolean) => {
     await Promise.all([...devices.values()].map((d) => driveRelay(d, false)));
     notifyActive.set(flow.id, new Set());
     status.set(flow.id, next);
-    if (!waiting && prev?.failsafe !== failsafe) {
-      await logRun(flow.id, "tick", "failsafe", `Relays off: ${failsafe}`);
-      await notify(flow, "relays switched off", `${failsafe}. Its relays have been switched off until this is fixed.`, "flow_failsafe");
+    if (!quiet && prev?.failsafe !== reason) {
+      await logRun(flow.id, "tick", "failsafe", `Relays off: ${reason}`);
+      await notify(flow, "relays switched off", `${reason}. Its relays have been switched off until this is fixed.`, "flow_failsafe");
     }
+  };
+
+  if (failsafe) {
+    await holdOff(failsafe, waiting);
     return;
   }
 
   const result = evaluateTemperatureTick(compiled, {
     tempC: reading.tempC!,
     now,
-    brewStatus: reading.brewStatus,
+    brew: reading.brew,
     relays: relayTiming,
   });
   next.nodes = result.nodes;
+
+  // Branches that share a relay are meant to take turns (fermenting, then the
+  // cold crash). If two pass at once there's no right answer, so fail off.
+  if (result.conflicts.length > 0) {
+    const names = result.conflicts.map((c) => devices.get(c.relayId)?.name ?? "a relay").join(", ");
+    next.failsafe = `More than one step wants ${names} at the same time`;
+    await holdOff(next.failsafe, false);
+    return;
+  }
   status.set(flow.id, next);
 
   const temp = await formatTemp(reading.tempC);

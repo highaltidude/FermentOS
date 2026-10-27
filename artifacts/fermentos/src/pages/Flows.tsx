@@ -260,6 +260,10 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
   const [setpoint, setSetpoint] = useState(unit === "F" ? "68" : "20");
   const [hysteresis, setHysteresis] = useState(unit === "F" ? "1" : "0.5");
   const [onlyFermenting, setOnlyFermenting] = useState(false);
+  const [crash, setCrash] = useState(false);
+  const [crashDays, setCrashDays] = useState("3");
+  const [crashTemp, setCrashTemp] = useState(unit === "F" ? "34" : "1");
+  const [crashNotify, setCrashNotify] = useState(true);
   // Timer
   const [scheduleKind, setScheduleKind] = useState<"daily" | "everyHours">("daily");
   const [time, setTime] = useState("06:00");
@@ -267,7 +271,7 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
   const [everyHours, setEveryHours] = useState("6");
   const [minutes, setMinutes] = useState("15");
 
-  const reset = () => { setTemplate(null); setName(""); setSource(""); setRelayId(""); setOnlyFermenting(false); };
+  const reset = () => { setTemplate(null); setName(""); setSource(""); setRelayId(""); setOnlyFermenting(false); setCrash(false); };
   const close = () => { reset(); onClose(); };
 
   const enable = useEnableFlow();
@@ -301,13 +305,17 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
       const sp = Number(setpoint);
       const hy = Number(hysteresis);
       if (!src || !relayId || !Number.isFinite(sp) || !(hy > 0)) return;
+      const cd = Number(crashDays);
+      const ct = Number(crashTemp);
+      if (crash && (!(cd >= 0) || !Number.isFinite(ct))) return;
       graph = fermentationTemplate({
         source: src,
         relayId: Number(relayId),
-        mode,
+        mode: crash ? "cool" : mode,
         setpointC: fromUnit(sp, unit),
         hysteresisC: deltaFromUnit(hy, unit),
         onlyWhileFermenting: onlyFermenting,
+        coldCrash: crash ? { afterDays: cd, crashC: fromUnit(ct, unit), notify: crashNotify } : null,
       });
     } else {
       const m = Number(minutes);
@@ -320,7 +328,9 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
       });
     }
     const relayName = devices.find((d) => d.id === Number(relayId))?.name ?? "relay";
-    const fallback = template === "fermentation" ? `${mode === "heat" ? "Heat" : "Cool"} with ${relayName}` : `${relayName} timer`;
+    const fallback = template !== "fermentation" ? `${relayName} timer`
+      : crash ? `${relayName} with cold crash`
+      : `${mode === "heat" ? "Heat" : "Cool"} with ${relayName}`;
     create.mutate({ data: { name: name.trim() || fallback, graph } });
   };
 
@@ -386,7 +396,7 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className={label}>Mode</label>
-                    <select className={select} value={mode} onChange={(e) => setMode(e.target.value as "heat" | "cool")}>
+                    <select className={select} value={crash ? "cool" : mode} disabled={crash} onChange={(e) => setMode(e.target.value as "heat" | "cool")}>
                       <option value="heat">Heat</option>
                       <option value="cool">Cool</option>
                     </select>
@@ -401,14 +411,39 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  {mode === "heat"
+                  {mode === "heat" && !crash
                     ? `Turns on below ${(Number(setpoint) - Number(hysteresis)).toFixed(1)}°${unit} and off again at ${Number(setpoint).toFixed(1)}°${unit}.`
                     : `Turns on above ${(Number(setpoint) + Number(hysteresis)).toFixed(1)}°${unit} and off again at ${Number(setpoint).toFixed(1)}°${unit}. Stays off at least 5 minutes between runs to protect the compressor.`}
                 </p>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={onlyFermenting} onChange={(e) => setOnlyFermenting(e.target.checked)} />
-                  Only while the sensor's brew is fermenting or conditioning
+                  <input type="checkbox" checked={crash} onChange={(e) => setCrash(e.target.checked)} />
+                  Cold crash after conditioning starts
                 </label>
+                {crash ? (
+                  <div className="rounded-md border border-border p-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                      After
+                      <Input type="number" min="0" max="365" step="0.5" value={crashDays} onChange={(e) => setCrashDays(e.target.value)} className="h-8 w-16 text-sm" required />
+                      days in conditioning, cool to
+                      <Input type="number" step="0.1" value={crashTemp} onChange={(e) => setCrashTemp(e.target.value)} className="h-8 w-16 text-sm" required />
+                      °{unit}
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={crashNotify} onChange={(e) => setCrashNotify(e.target.checked)} />
+                      Notify me when the crash starts
+                    </label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Cold crashing needs a fridge, so the relay runs in Cool mode. It holds the target while the brew is fermenting and
+                      for the first {Number(crashDays) || 0} days of conditioning, then crashes. Days count from when you move the brew
+                      the sensor is assigned to into Conditioning.
+                    </p>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={onlyFermenting} onChange={(e) => setOnlyFermenting(e.target.checked)} />
+                    Only while the sensor's brew is fermenting or conditioning
+                  </label>
+                )}
               </>
             ) : (
               <>

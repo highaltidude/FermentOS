@@ -1,4 +1,4 @@
-import { compareTemp, inTimeWindow, type FlowNode } from "./nodes.js";
+import { compareTemp, inTimeWindow, stageAgePasses, type FlowNode } from "./nodes.js";
 import { thermostatStep, type RelayTiming, type ThermostatReason } from "./thermostat.js";
 import type { CompiledFlow } from "./graph.js";
 
@@ -11,13 +11,19 @@ import type { CompiledFlow } from "./graph.js";
 export type TickInput = {
   tempC: number;
   now: Date;
-  /** Status of the brew the temperature source is assigned to, if any. */
-  brewStatus: string | null;
+  /** The brew the temperature source is assigned to, if any. */
+  brew: BrewContext | null;
   /** Current relay state per output device, as the engine last left it. */
   relays: Map<number, RelayTiming>;
 };
 
-export type NodeState = { active: boolean; relayOn?: boolean; reason?: ThermostatReason };
+export type BrewContext = {
+  status: string;
+  /** When the brew last entered its current stage. */
+  stageStartedAt: Date | null;
+};
+
+export type NodeState ={ active: boolean; relayOn?: boolean; reason?: ThermostatReason };
 
 export type TickResult = {
   /** Desired relay state for every relay the flow owns. */
@@ -25,6 +31,8 @@ export type TickResult = {
   nodes: Record<string, NodeState>;
   /** Notify nodes reached this tick (the engine sends only on the inactive → active edge). */
   notify: Extract<FlowNode, { type: "action.notify" }>[];
+  /** Relays wanted by more than one reached step; the engine fails safe on these. */
+  conflicts: { relayId: number; nodeIds: string[] }[];
 };
 
 function conditionPasses(node: FlowNode, input: TickInput): boolean {
@@ -34,16 +42,20 @@ function conditionPasses(node: FlowNode, input: TickInput): boolean {
     case "condition.timeWindow":
       return inTimeWindow(node.config, input.now);
     case "condition.brewStatus":
-      return input.brewStatus != null && (node.config.statuses as string[]).includes(input.brewStatus);
+      return input.brew != null && (node.config.statuses as string[]).includes(input.brew.status);
+    case "condition.stageAge":
+      return stageAgePasses(node.config, input.brew, input.now);
     default:
       return true;
   }
 }
 
 export function evaluateTemperatureTick(flow: CompiledFlow, input: TickInput): TickResult {
-  const result: TickResult = { desired: new Map(), nodes: {}, notify: [] };
+  const result: TickResult = { desired: new Map(), nodes: {}, notify: [], conflicts: [] };
   for (const n of flow.nodes.values()) result.nodes[n.id] = { active: false };
   const now = input.now.getTime();
+  const claimedBy = new Map<number, string[]>();
+  const claim = (relayId: number, nodeId: string) => claimedBy.set(relayId, [...(claimedBy.get(relayId) ?? []), nodeId]);
 
   const visit = (node: FlowNode) => {
     if (!conditionPasses(node, input)) return;
@@ -56,15 +68,21 @@ export function evaluateTemperatureTick(flow: CompiledFlow, input: TickInput): T
       state.relayOn = step.on;
       state.reason = step.reason;
       result.desired.set(node.config.outputDeviceId, { on: step.on, nodeId: node.id, reason: step.reason });
+      claim(node.config.outputDeviceId, node.id);
     } else if (node.type === "action.relay") {
       state.relayOn = true;
       result.desired.set(node.config.outputDeviceId, { on: true, nodeId: node.id, reason: "conditions met" });
+      claim(node.config.outputDeviceId, node.id);
     } else if (node.type === "action.notify") {
       result.notify.push(node);
     }
     for (const child of flow.children.get(node.id) ?? []) visit(child);
   };
   visit(flow.trigger);
+
+  for (const [relayId, nodeIds] of claimedBy) {
+    if (nodeIds.length > 1) result.conflicts.push({ relayId, nodeIds });
+  }
 
   for (const relay of flow.relays) {
     if (!result.desired.has(relay)) {

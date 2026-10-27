@@ -14,6 +14,7 @@ export const NODE_TYPES = [
   "condition.compare",
   "condition.timeWindow",
   "condition.brewStatus",
+  "condition.stageAge",
   "control.thermostat",
   "action.relay",
   "action.notify",
@@ -33,6 +34,7 @@ export type TemperatureTriggerConfig = { source: TempSource };
 export type CompareConfig = { op: "lt" | "gt" | "between"; valueC: number; value2C: number | null };
 export type TimeWindowConfig = { from: string; to: string; days: number[] };
 export type BrewStatusConfig = { statuses: BrewStatus[] };
+export type StageAgeConfig = { status: BrewStatus; op: "atLeast" | "lessThan"; days: number };
 export type ThermostatConfig = {
   outputDeviceId: number;
   mode: "heat" | "cool";
@@ -51,6 +53,7 @@ export type FlowNode =
   | { id: string; type: "condition.compare"; config: CompareConfig }
   | { id: string; type: "condition.timeWindow"; config: TimeWindowConfig }
   | { id: string; type: "condition.brewStatus"; config: BrewStatusConfig }
+  | { id: string; type: "condition.stageAge"; config: StageAgeConfig }
   | { id: string; type: "control.thermostat"; config: ThermostatConfig }
   | { id: string; type: "action.relay"; config: RelayConfig }
   | { id: string; type: "action.notify"; config: NotifyConfig }
@@ -117,6 +120,12 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
       if (!days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) return fail("Days must be 0 (Sunday) to 6");
       return { ok: true, value: { from: c.from, to: c.to, days: [...new Set(days as number[])].sort() } };
     }
+    case "condition.stageAge": {
+      if (!(BREW_STATUSES as readonly unknown[]).includes(c.status)) return fail("Choose a brew stage");
+      if (c.op !== "atLeast" && c.op !== "lessThan") return fail("Choose \"at least\" or \"less than\"");
+      if (!isNum(c.days) || c.days < 0 || c.days > 365) return fail("Days must be 0–365");
+      return { ok: true, value: { status: c.status as BrewStatus, op: c.op, days: Math.round(c.days * 10) / 10 } };
+    }
     case "condition.brewStatus": {
       const statuses = Array.isArray(c.statuses) ? c.statuses : [];
       if (statuses.length === 0) return fail("Choose at least one brew status");
@@ -179,6 +188,23 @@ export function inTimeWindow(cfg: TimeWindowConfig, now: Date): boolean {
   if (nowMin >= from) return dayOk(now.getDay());
   if (nowMin < to) return dayOk((now.getDay() + 6) % 7);
   return false;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a brew has been in a stage for at least / less than a number of
+ * days. A brew in any other stage never passes, so "conditioning for less than
+ * 3 days" doesn't match a batch that's still fermenting.
+ */
+export function stageAgePasses(
+  cfg: StageAgeConfig,
+  brew: { status: string; stageStartedAt: Date | null } | null,
+  now: Date,
+): boolean {
+  if (!brew || brew.status !== cfg.status || !brew.stageStartedAt) return false;
+  const days = (now.getTime() - brew.stageStartedAt.getTime()) / DAY_MS;
+  return cfg.op === "atLeast" ? days >= cfg.days : days < cfg.days;
 }
 
 export function compareTemp(cfg: CompareConfig, tempC: number): boolean {

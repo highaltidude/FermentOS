@@ -2082,6 +2082,7 @@ components:
             - condition.compare
             - condition.timeWindow
             - condition.brewStatus
+            - condition.stageAge
             - control.thermostat
             - action.relay
             - action.notify

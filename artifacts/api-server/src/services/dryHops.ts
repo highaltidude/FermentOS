@@ -1,14 +1,13 @@
 import {
   db,
   brewSessionsTable,
-  brewSessionStatusLogTable,
   brewAlertStateTable,
   recipeIngredientsTable,
   recipesTable,
   ACTIVE_BREW_STATUSES,
   type BrewSession,
 } from "@workspace/db";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import {
   dryHopSchedule,
@@ -21,6 +20,7 @@ import {
 import { ingredientsForVariant, resolveSessionVariant } from "../lib/recipeVariants.js";
 import { getNotifyConfig } from "./notifications.js";
 import { recordFiringAlert, resolveAlert } from "./alertState.js";
+import { stageStartedAt } from "./brewStage.js";
 
 /**
  * Dry hop reminders. Sessions do not copy their recipe, so the dry hops are
@@ -54,26 +54,13 @@ async function loadDryHopIngredients(recipeId: number | null, sessionVariant: st
   return ingredientsForVariant(ingredients, resolveSessionVariant(recipe?.variants, sessionVariant));
 }
 
-async function conditioningStartedAt(brewSessionId: number): Promise<Date | null> {
-  const [entry] = await db
-    .select({ changedAt: brewSessionStatusLogTable.changedAt })
-    .from(brewSessionStatusLogTable)
-    .where(and(
-      eq(brewSessionStatusLogTable.brewSessionId, brewSessionId),
-      eq(brewSessionStatusLogTable.status, "conditioning"),
-    ))
-    .orderBy(desc(brewSessionStatusLogTable.changedAt))
-    .limit(1);
-  return entry?.changedAt ?? null;
-}
-
 type SessionFields = Pick<BrewSession, "id" | "recipeId" | "recipeVariant" | "status" | "dryHopAddedIds">;
 
 export async function scheduleForSession(session: SessionFields, now = Date.now()): Promise<DryHopItem[]> {
   const ingredients = await loadDryHopIngredients(session.recipeId, session.recipeVariant);
   if (ingredients.length === 0) return [];
   return dryHopSchedule(ingredients, {
-    conditioningStartedAt: await conditioningStartedAt(session.id),
+    conditioningStartedAt: await stageStartedAt(session.id, "conditioning"),
     inConditioning: session.status === "conditioning",
     addedIds: session.dryHopAddedIds,
   }, now);

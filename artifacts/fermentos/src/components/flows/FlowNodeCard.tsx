@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
-  AlertTriangle, ArrowDownUp, Beer, Bell, CalendarClock, Clock, Gauge, Hourglass, Power, Thermometer, type LucideIcon,
+  AlertTriangle, ArrowDownUp, Beer, Bell, CalendarClock, CalendarDays, Clock, Gauge, Hourglass, Power, Thermometer, type LucideIcon,
 } from "lucide-react";
 import type { FlowGraphNodeType, FlowNodeState, OutputDevice, SensorDeviceWithStatus } from "@workspace/api-client-react";
 import { NODE_LABELS, describeNode, formatTemp, hasInput, hasOutput, nodeCategory, type NodeCategory, type TempUnit } from "@/lib/flows";
@@ -29,6 +29,7 @@ export const NODE_ICONS: Record<FlowGraphNodeType, LucideIcon> = {
   "condition.compare": ArrowDownUp,
   "condition.timeWindow": CalendarClock,
   "condition.brewStatus": Beer,
+  "condition.stageAge": CalendarDays,
   "control.thermostat": Gauge,
   "action.relay": Power,
   "action.notify": Bell,

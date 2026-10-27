@@ -40,6 +40,7 @@ const NODE_LABELS: Record<NodeType, string> = {
   "condition.compare": "Compare",
   "condition.timeWindow": "Time window",
   "condition.brewStatus": "Brew status",
+  "condition.stageAge": "Days in stage",
   "control.thermostat": "Thermostat",
   "action.relay": "Relay",
   "action.notify": "Notify",
@@ -151,15 +152,28 @@ export function validateFlowGraph(graph: unknown, opts: { isValidCron: (expr: st
       if (n.type === "control.thermostat") problems.push({ nodeId: n.id, message: "A thermostat needs a temperature trigger" });
       if (n.type === "condition.compare") problems.push({ nodeId: n.id, message: "Comparing a temperature needs a temperature trigger" });
       if (n.type === "condition.brewStatus") problems.push({ nodeId: n.id, message: "Brew status needs a temperature trigger with a sensor" });
+      if (n.type === "condition.stageAge") problems.push({ nodeId: n.id, message: "Days in stage needs a temperature trigger with a sensor" });
       if (n.type === "action.relay" && n.config.action === "on") {
         problems.push({ nodeId: n.id, message: "A schedule can't leave a relay on indefinitely; choose \"on for\" a number of minutes" });
       }
     }
   }
-  // Two nodes in a level-driven flow fighting over one relay would flap it.
+  // A relay may appear on several branches of a temperature flow (fermenting
+  // → cold crash hands one fridge from thermostat to thermostat), but never
+  // twice down one branch: whenever the lower step is reached so is the upper
+  // one, and the two would fight. If sibling branches are ever reached
+  // together, the engine fails safe rather than picking one.
   if (kind === "temperature") {
+    const isAncestor = (a: string, b: string) => {
+      for (let p = parentOf.get(b); p; p = parentOf.get(p)) if (p === a) return true;
+      return false;
+    };
     for (const ids of relayUses.values()) {
-      for (const id of ids.slice(1)) problems.push({ nodeId: id, message: "Another step in this flow already switches this relay" });
+      for (const id of ids) {
+        if (ids.some((other) => other !== id && isAncestor(other, id))) {
+          problems.push({ nodeId: id, message: "Another step on this branch already switches this relay" });
+        }
+      }
     }
   }
 

@@ -21,6 +21,7 @@ export const FlowGraphNodeType = {
   conditioncompare: "condition.compare",
   conditiontimeWindow: "condition.timeWindow",
   conditionbrewStatus: "condition.brewStatus",
+  conditionstageAge: "condition.stageAge",
   controlthermostat: "control.thermostat",
   actionrelay: "action.relay",
   actionnotify: "action.notify",

@@ -232,6 +232,36 @@ export function NodeInspector({ id, type, config, onChange, onDelete, kind, unit
         </>
       );
       break;
+    case "condition.stageAge":
+      fields = (
+        <>
+          <div>
+            <label className={label}>Continue while the brew has been</label>
+            <select className={select} value={String(config.status ?? "conditioning")} onChange={(e) => set({ status: e.target.value })}>
+              {STATUS_OPTIONS.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={label}>For</label>
+              <select className={select} value={String(config.op ?? "atLeast")} onChange={(e) => set({ op: e.target.value })}>
+                <option value="atLeast">At least</option>
+                <option value="lessThan">Less than</option>
+              </select>
+            </div>
+            <div>
+              <label className={label}>Days</label>
+              <NumberField value={config.days} onChange={(v) => set({ days: v })} step="0.5" min={0} max={365} />
+            </div>
+          </div>
+          <p className={hint}>
+            Counted from when the sensor's brew last moved to this stage. A brew at any other stage doesn't pass. Pair
+            "at least 3 days" with "less than 3 days" on another branch to hand a relay from one thermostat to the next,
+            e.g. to cold crash.
+          </p>
+        </>
+      );
+      break;
     case "condition.brewStatus": {
       const statuses = Array.isArray(config.statuses) ? (config.statuses as string[]) : [];
       fields = (

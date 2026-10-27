@@ -5,14 +5,15 @@ import {
   flowRunsTable,
   outputDevicesTable,
   sensorDevicesTable,
-  brewSessionsTable,
+  flowRecipesTable,
+  recipesTable,
   type Flow,
   type OutputDevice,
 } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { validateFlowGraph, type CompiledFlow, type FlowProblem } from "../lib/flows/graph.js";
-import { evaluateTemperatureTick, renderMessage, type NodeState } from "../lib/flows/evaluate.js";
+import { evaluateTemperatureTick, renderMessage, type BrewContext, type NodeState } from "../lib/flows/evaluate.js";
 import { inTimeWindow, type FlowNode, type TempSource } from "../lib/flows/nodes.js";
 import type { RelayTiming } from "../lib/flows/thermostat.js";
 import { setShellyRelay } from "./shelly.js";
@@ -20,6 +21,7 @@ import { getLiveState, isReachable, noteRelayState } from "./devicePoller.js";
 import { getLatestReading, getActiveAssignment } from "./sensorDevices.js";
 import { sendNotification } from "./notifications.js";
 import { getConfigValue } from "./appConfig.js";
+import { brewSnapshot } from "./brewStage.js";
 
 /**
  * Brew Flow runtime.
@@ -57,11 +59,14 @@ export type FlowLiveStatus = {
   failsafe: string | null;
   /** True during the startup grace period while the first readings arrive. */
   waiting: boolean;
+  /** Why a recipe-linked flow is idle (its relays off, no alert), if it is. */
+  standby: string | null;
   nodes: Record<string, NodeState>;
   nextRunAt: Date | null;
 };
 
-type ActiveFlow = { flow: Flow; compiled: CompiledFlow };
+/** `recipes` empty = the flow runs for whatever brew is on its sensor. */
+type ActiveFlow = { flow: Flow; compiled: CompiledFlow; recipes: { id: number; name: string }[] };
 
 const active = new Map<number, ActiveFlow>();
 const status = new Map<number, FlowLiveStatus>();
@@ -78,8 +83,27 @@ export function isValidCron(expr: string): boolean {
   return cron.validate(expr);
 }
 
-export function validateFlow(graph: unknown) {
-  return validateFlowGraph(graph, { isValidCron });
+/** Validate a flow's graph, plus the one rule about its recipe links: only temperature flows have a brew to match. */
+export function validateFlow(graph: unknown, linkedRecipes = 0) {
+  const result = validateFlowGraph(graph, { isValidCron });
+  if (result.compiled && linkedRecipes > 0 && result.compiled.kind !== "temperature") {
+    return { problems: [{ nodeId: null, message: "Only temperature flows can follow a recipe; unlink its recipes or use a temperature trigger" }], compiled: null };
+  }
+  return result;
+}
+
+/** Recipes each flow is linked to, by flow id. */
+export async function flowRecipeLinks(flowIds: number[]): Promise<Map<number, { id: number; name: string }[]>> {
+  const links = new Map<number, { id: number; name: string }[]>();
+  if (flowIds.length === 0) return links;
+  const rows = await db
+    .select({ flowId: flowRecipesTable.flowId, id: recipesTable.id, name: recipesTable.name })
+    .from(flowRecipesTable)
+    .innerJoin(recipesTable, eq(recipesTable.id, flowRecipesTable.recipeId))
+    .where(inArray(flowRecipesTable.flowId, flowIds))
+    .orderBy(recipesTable.name);
+  for (const r of rows) links.set(r.flowId, [...(links.get(r.flowId) ?? []), { id: r.id, name: r.name }]);
+  return links;
 }
 
 /** Which enabled flow owns each relay. */
@@ -174,54 +198,95 @@ async function allOff(deviceIds: number[]): Promise<void> {
 
 // ── Temperature flows ───────────────────────────────────────────────────────
 
-type SourceReading = { tempC: number | null; stale: string | null; brewStatus: string | null };
+type SourceReading = { tempC: number | null; stale: string | null; brew: BrewContext | null };
 
-async function brewStatusFor(sensorDeviceId: number | null): Promise<string | null> {
+/** The brew a sensor is assigned to: its recipe, stage (and since when) and ideal temperatures. */
+async function brewContextFor(sensorDeviceId: number | null): Promise<BrewContext | null> {
   if (sensorDeviceId == null) return null;
   const assignment = await getActiveAssignment(sensorDeviceId);
   if (!assignment) return null;
-  const [session] = await db
-    .select({ status: brewSessionsTable.status })
-    .from(brewSessionsTable)
-    .where(eq(brewSessionsTable.id, assignment.brewSessionId));
-  return session?.status ?? null;
+  return brewSnapshot(assignment.brewSessionId);
 }
 
-async function readSource(source: TempSource, wantsBrewStatus: boolean): Promise<SourceReading> {
+/** Whether a tick needs to look up the sensor's brew at all. */
+function needsBrew({ compiled, recipes }: ActiveFlow): boolean {
+  if (recipes.length > 0) return true;
+  return [...compiled.nodes.values()].some((n) =>
+    n.type === "condition.brewStatus" ||
+    n.type === "condition.stageAge" ||
+    (n.type === "control.thermostat" && n.config.setpointFrom !== "fixed"));
+}
+
+/** Why a recipe-linked flow should sit this one out, or null if it should run. */
+function standbyReason({ recipes }: ActiveFlow, brew: BrewContext | null): string | null {
+  if (recipes.length === 0) return null;
+  const names = recipes.map((r) => r.name).join(" or ");
+  if (!brew) return `Standing by: no brew is assigned to the temperature sensor (waiting for ${names})`;
+  if (brew.recipeId == null || !recipes.some((r) => r.id === brew.recipeId)) {
+    return `Standing by: the sensor's brew (${brew.name}) isn't ${names}`;
+  }
+  return null;
+}
+
+async function readSource(source: TempSource, wantsBrew: boolean): Promise<SourceReading> {
   if (source.kind === "shelly") {
     const [device] = await db.select().from(outputDevicesTable).where(eq(outputDevicesTable.id, source.outputDeviceId));
-    if (!device) return { tempC: null, stale: "The temperature source relay has been removed", brewStatus: null };
-    const brewStatus = wantsBrewStatus ? await brewStatusFor(device.probeSensorDeviceId) : null;
+    if (!device) return { tempC: null, stale: "The temperature source relay has been removed", brew: null };
+    const brew = wantsBrew ? await brewContextFor(device.probeSensorDeviceId) : null;
     const live = getLiveState(device.id);
-    if (!live || !isReachable(live)) return { tempC: null, stale: `Can't reach ${device.name} to read its probe`, brewStatus };
-    if (live.tempC == null) return { tempC: null, stale: `${device.name} has no temperature probe reading`, brewStatus };
+    if (!live || !isReachable(live)) return { tempC: null, stale: `Can't reach ${device.name} to read its probe`, brew };
+    if (live.tempC == null) return { tempC: null, stale: `${device.name} has no temperature probe reading`, brew };
     if (!live.at || Date.now() - live.at.getTime() > SHELLY_TEMP_MAX_AGE_MS) {
-      return { tempC: null, stale: `${device.name}'s probe reading is out of date`, brewStatus };
+      return { tempC: null, stale: `${device.name}'s probe reading is out of date`, brew };
     }
-    return { tempC: live.tempC, stale: null, brewStatus };
+    return { tempC: live.tempC, stale: null, brew };
   }
 
   const [sensor] = await db.select().from(sensorDevicesTable).where(eq(sensorDevicesTable.id, source.sensorDeviceId));
-  if (!sensor) return { tempC: null, stale: "The temperature sensor has been removed", brewStatus: null };
-  const brewStatus = wantsBrewStatus ? await brewStatusFor(sensor.id) : null;
+  if (!sensor) return { tempC: null, stale: "The temperature sensor has been removed", brew: null };
+  const brew = wantsBrew ? await brewContextFor(sensor.id) : null;
   const reading = await getLatestReading(sensor.id);
-  if (!reading || reading.temperature == null) return { tempC: null, stale: `${sensor.deviceName} hasn't reported a temperature`, brewStatus };
+  if (!reading || reading.temperature == null) return { tempC: null, stale: `${sensor.deviceName} hasn't reported a temperature`, brew };
   const maxAge = reading.reportedInterval
     ? Math.max(SENSOR_STALE_MIN_MS, reading.reportedInterval * 1000 * SENSOR_STALE_INTERVALS)
     : SENSOR_STALE_DEFAULT_MS;
   if (Date.now() - reading.receivedAt.getTime() > maxAge) {
-    return { tempC: null, stale: `${sensor.deviceName} hasn't reported for ${Math.round((Date.now() - reading.receivedAt.getTime()) / 60_000)} minutes`, brewStatus };
+    return { tempC: null, stale: `${sensor.deviceName} hasn't reported for ${Math.round((Date.now() - reading.receivedAt.getTime()) / 60_000)} minutes`, brew };
   }
   const tempC = (reading.temperatureUnit ?? "C").toUpperCase() === "F" ? (reading.temperature - 32) * 5 / 9 : reading.temperature;
-  return { tempC, stale: null, brewStatus };
+  return { tempC, stale: null, brew };
 }
 
-async function tickTemperatureFlow({ flow, compiled }: ActiveFlow): Promise<void> {
+async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
+  const { flow, compiled } = entry;
   const prev = status.get(flow.id);
   const now = new Date();
-  const wantsBrewStatus = [...compiled.nodes.values()].some((n) => n.type === "condition.brewStatus");
-  const reading = await readSource(compiled.source!, wantsBrewStatus);
+  const reading = await readSource(compiled.source!, needsBrew(entry));
   const devices = await loadDevices(compiled.relays);
+
+  // A recipe-linked flow with someone else's brew (or none) on its sensor is
+  // idle, not broken: relays off, a note in the log, no alert. It takes
+  // precedence over the fail-safes so an unused fermenter's stale probe
+  // doesn't page anyone.
+  const standby = standbyReason(entry, reading.brew);
+  if (standby) {
+    await Promise.all([...devices.values()].map((d) => driveRelay(d, false)));
+    notifyActive.set(flow.id, new Set());
+    status.set(flow.id, {
+      flowId: flow.id,
+      kind: "temperature",
+      lastTickAt: now,
+      tempC: reading.tempC,
+      failsafe: null,
+      waiting: false,
+      standby,
+      nodes: Object.fromEntries([...compiled.nodes.keys()].map((id) => [id, { active: false }])),
+      nextRunAt: null,
+    });
+    if (prev?.standby !== standby) await logRun(flow.id, "tick", "skipped", standby);
+    return;
+  }
+  if (prev?.standby) await logRun(flow.id, "tick", "ok", `Running: ${reading.brew!.name} is on the sensor`);
 
   let failsafe = reading.stale;
   const missing = compiled.relays.filter((id) => !devices.has(id));
@@ -237,28 +302,48 @@ async function tickTemperatureFlow({ flow, compiled }: ActiveFlow): Promise<void
     tempC: reading.tempC,
     failsafe: waiting ? null : failsafe,
     waiting,
+    standby: null,
     nodes: Object.fromEntries([...compiled.nodes.keys()].map((id) => [id, { active: false }])),
     nextRunAt: null,
   };
 
-  if (failsafe) {
+  const holdOff = async (reason: string, quiet: boolean) => {
     await Promise.all([...devices.values()].map((d) => driveRelay(d, false)));
     notifyActive.set(flow.id, new Set());
     status.set(flow.id, next);
-    if (!waiting && prev?.failsafe !== failsafe) {
-      await logRun(flow.id, "tick", "failsafe", `Relays off: ${failsafe}`);
-      await notify(flow, "relays switched off", `${failsafe}. Its relays have been switched off until this is fixed.`, "flow_failsafe");
+    if (!quiet && prev?.failsafe !== reason) {
+      await logRun(flow.id, "tick", "failsafe", `Relays off: ${reason}`);
+      await notify(flow, "relays switched off", `${reason}. Its relays have been switched off until this is fixed.`, "flow_failsafe");
     }
+  };
+
+  if (failsafe) {
+    await holdOff(failsafe, waiting);
     return;
   }
 
   const result = evaluateTemperatureTick(compiled, {
     tempC: reading.tempC!,
     now,
-    brewStatus: reading.brewStatus,
+    brew: reading.brew,
     relays: relayTiming,
   });
   next.nodes = result.nodes;
+
+  // Branches that share a relay are meant to take turns (fermenting, then the
+  // cold crash). If two pass at once there's no right answer, so fail off.
+  if (result.conflicts.length > 0) {
+    const names = result.conflicts.map((c) => devices.get(c.relayId)?.name ?? "a relay").join(", ");
+    next.failsafe = `More than one step wants ${names} at the same time`;
+    await holdOff(next.failsafe, false);
+    return;
+  }
+  // A thermostat told to follow the brew's temperature has nothing to aim at.
+  if (result.missingTargets.length > 0) {
+    next.failsafe = result.missingTargets[0]!.message;
+    await holdOff(next.failsafe, false);
+    return;
+  }
   status.set(flow.id, next);
 
   const temp = await formatTemp(reading.tempC);
@@ -322,6 +407,7 @@ function emptyStatus({ flow, compiled }: ActiveFlow): FlowLiveStatus {
     tempC: null,
     failsafe: null,
     waiting: false,
+    standby: null,
     nodes: Object.fromEntries([...compiled.nodes.keys()].map((id) => [id, { active: false }])),
     nextRunAt: null,
   };
@@ -404,8 +490,10 @@ export async function reloadFlows(): Promise<void> {
   active.clear();
 
   const flows = await db.select().from(flowsTable).where(eq(flowsTable.enabled, true));
+  const links = await flowRecipeLinks(flows.map((f) => f.id));
   for (const flow of flows) {
-    const { compiled, problems } = validateFlow(flow.graph);
+    const recipes = links.get(flow.id) ?? [];
+    const { compiled, problems } = validateFlow(flow.graph, recipes.length);
     if (!compiled) {
       // Shouldn't happen — the API refuses to enable an invalid flow — but a
       // restore or a manual DB edit could get here.
@@ -413,8 +501,9 @@ export async function reloadFlows(): Promise<void> {
       await setLastError(flow.id, problems[0]?.message ?? "Flow is invalid");
       continue;
     }
-    active.set(flow.id, { flow, compiled });
-    if (!status.has(flow.id) || status.get(flow.id)!.kind !== compiled.kind) status.set(flow.id, emptyStatus({ flow, compiled }));
+    const entry = { flow, compiled, recipes };
+    active.set(flow.id, entry);
+    if (!status.has(flow.id) || status.get(flow.id)!.kind !== compiled.kind) status.set(flow.id, emptyStatus(entry));
 
     if (compiled.trigger.type === "trigger.schedule") {
       const flowId = flow.id;

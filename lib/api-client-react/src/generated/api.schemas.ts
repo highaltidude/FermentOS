@@ -21,6 +21,7 @@ export const FlowGraphNodeType = {
   conditioncompare: "condition.compare",
   conditiontimeWindow: "condition.timeWindow",
   conditionbrewStatus: "condition.brewStatus",
+  conditionstageAge: "condition.stageAge",
   controlthermostat: "control.thermostat",
   actionrelay: "action.relay",
   actionnotify: "action.notify",
@@ -125,6 +126,8 @@ export interface Flow {
   kind: FlowKind;
   problems: FlowProblem[];
   relayDeviceIds: number[];
+  /** Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew */
+  recipeIds: number[];
   /** @nullable */
   lastError: string | null;
   lastRun: FlowRun | null;
@@ -141,6 +144,7 @@ export interface CreateFlowBody {
   /** @nullable */
   description?: string | null;
   graph: FlowGraph;
+  recipeIds?: number[];
 }
 
 export interface UpdateFlowBody {
@@ -152,6 +156,8 @@ export interface UpdateFlowBody {
   /** @nullable */
   description?: string | null;
   graph?: FlowGraph;
+  /** Replaces the flow's recipe links */
+  recipeIds?: number[];
 }
 
 export interface FlowNodeState {
@@ -160,6 +166,8 @@ export interface FlowNodeState {
   relayOn?: boolean;
   /** Thermostat state, e.g. heating, idle, holding_min_off */
   reason?: string;
+  /** The target a thermostat used on the last evaluation (its own, or the brew's) */
+  targetC?: number;
 }
 
 /**
@@ -192,6 +200,11 @@ export interface FlowStatus {
   failsafe: string | null;
   /** Waiting for the first readings after a restart */
   waiting: boolean;
+  /**
+   * Why a recipe-linked flow is idle (relays off, no alert), if it is
+   * @nullable
+   */
+  standby: string | null;
   /** @nullable */
   nextRunAt: string | null;
   nodes: FlowStatusNodes;

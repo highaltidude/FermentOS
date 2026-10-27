@@ -1,4 +1,4 @@
-import { ShieldAlert } from "lucide-react";
+import { CirclePause, ShieldAlert } from "lucide-react";
 import type { FlowStatus } from "@workspace/api-client-react";
 import { formatTemp, type TempUnit } from "@/lib/flows";
 import { formatShortDateTime } from "@/pages/settings/system/integrations/ispindelFormat";
@@ -11,6 +11,7 @@ export function FlowStatusLine({ status, unit }: { status: FlowStatus | undefine
       <span className="text-destructive flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5 shrink-0" />Relays off: {status.failsafe}</span>
     );
   }
+  if (status.standby) return <span className="flex items-center gap-1"><CirclePause className="w-3.5 h-3.5 shrink-0" />{status.standby}</span>;
   if (status.waiting) return <span>Waiting for the first readings…</span>;
   if (status.kind === "temperature" && status.tempC != null) {
     const on = Object.values(status.nodes).some((n) => n.relayOn);

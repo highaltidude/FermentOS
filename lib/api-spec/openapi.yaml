@@ -2082,6 +2082,7 @@ components:
             - condition.compare
             - condition.timeWindow
             - condition.brewStatus
+            - condition.stageAge
             - control.thermostat
             - action.relay
             - action.notify
@@ -2163,6 +2164,11 @@ components:
           type: array
           items:
             type: integer
+        recipeIds:
+          type: array
+          description: Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew
+          items:
+            type: integer
         lastError:
           type: string
           nullable: true
@@ -2176,7 +2182,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, name, description, enabled, graph, kind, problems, relayDeviceIds, lastError, lastRun, createdAt, updatedAt]
+      required: [id, name, description, enabled, graph, kind, problems, relayDeviceIds, recipeIds, lastError, lastRun, createdAt, updatedAt]
 
     CreateFlowBody:
       type: object
@@ -2190,6 +2196,10 @@ components:
           nullable: true
         graph:
           $ref: "#/components/schemas/FlowGraph"
+        recipeIds:
+          type: array
+          items:
+            type: integer
       required: [name, graph]
 
     UpdateFlowBody:
@@ -2204,6 +2214,11 @@ components:
           nullable: true
         graph:
           $ref: "#/components/schemas/FlowGraph"
+        recipeIds:
+          type: array
+          description: Replaces the flow's recipe links
+          items:
+            type: integer
 
     FlowRun:
       type: object
@@ -2240,6 +2255,9 @@ components:
         reason:
           type: string
           description: Thermostat state, e.g. heating, idle, holding_min_off
+        targetC:
+          type: number
+          description: The target a thermostat used on the last evaluation (its own, or the brew's)
       required: [active]
 
     FlowStatus:
@@ -2268,6 +2286,10 @@ components:
         waiting:
           type: boolean
           description: Waiting for the first readings after a restart
+        standby:
+          type: string
+          nullable: true
+          description: Why a recipe-linked flow is idle (relays off, no alert), if it is
         nextRunAt:
           type: string
           format: date-time
@@ -2276,7 +2298,7 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/FlowNodeState"
-      required: [flowId, running, kind, lastTickAt, tempC, failsafe, waiting, nextRunAt, nodes]
+      required: [flowId, running, kind, lastTickAt, tempC, failsafe, waiting, standby, nextRunAt, nodes]
 
     RunFlowResult:
       type: object

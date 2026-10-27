@@ -80,9 +80,16 @@ describe("validateFlowGraph — rules per kind", () => {
     expect(messages.some((m) => m?.includes('choose "on"'))).toBe(true);
   });
 
-  it("temperature flows can't switch one relay from two steps", () => {
-    const g = graph([tempTrigger, thermostat("a", 3), thermostat("b", 3)], [["t", "a"], ["t", "b"]]);
-    expect(problemsOf(g)).toEqual([["b", "Another step in this flow already switches this relay"]]);
+  it("temperature flows may share a relay across branches, not down one", () => {
+    const siblings = graph([tempTrigger, thermostat("a", 3), thermostat("b", 3)], [["t", "a"], ["t", "b"]]);
+    expect(problemsOf(siblings)).toEqual([]);
+    expect(validate(siblings).compiled?.relays).toEqual([3]);
+
+    const chained = graph(
+      [tempTrigger, { id: "r", type: "action.relay", config: { outputDeviceId: 3, action: "on" } }, { id: "n", type: "action.notify", config: { message: "x" } }, thermostat("b", 3)],
+      [["t", "r"], ["r", "n"], ["n", "b"]],
+    );
+    expect(problemsOf(chained)).toEqual([["b", "Another step on this branch already switches this relay"]]);
   });
 
   it("schedule flows must time-limit \"on\" and can't use temperature nodes", () => {
@@ -150,7 +157,7 @@ describe("evaluateTemperatureTick", () => {
 
   it("drives the thermostat's relay", () => {
     const compiled = validate(fermentationFlow).compiled!;
-    const cold = evaluateTemperatureTick(compiled, { tempC: 18, now, brewStatus: null, relays: new Map() });
+    const cold = evaluateTemperatureTick(compiled, { tempC: 18, now, brew: null, relays: new Map() });
     expect(cold.desired.get(3)).toMatchObject({ on: true, nodeId: "th", reason: "heating" });
     expect(cold.nodes.th).toMatchObject({ active: true, relayOn: true });
   });
@@ -161,7 +168,7 @@ describe("evaluateTemperatureTick", () => {
       [["t", "b"], ["b", "th"]],
     );
     const compiled = validate(g).compiled!;
-    const result = evaluateTemperatureTick(compiled, { tempC: 18, now, brewStatus: "conditioning", relays: new Map([[3, { on: true, since: null }]]) });
+    const result = evaluateTemperatureTick(compiled, { tempC: 18, now, brew: { status: "conditioning", stageStartedAt: null }, relays: new Map([[3, { on: true, since: null }]]) });
     expect(result.desired.get(3)).toMatchObject({ on: false, reason: "conditions not met" });
     expect(result.nodes.b?.active).toBe(false);
     expect(result.nodes.th?.active).toBe(false);
@@ -178,10 +185,10 @@ describe("evaluateTemperatureTick", () => {
       [["t", "hot"], ["hot", "fan"], ["hot", "n"]],
     );
     const compiled = validate(g).compiled!;
-    const hot = evaluateTemperatureTick(compiled, { tempC: 25, now, brewStatus: null, relays: new Map() });
+    const hot = evaluateTemperatureTick(compiled, { tempC: 25, now, brew: null, relays: new Map() });
     expect(hot.desired.get(5)?.on).toBe(true);
     expect(hot.notify.map((n) => n.id)).toEqual(["n"]);
-    const fine = evaluateTemperatureTick(compiled, { tempC: 20, now, brewStatus: null, relays: new Map() });
+    const fine = evaluateTemperatureTick(compiled, { tempC: 20, now, brew: null, relays: new Map() });
     expect(fine.desired.get(5)?.on).toBe(false);
     expect(fine.notify).toEqual([]);
   });

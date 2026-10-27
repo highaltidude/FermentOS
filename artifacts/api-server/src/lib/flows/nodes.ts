@@ -14,6 +14,7 @@ export const NODE_TYPES = [
   "condition.compare",
   "condition.timeWindow",
   "condition.brewStatus",
+  "condition.stageAge",
   "control.thermostat",
   "action.relay",
   "action.notify",
@@ -33,9 +34,20 @@ export type TemperatureTriggerConfig = { source: TempSource };
 export type CompareConfig = { op: "lt" | "gt" | "between"; valueC: number; value2C: number | null };
 export type TimeWindowConfig = { from: string; to: string; days: number[] };
 export type BrewStatusConfig = { statuses: BrewStatus[] };
+export type StageAgeConfig = { status: BrewStatus; op: "atLeast" | "lessThan"; days: number };
+/**
+ * Where a thermostat's target comes from: its own `setpointC`, or the ideal
+ * temperature the brew on the sensor has for a stage (the session's own value,
+ * else its recipe's), so one flow suits every batch.
+ */
+export const SETPOINT_SOURCES = ["fixed", "fermentIdeal", "conditionIdeal"] as const;
+export type SetpointSource = (typeof SETPOINT_SOURCES)[number];
+
 export type ThermostatConfig = {
   outputDeviceId: number;
   mode: "heat" | "cool";
+  setpointFrom: SetpointSource;
+  /** The target when `setpointFrom` is "fixed"; kept but unused otherwise. */
   setpointC: number;
   hysteresisC: number;
   minOnSec: number;
@@ -51,6 +63,7 @@ export type FlowNode =
   | { id: string; type: "condition.compare"; config: CompareConfig }
   | { id: string; type: "condition.timeWindow"; config: TimeWindowConfig }
   | { id: string; type: "condition.brewStatus"; config: BrewStatusConfig }
+  | { id: string; type: "condition.stageAge"; config: StageAgeConfig }
   | { id: string; type: "control.thermostat"; config: ThermostatConfig }
   | { id: string; type: "action.relay"; config: RelayConfig }
   | { id: string; type: "action.notify"; config: NotifyConfig }
@@ -117,6 +130,12 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
       if (!days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) return fail("Days must be 0 (Sunday) to 6");
       return { ok: true, value: { from: c.from, to: c.to, days: [...new Set(days as number[])].sort() } };
     }
+    case "condition.stageAge": {
+      if (!(BREW_STATUSES as readonly unknown[]).includes(c.status)) return fail("Choose a brew stage");
+      if (c.op !== "atLeast" && c.op !== "lessThan") return fail("Choose \"at least\" or \"less than\"");
+      if (!isNum(c.days) || c.days < 0 || c.days > 365) return fail("Days must be 0–365");
+      return { ok: true, value: { status: c.status as BrewStatus, op: c.op, days: Math.round(c.days * 10) / 10 } };
+    }
     case "condition.brewStatus": {
       const statuses = Array.isArray(c.statuses) ? c.statuses : [];
       if (statuses.length === 0) return fail("Choose at least one brew status");
@@ -126,7 +145,11 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
     case "control.thermostat": {
       if (!isId(c.outputDeviceId)) return fail("Choose the relay to switch");
       if (c.mode !== "heat" && c.mode !== "cool") return fail("Choose heating or cooling");
-      if (!isNum(c.setpointC) || !inTempRange(c.setpointC)) return fail("Enter a target temperature");
+      const setpointFrom = c.setpointFrom ?? "fixed";
+      if (!(SETPOINT_SOURCES as readonly unknown[]).includes(setpointFrom)) return fail("Choose where the target comes from");
+      // A target that follows the brew doesn't need its own number.
+      const setpointC = setpointFrom === "fixed" ? c.setpointC : (isNum(c.setpointC) && inTempRange(c.setpointC) ? c.setpointC : 20);
+      if (!isNum(setpointC) || !inTempRange(setpointC)) return fail("Enter a target temperature");
       const hysteresisC = c.hysteresisC ?? 0.5;
       if (!isNum(hysteresisC) || hysteresisC < 0.1 || hysteresisC > 10) return fail("Hysteresis must be 0.1–10 °C");
       const minOnSec = c.minOnSec ?? 0;
@@ -135,7 +158,15 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
       if (!isNum(minOffSec) || minOffSec < 0 || minOffSec > 3600) return fail("Minimum off time must be 0–60 minutes");
       return {
         ok: true,
-        value: { outputDeviceId: c.outputDeviceId, mode: c.mode, setpointC: c.setpointC, hysteresisC, minOnSec, minOffSec },
+        value: {
+          outputDeviceId: c.outputDeviceId,
+          mode: c.mode,
+          setpointFrom: setpointFrom as SetpointSource,
+          setpointC,
+          hysteresisC,
+          minOnSec,
+          minOffSec,
+        },
       };
     }
     case "action.relay": {
@@ -179,6 +210,23 @@ export function inTimeWindow(cfg: TimeWindowConfig, now: Date): boolean {
   if (nowMin >= from) return dayOk(now.getDay());
   if (nowMin < to) return dayOk((now.getDay() + 6) % 7);
   return false;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a brew has been in a stage for at least / less than a number of
+ * days. A brew in any other stage never passes, so "conditioning for less than
+ * 3 days" doesn't match a batch that's still fermenting.
+ */
+export function stageAgePasses(
+  cfg: StageAgeConfig,
+  brew: { status: string; stageStartedAt: Date | null } | null,
+  now: Date,
+): boolean {
+  if (!brew || brew.status !== cfg.status || !brew.stageStartedAt) return false;
+  const days = (now.getTime() - brew.stageStartedAt.getTime()) / DAY_MS;
+  return cfg.op === "atLeast" ? days >= cfg.days : days < cfg.days;
 }
 
 export function compareTemp(cfg: CompareConfig, tempC: number): boolean {

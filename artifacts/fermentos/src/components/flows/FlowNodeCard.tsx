@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
-  AlertTriangle, ArrowDownUp, Beer, Bell, CalendarClock, Clock, Gauge, Hourglass, Power, Thermometer, type LucideIcon,
+  AlertTriangle, ArrowDownUp, Beer, Bell, CalendarClock, CalendarDays, Clock, Gauge, Hourglass, Power, Thermometer, type LucideIcon,
 } from "lucide-react";
 import type { FlowGraphNodeType, FlowNodeState, OutputDevice, SensorDeviceWithStatus } from "@workspace/api-client-react";
 import { NODE_LABELS, describeNode, formatTemp, hasInput, hasOutput, nodeCategory, type NodeCategory, type TempUnit } from "@/lib/flows";
@@ -29,6 +29,7 @@ export const NODE_ICONS: Record<FlowGraphNodeType, LucideIcon> = {
   "condition.compare": ArrowDownUp,
   "condition.timeWindow": CalendarClock,
   "condition.brewStatus": Beer,
+  "condition.stageAge": CalendarDays,
   "control.thermostat": Gauge,
   "action.relay": Power,
   "action.notify": Bell,
@@ -55,8 +56,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FlowCanvasN
   let liveText: string | null = null;
   if (live?.active) {
     if (type === "trigger.temperature" && info.tempC != null) liveText = `Now ${formatTemp(info.tempC, info.unit)}`;
-    else if (live.relayOn !== undefined) liveText = `Relay ${live.relayOn ? "on" : "off"}${live.reason ? ` · ${live.reason.replace(/_/g, " ")}` : ""}`;
-    else if (live.reason) liveText = live.reason.replace(/_/g, " ");
+    else if (live.relayOn !== undefined) {
+      // A target that follows the brew is only known live, so show it.
+      const target = live.targetC != null && (data.config.setpointFrom ?? "fixed") !== "fixed" ? `Target ${formatTemp(live.targetC, info.unit)} · ` : "";
+      liveText = `${target}Relay ${live.relayOn ? "on" : "off"}${live.reason ? ` · ${live.reason.replace(/_/g, " ")}` : ""}`;
+    } else if (live.reason) liveText = live.reason.replace(/_/g, " ");
   }
 
   return (

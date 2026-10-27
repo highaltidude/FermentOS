@@ -64,7 +64,15 @@ function sourceName(source: unknown, l: Lookups): string {
   return "(no sensor chosen)";
 }
 
-const STATUS_LABELS: Record<string, string> = {
+/** Where a thermostat's target comes from; mirrors SETPOINT_SOURCES on the server. */
+export type SetpointSource = "fixed" | "fermentIdeal" | "conditionIdeal";
+export const SETPOINT_LABELS: Record<SetpointSource, string> = {
+  fixed: "A set temperature",
+  fermentIdeal: "The brew's fermentation temp",
+  conditionIdeal: "The brew's conditioning temp",
+};
+
+export const STATUS_LABELS: Record<string, string> = {
   brew_day: "Brew day",
   fermenting: "Fermenting",
   conditioning: "Conditioning",
@@ -77,11 +85,14 @@ export const NODE_LABELS: Record<FlowGraphNodeType, string> = {
   "condition.compare": "Compare",
   "condition.timeWindow": "Time window",
   "condition.brewStatus": "Brew status",
+  "condition.stageAge": "Days in stage",
   "control.thermostat": "Thermostat",
   "action.relay": "Relay",
   "action.notify": "Notify",
   "action.delay": "Delay",
 };
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /** One line saying what a node does, e.g. "Heat to 68.0°F (±0.9°F) with Heat wrap". */
 export function describeNode(node: FlowGraphNode, l: Lookups): string {
@@ -102,9 +113,15 @@ export function describeNode(node: FlowGraphNode, l: Lookups): string {
     }
     case "condition.brewStatus":
       return `If the brew is ${(c.statuses ?? []).map((s: string) => STATUS_LABELS[s] ?? s).join(" or ")}`;
+    case "condition.stageAge":
+      return `If ${STATUS_LABELS[c.status] ?? c.status} for ${c.op === "lessThan" ? "less than" : "at least"} ${plural(Number(c.days), "day")}`;
     case "control.thermostat": {
-      // The band is one-sided: heat comes on below the target and stops at it.
       const cool = c.mode === "cool";
+      const from = (c.setpointFrom ?? "fixed") as SetpointSource;
+      if (from !== "fixed") {
+        return `${cool ? "Cool" : "Heat"} to ${SETPOINT_LABELS[from].toLowerCase()} with ${relayName(c.outputDeviceId, l)}`;
+      }
+      // The band is one-sided: heat comes on below the target and stops at it.
       const start = cool ? c.setpointC + (c.hysteresisC ?? 0.5) : c.setpointC - (c.hysteresisC ?? 0.5);
       return `${cool ? "Cool" : "Heat"} to ${t(c.setpointC)} with ${relayName(c.outputDeviceId, l)}, on ${cool ? "above" : "below"} ${t(start)}`;
     }
@@ -140,10 +157,13 @@ export function outline(graph: FlowGraph): { node: FlowGraphNode; depth: number 
 
 // ── Templates ──────────────────────────────────────────────────────────────
 
-const node = (id: string, type: FlowGraphNodeType, y: number, config: Record<string, unknown>): FlowGraphNode => ({
+/** Horizontal spacing between template branches: a node card plus a gap. */
+const NODE_COLUMN = 260;
+
+const node = (id: string, type: FlowGraphNodeType, y: number, config: Record<string, unknown>, x = 0): FlowGraphNode => ({
   id,
   type,
-  position: { x: 0, y },
+  position: { x, y },
   data: { config },
 });
 const edge = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
@@ -178,25 +198,70 @@ export function fermentationTemplate(opts: {
   setpointC: number;
   hysteresisC: number;
   onlyWhileFermenting: boolean;
+  /** Cool to `crashC` once the brew has been conditioning for `afterDays`. Needs a cooling relay. */
+  coldCrash?: { afterDays: number; crashC: number; notify: boolean } | null;
+  /** Aim for the brew's own ideal temperatures (per stage) instead of `setpointC`. */
+  followBrew?: boolean;
 }): FlowGraph {
+  const thermostat = (mode: "heat" | "cool", setpointC: number, setpointFrom: SetpointSource = "fixed") => ({
+    outputDeviceId: opts.relayId,
+    mode,
+    setpointFrom,
+    setpointC: Math.round(setpointC * 100) / 100,
+    hysteresisC: Math.round(opts.hysteresisC * 100) / 100,
+    minOnSec: mode === "cool" ? 60 : 0,
+    minOffSec: mode === "cool" ? 300 : 0,
+  });
+  const fermentFrom: SetpointSource = opts.followBrew ? "fermentIdeal" : "fixed";
+  const conditionFrom: SetpointSource = opts.followBrew ? "conditionIdeal" : "fixed";
   const nodes = [node("trigger", "trigger.temperature", 0, { source: opts.source })];
   const edges = [];
+
+  if (opts.followBrew && !opts.coldCrash) {
+    // One thermostat per stage, each following that stage's ideal temperature.
+    nodes.push(
+      node("fermenting", "condition.brewStatus", 150, { statuses: ["fermenting"] }, -NODE_COLUMN / 2),
+      node("thermostat", "control.thermostat", 300, thermostat(opts.mode, opts.setpointC, fermentFrom), -NODE_COLUMN / 2),
+      node("conditioning", "condition.brewStatus", 150, { statuses: ["conditioning"] }, NODE_COLUMN / 2),
+      node("hold", "control.thermostat", 300, thermostat(opts.mode, opts.setpointC, conditionFrom), NODE_COLUMN / 2),
+    );
+    edges.push(edge("trigger", "fermenting"), edge("fermenting", "thermostat"), edge("trigger", "conditioning"), edge("conditioning", "hold"));
+    return { version: 1, nodes, edges };
+  }
+
+  if (opts.coldCrash) {
+    // Three branches share the relay and take turns: hold the target while
+    // fermenting and early in conditioning, then crash. Exactly one passes at
+    // a time; the engine fails off if that's ever not so.
+    const { afterDays, crashC, notify } = opts.coldCrash;
+    const col = (i: number) => (i - 1) * NODE_COLUMN;
+    nodes.push(
+      node("fermenting", "condition.brewStatus", 150, { statuses: ["fermenting"] }, col(0)),
+      node("thermostat", "control.thermostat", 300, thermostat(opts.mode, opts.setpointC, fermentFrom), col(0)),
+      node("before-crash", "condition.stageAge", 150, { status: "conditioning", op: "lessThan", days: afterDays }, col(1)),
+      node("hold", "control.thermostat", 300, thermostat(opts.mode, opts.setpointC, conditionFrom), col(1)),
+      node("crash-time", "condition.stageAge", 150, { status: "conditioning", op: "atLeast", days: afterDays }, col(2)),
+      node("crash", "control.thermostat", 300, thermostat("cool", crashC), col(2)),
+    );
+    edges.push(
+      edge("trigger", "fermenting"), edge("fermenting", "thermostat"),
+      edge("trigger", "before-crash"), edge("before-crash", "hold"),
+      edge("trigger", "crash-time"), edge("crash-time", "crash"),
+    );
+    if (notify) {
+      nodes.push(node("crash-notify", "action.notify", 300, { message: "{flow}: cold crash started at {temp}" }, col(3)));
+      edges.push(edge("crash-time", "crash-notify"));
+    }
+    return { version: 1, nodes, edges };
+  }
+
   let last = "trigger";
   if (opts.onlyWhileFermenting) {
     nodes.push(node("status", "condition.brewStatus", 150, { statuses: ["fermenting", "conditioning"] }));
     edges.push(edge(last, "status"));
     last = "status";
   }
-  nodes.push(
-    node("thermostat", "control.thermostat", nodes.length * 150, {
-      outputDeviceId: opts.relayId,
-      mode: opts.mode,
-      setpointC: Math.round(opts.setpointC * 100) / 100,
-      hysteresisC: Math.round(opts.hysteresisC * 100) / 100,
-      minOnSec: opts.mode === "cool" ? 60 : 0,
-      minOffSec: opts.mode === "cool" ? 300 : 0,
-    }),
-  );
+  nodes.push(node("thermostat", "control.thermostat", nodes.length * 150, thermostat(opts.mode, opts.setpointC)));
   edges.push(edge(last, "thermostat"));
   return { version: 1, nodes, edges };
 }
@@ -228,7 +293,7 @@ export const hasOutput = (type: FlowGraphNodeType) => type !== "control.thermost
 
 export const PALETTE: { category: NodeCategory; label: string; types: FlowGraphNodeType[] }[] = [
   { category: "trigger", label: "Start with", types: ["trigger.temperature", "trigger.schedule"] },
-  { category: "condition", label: "Only if", types: ["condition.compare", "condition.timeWindow", "condition.brewStatus"] },
+  { category: "condition", label: "Only if", types: ["condition.compare", "condition.timeWindow", "condition.brewStatus", "condition.stageAge"] },
   { category: "control", label: "Control", types: ["control.thermostat"] },
   { category: "action", label: "Then", types: ["action.relay", "action.notify", "action.delay"] },
 ];
@@ -239,6 +304,7 @@ export const NODE_HINTS: Record<FlowGraphNodeType, string> = {
   "condition.compare": "Continues only while the temperature is above, below or between values.",
   "condition.timeWindow": "Continues only between two times of day.",
   "condition.brewStatus": "Continues only while the sensor's brew is at one of these stages.",
+  "condition.stageAge": "Continues only once the sensor's brew has been at a stage for a number of days (or until it has).",
   "control.thermostat": "Switches a relay to hold a target temperature.",
   "action.relay": "Turns a relay on or off.",
   "action.notify": "Sends a notification to your alert channel.",
@@ -248,7 +314,7 @@ export const NODE_HINTS: Record<FlowGraphNodeType, string> = {
 /** Whether a node type can be used in a flow of the given kind (null = no trigger yet). */
 export function allowedInKind(type: FlowGraphNodeType, kind: GraphKind | null): boolean {
   if (kind === null || nodeCategory(type) === "trigger") return true;
-  if (kind === "schedule") return !["condition.compare", "condition.brewStatus", "control.thermostat"].includes(type);
+  if (kind === "schedule") return !["condition.compare", "condition.brewStatus", "condition.stageAge", "control.thermostat"].includes(type);
   return type !== "action.delay";
 }
 
@@ -274,8 +340,10 @@ export function defaultConfig(type: FlowGraphNodeType, unit: TempUnit, kind: Gra
       return { from: "22:00", to: "06:00", days: [] };
     case "condition.brewStatus":
       return { statuses: ["fermenting", "conditioning"] };
+    case "condition.stageAge":
+      return { status: "conditioning", op: "atLeast", days: 3 };
     case "control.thermostat":
-      return { outputDeviceId: null, mode: "heat", setpointC: temp(20, 68), hysteresisC: round2(deltaFromUnit(unit === "F" ? 1 : 0.5, unit)), minOnSec: 0, minOffSec: 0 };
+      return { outputDeviceId: null, mode: "heat", setpointFrom: "fixed", setpointC: temp(20, 68), hysteresisC: round2(deltaFromUnit(unit === "F" ? 1 : 0.5, unit)), minOnSec: 0, minOffSec: 0 };
     case "action.relay":
       return kind === "schedule"
         ? { outputDeviceId: null, action: "onFor", minutes: 15 }

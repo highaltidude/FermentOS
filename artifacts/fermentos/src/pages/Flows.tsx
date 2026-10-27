@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Plus, Trash2, Play, ChevronDown, ChevronRight, Thermometer, Clock, AlertTriangle, Loader2, Workflow, Pencil,
+  Plus, Trash2, Play, ChevronDown, ChevronRight, Thermometer, Clock, AlertTriangle, Loader2, Workflow, Pencil, BookOpen,
 } from "lucide-react";
 import {
   useListFlows,
@@ -18,6 +18,7 @@ import {
   useListOutputDevices,
   getListOutputDevicesQueryKey,
   useListSensorDevices,
+  useListRecipes,
   type Flow,
   type FlowGraph,
 } from "@workspace/api-client-react";
@@ -101,6 +102,7 @@ function FlowCard({ flow }: { flow: Flow }) {
   const [open, setOpen] = useState(false);
   const { data: devices = [] } = useListOutputDevices({ query: { queryKey: getListOutputDevicesQueryKey() } });
   const { data: sensors = [] } = useListSensorDevices();
+  const { data: recipes = [] } = useListRecipes({});
   const { data: status } = useGetFlowStatus(flow.id, {
     query: { enabled: flow.enabled, refetchInterval: 10_000, queryKey: getGetFlowStatusQueryKey(flow.id) },
   });
@@ -141,6 +143,10 @@ function FlowCard({ flow }: { flow: Flow }) {
               : flow.kind === "temperature" ? <Thermometer className="w-4 h-4 text-muted-foreground" />
               : <Workflow className="w-4 h-4 text-muted-foreground" />}
             <button type="button" onClick={() => setOpen((v) => !v)} className="text-sm font-semibold text-foreground text-left">{flow.name}</button>
+            {flow.recipeIds.map((rid) => {
+              const r = recipes.find((x) => x.id === rid);
+              return r ? <Link key={rid} href={`/recipes/${rid}`}><Badge variant="muted"><BookOpen className="w-3 h-3" />{r.name}</Badge></Link> : null;
+            })}
             {flow.problems.length > 0 && <Badge variant="warning"><AlertTriangle className="w-3 h-3" />Needs attention</Badge>}
             {flow.enabled && status?.failsafe && <Badge variant="destructive">Fail-safe</Badge>}
           </div>
@@ -243,14 +249,20 @@ function FlowCard({ flow }: { flow: Flow }) {
 
 type Template = "fermentation" | "timer";
 
-function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * New flow from a template. Given a `recipe`, it goes straight to the
+ * fermentation template, follows the brew's temperatures and links the flow to
+ * that recipe.
+ */
+export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClose: () => void; recipe?: { id: number; name: string } }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const unit = useFermentTempUnit();
   const { data: devices = [] } = useListOutputDevices({ query: { queryKey: getListOutputDevicesQueryKey() } });
   const { data: sensors = [] } = useListSensorDevices();
   const [, navigate] = useLocation();
-  const [template, setTemplate] = useState<Template | null>(null);
+  const [template, setTemplate] = useState<Template | null>(recipe ? "fermentation" : null);
+  const [followBrew, setFollowBrew] = useState(!!recipe);
   const [name, setName] = useState("");
   const [enableNow, setEnableNow] = useState(true);
   // Fermentation
@@ -260,6 +272,10 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
   const [setpoint, setSetpoint] = useState(unit === "F" ? "68" : "20");
   const [hysteresis, setHysteresis] = useState(unit === "F" ? "1" : "0.5");
   const [onlyFermenting, setOnlyFermenting] = useState(false);
+  const [crash, setCrash] = useState(false);
+  const [crashDays, setCrashDays] = useState("3");
+  const [crashTemp, setCrashTemp] = useState(unit === "F" ? "34" : "1");
+  const [crashNotify, setCrashNotify] = useState(true);
   // Timer
   const [scheduleKind, setScheduleKind] = useState<"daily" | "everyHours">("daily");
   const [time, setTime] = useState("06:00");
@@ -267,7 +283,9 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
   const [everyHours, setEveryHours] = useState("6");
   const [minutes, setMinutes] = useState("15");
 
-  const reset = () => { setTemplate(null); setName(""); setSource(""); setRelayId(""); setOnlyFermenting(false); };
+  const reset = () => {
+    setTemplate(recipe ? "fermentation" : null); setName(""); setSource(""); setRelayId(""); setOnlyFermenting(false); setCrash(false); setFollowBrew(!!recipe);
+  };
   const close = () => { reset(); onClose(); };
 
   const enable = useEnableFlow();
@@ -300,14 +318,19 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
       const src = sourceOptions.find((o) => o.key === source)?.value;
       const sp = Number(setpoint);
       const hy = Number(hysteresis);
-      if (!src || !relayId || !Number.isFinite(sp) || !(hy > 0)) return;
+      if (!src || !relayId || (!followBrew && !Number.isFinite(sp)) || !(hy > 0)) return;
+      const cd = Number(crashDays);
+      const ct = Number(crashTemp);
+      if (crash && (!(cd >= 0) || !Number.isFinite(ct))) return;
       graph = fermentationTemplate({
         source: src,
         relayId: Number(relayId),
-        mode,
-        setpointC: fromUnit(sp, unit),
+        mode: crash ? "cool" : mode,
+        setpointC: fromUnit(Number.isFinite(sp) ? sp : unit === "F" ? 68 : 20, unit),
         hysteresisC: deltaFromUnit(hy, unit),
         onlyWhileFermenting: onlyFermenting,
+        coldCrash: crash ? { afterDays: cd, crashC: fromUnit(ct, unit), notify: crashNotify } : null,
+        followBrew,
       });
     } else {
       const m = Number(minutes);
@@ -320,8 +343,11 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
       });
     }
     const relayName = devices.find((d) => d.id === Number(relayId))?.name ?? "relay";
-    const fallback = template === "fermentation" ? `${mode === "heat" ? "Heat" : "Cool"} with ${relayName}` : `${relayName} timer`;
-    create.mutate({ data: { name: name.trim() || fallback, graph } });
+    const fallback = template !== "fermentation" ? `${relayName} timer`
+      : recipe ? `${recipe.name} on ${relayName}`
+      : crash ? `${relayName} with cold crash`
+      : `${mode === "heat" ? "Heat" : "Cool"} with ${relayName}`;
+    create.mutate({ data: { name: name.trim() || fallback, graph, recipeIds: recipe ? [recipe.id] : undefined } });
   };
 
   const label = "text-xs text-muted-foreground mb-1 block";
@@ -357,7 +383,7 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
           <form className="space-y-3" onSubmit={submit}>
             <div>
               <label className={label}>Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={template === "fermentation" ? "Fermenter 1 heat" : "Morning recirculation"} className="text-sm" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={recipe ? `${recipe.name} fermentation` : template === "fermentation" ? "Fermenter 1 heat" : "Morning recirculation"} className="text-sm" />
             </div>
 
             <div>
@@ -386,29 +412,64 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className={label}>Mode</label>
-                    <select className={select} value={mode} onChange={(e) => setMode(e.target.value as "heat" | "cool")}>
+                    <select className={select} value={crash ? "cool" : mode} disabled={crash} onChange={(e) => setMode(e.target.value as "heat" | "cool")}>
                       <option value="heat">Heat</option>
                       <option value="cool">Cool</option>
                     </select>
                   </div>
-                  <div>
-                    <label className={label}>Target °{unit}</label>
-                    <Input type="number" step="0.1" value={setpoint} onChange={(e) => setSetpoint(e.target.value)} className="text-sm" required />
-                  </div>
+                  {!followBrew && (
+                    <div>
+                      <label className={label}>Target °{unit}</label>
+                      <Input type="number" step="0.1" value={setpoint} onChange={(e) => setSetpoint(e.target.value)} className="text-sm" required />
+                    </div>
+                  )}
                   <div>
                     <label className={label}>Swing °{unit}</label>
                     <Input type="number" step="0.1" min="0.1" value={hysteresis} onChange={(e) => setHysteresis(e.target.value)} className="text-sm" required />
                   </div>
                 </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={followBrew} onChange={(e) => setFollowBrew(e.target.checked)} />
+                  Use the brew's own temperatures
+                </label>
                 <p className="text-[11px] text-muted-foreground">
-                  {mode === "heat"
-                    ? `Turns on below ${(Number(setpoint) - Number(hysteresis)).toFixed(1)}°${unit} and off again at ${Number(setpoint).toFixed(1)}°${unit}.`
-                    : `Turns on above ${(Number(setpoint) + Number(hysteresis)).toFixed(1)}°${unit} and off again at ${Number(setpoint).toFixed(1)}°${unit}. Stays off at least 5 minutes between runs to protect the compressor.`}
+                  {followBrew
+                    ? "Targets the ideal fermentation temperature while the sensor's brew is fermenting and its conditioning temperature while conditioning — the brew's own, else its recipe's."
+                    : mode === "heat" && !crash
+                      ? `Turns on below ${(Number(setpoint) - Number(hysteresis)).toFixed(1)}°${unit} and off again at ${Number(setpoint).toFixed(1)}°${unit}.`
+                      : `Turns on above ${(Number(setpoint) + Number(hysteresis)).toFixed(1)}°${unit} and off again at ${Number(setpoint).toFixed(1)}°${unit}.`}
+                  {(mode === "cool" || crash) && " Stays off at least 5 minutes between runs to protect the compressor."}
+                  {recipe && ` It will only run while a ${recipe.name} brew is on the sensor.`}
                 </p>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={onlyFermenting} onChange={(e) => setOnlyFermenting(e.target.checked)} />
-                  Only while the sensor's brew is fermenting or conditioning
+                  <input type="checkbox" checked={crash} onChange={(e) => setCrash(e.target.checked)} />
+                  Cold crash after conditioning starts
                 </label>
+                {crash ? (
+                  <div className="rounded-md border border-border p-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                      After
+                      <Input type="number" min="0" max="365" step="0.5" value={crashDays} onChange={(e) => setCrashDays(e.target.value)} className="h-8 w-16 text-sm" required />
+                      days in conditioning, cool to
+                      <Input type="number" step="0.1" value={crashTemp} onChange={(e) => setCrashTemp(e.target.value)} className="h-8 w-16 text-sm" required />
+                      °{unit}
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={crashNotify} onChange={(e) => setCrashNotify(e.target.checked)} />
+                      Notify me when the crash starts
+                    </label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Cold crashing needs a fridge, so the relay runs in Cool mode. It holds the target while the brew is fermenting and
+                      for the first {Number(crashDays) || 0} days of conditioning, then crashes. Days count from when you move the brew
+                      the sensor is assigned to into Conditioning.
+                    </p>
+                  </div>
+                ) : !followBrew && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={onlyFermenting} onChange={(e) => setOnlyFermenting(e.target.checked)} />
+                    Only while the sensor's brew is fermenting or conditioning
+                  </label>
+                )}
               </>
             ) : (
               <>
@@ -465,7 +526,7 @@ function NewFlowDialog({ open, onClose }: { open: boolean; onClose: () => void }
             </label>
 
             <DialogFooter>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setTemplate(null)}>Back</Button>
+              {!recipe && <Button type="button" variant="ghost" size="sm" onClick={() => setTemplate(null)}>Back</Button>}
               <Button type="submit" size="sm" disabled={create.isPending}>
                 {create.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Create flow
               </Button>

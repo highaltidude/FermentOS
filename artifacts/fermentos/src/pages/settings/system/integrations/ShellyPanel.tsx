@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Loader2, Power, ShieldCheck, Pencil, Check, X, XCircle, CheckCircle, AlertTriangle, ToggleRight } from "lucide-react";
+import { Plus, Trash2, Loader2, Power, ShieldCheck, Pencil, Check, X, XCircle, CheckCircle, AlertTriangle, ToggleRight, Timer } from "lucide-react";
 import {
   useListOutputDevices,
   getListOutputDevicesQueryKey,
@@ -71,7 +71,13 @@ export function ShellyPanel() {
     mutation: { onSuccess: () => { invalidate(); toast({ title: "Relay removed" }); }, onError: onError("Could not remove relay") },
   });
   const setRelay = useSetOutputDeviceRelay({
-    mutation: { onSuccess: invalidate, onError: onError("Relay did not switch") },
+    mutation: {
+      onSuccess: (_, { data }) => {
+        invalidate();
+        if (data.durationSec) toast({ title: `On for ${Math.round(data.durationSec / 60)} min`, description: "The Shelly switches it off by itself when the time is up." });
+      },
+      onError: onError("Relay did not switch"),
+    },
   });
   const safeDefaults = useApplyOutputDeviceSafeDefaults({
     mutation: {
@@ -113,7 +119,7 @@ export function ShellyPanel() {
             const busy = setRelay.isPending && setRelay.variables?.id === d.id;
             // A flow owns this relay; switching by hand would be undone on its next tick.
             const locked = d.controlledBy != null;
-            const minutes = timedMinutes[d.id] ?? "";
+            const minutes = timedMinutes[d.id] ?? "15";
             return (
               <div key={d.id} className="bg-muted/30 rounded-lg p-3 border border-border">
                 <div className="flex items-start gap-2">
@@ -177,26 +183,35 @@ export function ShellyPanel() {
                         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
                         {d.state.ison ? "Turn off" : "Turn on"}
                       </Button>
+                      {/* Reads as a sentence: "or run for [15] min [Start timer]". */}
                       <form
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground"
                         onSubmit={(e) => {
                           e.preventDefault();
                           const m = Number(minutes);
                           if (m > 0) setRelay.mutate({ id: d.id, data: { on: true, durationSec: Math.round(m * 60) } });
                         }}
                       >
+                        <label htmlFor={`relay-minutes-${d.id}`} className="whitespace-nowrap">or run for</label>
                         <Input
+                          id={`relay-minutes-${d.id}`}
                           type="number"
                           min={1}
                           max={1440}
                           value={minutes}
                           onChange={(e) => setTimedMinutes((t) => ({ ...t, [d.id]: e.target.value }))}
-                          placeholder="min"
                           className="h-7 w-16 text-xs"
-                          aria-label="Minutes"
                         />
-                        <Button type="submit" size="sm" variant="outline" className="h-7" disabled={!d.state.reachable || busy || !(Number(minutes) > 0)}>
-                          On for…
+                        <span>min</span>
+                        <Button
+                          type="submit"
+                          size="sm"
+                          variant="outline"
+                          className="h-7"
+                          disabled={!d.state.reachable || busy || !(Number(minutes) > 0)}
+                          title={`Turn the relay on now; the Shelly switches it off again after ${Number(minutes) > 0 ? minutes : "that many"} minute${Number(minutes) === 1 ? "" : "s"}`}
+                        >
+                          <Timer className="w-3.5 h-3.5" />Start timer
                         </Button>
                       </form>
                     </div>

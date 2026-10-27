@@ -35,9 +35,19 @@ export type CompareConfig = { op: "lt" | "gt" | "between"; valueC: number; value
 export type TimeWindowConfig = { from: string; to: string; days: number[] };
 export type BrewStatusConfig = { statuses: BrewStatus[] };
 export type StageAgeConfig = { status: BrewStatus; op: "atLeast" | "lessThan"; days: number };
+/**
+ * Where a thermostat's target comes from: its own `setpointC`, or the ideal
+ * temperature the brew on the sensor has for a stage (the session's own value,
+ * else its recipe's), so one flow suits every batch.
+ */
+export const SETPOINT_SOURCES = ["fixed", "fermentIdeal", "conditionIdeal"] as const;
+export type SetpointSource = (typeof SETPOINT_SOURCES)[number];
+
 export type ThermostatConfig = {
   outputDeviceId: number;
   mode: "heat" | "cool";
+  setpointFrom: SetpointSource;
+  /** The target when `setpointFrom` is "fixed"; kept but unused otherwise. */
   setpointC: number;
   hysteresisC: number;
   minOnSec: number;
@@ -135,7 +145,11 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
     case "control.thermostat": {
       if (!isId(c.outputDeviceId)) return fail("Choose the relay to switch");
       if (c.mode !== "heat" && c.mode !== "cool") return fail("Choose heating or cooling");
-      if (!isNum(c.setpointC) || !inTempRange(c.setpointC)) return fail("Enter a target temperature");
+      const setpointFrom = c.setpointFrom ?? "fixed";
+      if (!(SETPOINT_SOURCES as readonly unknown[]).includes(setpointFrom)) return fail("Choose where the target comes from");
+      // A target that follows the brew doesn't need its own number.
+      const setpointC = setpointFrom === "fixed" ? c.setpointC : (isNum(c.setpointC) && inTempRange(c.setpointC) ? c.setpointC : 20);
+      if (!isNum(setpointC) || !inTempRange(setpointC)) return fail("Enter a target temperature");
       const hysteresisC = c.hysteresisC ?? 0.5;
       if (!isNum(hysteresisC) || hysteresisC < 0.1 || hysteresisC > 10) return fail("Hysteresis must be 0.1–10 °C");
       const minOnSec = c.minOnSec ?? 0;
@@ -144,7 +158,15 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
       if (!isNum(minOffSec) || minOffSec < 0 || minOffSec > 3600) return fail("Minimum off time must be 0–60 minutes");
       return {
         ok: true,
-        value: { outputDeviceId: c.outputDeviceId, mode: c.mode, setpointC: c.setpointC, hysteresisC, minOnSec, minOffSec },
+        value: {
+          outputDeviceId: c.outputDeviceId,
+          mode: c.mode,
+          setpointFrom: setpointFrom as SetpointSource,
+          setpointC,
+          hysteresisC,
+          minOnSec,
+          minOffSec,
+        },
       };
     }
     case "action.relay": {

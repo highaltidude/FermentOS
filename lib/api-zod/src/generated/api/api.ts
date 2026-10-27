@@ -5228,6 +5228,11 @@ export const ListFlowsResponseItem = zod.object({
     }),
   ),
   relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
   lastError: zod.string().nullable(),
   lastRun: zod.union([
     zod.object({
@@ -5292,6 +5297,7 @@ export const CreateFlowBody = zod.object({
     .describe(
       "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
     ),
+  recipeIds: zod.array(zod.number().int()).optional(),
 });
 
 export const CreateFlowResponse = zod.object({
@@ -5357,6 +5363,11 @@ export const CreateFlowResponse = zod.object({
     }),
   ),
   relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
   lastError: zod.string().nullable(),
   lastRun: zod.union([
     zod.object({
@@ -5444,6 +5455,11 @@ export const GetFlowResponse = zod.object({
     }),
   ),
   relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
   lastError: zod.string().nullable(),
   lastRun: zod.union([
     zod.object({
@@ -5512,6 +5528,10 @@ export const UpdateFlowBody = zod.object({
     .describe(
       "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
     ),
+  recipeIds: zod
+    .array(zod.number().int())
+    .optional()
+    .describe("Replaces the flow's recipe links"),
 });
 
 export const UpdateFlowResponse = zod.object({
@@ -5577,6 +5597,11 @@ export const UpdateFlowResponse = zod.object({
     }),
   ),
   relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
   lastError: zod.string().nullable(),
   lastRun: zod.union([
     zod.object({
@@ -5673,6 +5698,11 @@ export const EnableFlowResponse = zod.object({
     }),
   ),
   relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
   lastError: zod.string().nullable(),
   lastRun: zod.union([
     zod.object({
@@ -5760,6 +5790,11 @@ export const DisableFlowResponse = zod.object({
     }),
   ),
   relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
   lastError: zod.string().nullable(),
   lastRun: zod.union([
     zod.object({
@@ -5846,6 +5881,12 @@ export const GetFlowStatusResponse = zod.object({
   waiting: zod
     .boolean()
     .describe("Waiting for the first readings after a restart"),
+  standby: zod
+    .string()
+    .nullable()
+    .describe(
+      "Why a recipe-linked flow is idle (relays off, no alert), if it is",
+    ),
   nextRunAt: zod.string().datetime({ offset: true }).nullable(),
   nodes: zod.record(
     zod.string(),
@@ -5856,6 +5897,12 @@ export const GetFlowStatusResponse = zod.object({
         .string()
         .optional()
         .describe("Thermostat state, e.g. heating, idle, holding_min_off"),
+      targetC: zod
+        .number()
+        .optional()
+        .describe(
+          "The target a thermostat used on the last evaluation (its own, or the brew's)",
+        ),
     }),
   ),
 });

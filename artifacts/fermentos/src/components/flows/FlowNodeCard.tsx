@@ -56,8 +56,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FlowCanvasN
   let liveText: string | null = null;
   if (live?.active) {
     if (type === "trigger.temperature" && info.tempC != null) liveText = `Now ${formatTemp(info.tempC, info.unit)}`;
-    else if (live.relayOn !== undefined) liveText = `Relay ${live.relayOn ? "on" : "off"}${live.reason ? ` · ${live.reason.replace(/_/g, " ")}` : ""}`;
-    else if (live.reason) liveText = live.reason.replace(/_/g, " ");
+    else if (live.relayOn !== undefined) {
+      // A target that follows the brew is only known live, so show it.
+      const target = live.targetC != null && (data.config.setpointFrom ?? "fixed") !== "fixed" ? `Target ${formatTemp(live.targetC, info.unit)} · ` : "";
+      liveText = `${target}Relay ${live.relayOn ? "on" : "off"}${live.reason ? ` · ${live.reason.replace(/_/g, " ")}` : ""}`;
+    } else if (live.reason) liveText = live.reason.replace(/_/g, " ");
   }
 
   return (

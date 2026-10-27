@@ -99,3 +99,23 @@ describe("fermentationTemplate with a cold crash", () => {
     expect(g.edges).toContainEqual({ id: "crash-time-crash-notify", source: "crash-time", target: "crash-notify" });
   });
 });
+
+describe("fermentationTemplate following the brew", () => {
+  const base = { source: { kind: "sensor", sensorDeviceId: 5 } as const, relayId: 2, mode: "cool" as const, setpointC: 20, hysteresisC: 0.5, onlyWhileFermenting: false };
+  const config = (g: FlowGraph, id: string) => g.nodes.find((n) => n.id === id)?.data.config as Record<string, unknown>;
+
+  it("gives each stage its own thermostat aimed at the brew's temperature", () => {
+    const g = fermentationTemplate({ ...base, followBrew: true });
+    expect(config(g, "fermenting")).toEqual({ statuses: ["fermenting"] });
+    expect(config(g, "thermostat")).toMatchObject({ setpointFrom: "fermentIdeal" });
+    expect(config(g, "conditioning")).toEqual({ statuses: ["conditioning"] });
+    expect(config(g, "hold")).toMatchObject({ setpointFrom: "conditionIdeal" });
+  });
+
+  it("keeps the crash target fixed when combined with a cold crash", () => {
+    const g = fermentationTemplate({ ...base, followBrew: true, coldCrash: { afterDays: 3, crashC: 1, notify: false } });
+    expect(config(g, "thermostat")).toMatchObject({ setpointFrom: "fermentIdeal" });
+    expect(config(g, "hold")).toMatchObject({ setpointFrom: "conditionIdeal" });
+    expect(config(g, "crash")).toMatchObject({ setpointFrom: "fixed", setpointC: 1 });
+  });
+});

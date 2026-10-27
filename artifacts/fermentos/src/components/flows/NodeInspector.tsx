@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  DAY_LABELS, NODE_HINTS, NODE_LABELS, cronToSchedule, deltaFromUnit, deltaToUnit, fromUnit, scheduleToCron, sourceKey,
-  tempSourceOptions, toUnit, type GraphKind, type TempUnit,
+  DAY_LABELS, NODE_HINTS, NODE_LABELS, SETPOINT_LABELS, cronToSchedule, deltaFromUnit, deltaToUnit, fromUnit, scheduleToCron,
+  sourceKey, tempSourceOptions, toUnit, type GraphKind, type SetpointSource, type TempUnit,
 } from "@/lib/flows";
 import { cn } from "@/lib/utils";
 import { NODE_ICONS } from "./FlowNodeCard";
@@ -23,17 +23,19 @@ const round = (v: number, places = 2) => Number(v.toFixed(places));
  * A number input that keeps what's typed ("20." or "") while sending only
  * valid numbers upward, so the stored config never holds a half-typed value.
  */
-function NumberField({ value, onChange, toDisplay = (v) => v, fromDisplay = (v) => v, step = "any", min, max, className }: {
+function NumberField({ value, onChange, toDisplay = (v) => v, fromDisplay = (v) => v, step = "any", places = 2, min, max, className }: {
   value: unknown;
   onChange: (v: number | null) => void;
   toDisplay?: (v: number) => number;
   fromDisplay?: (v: number) => number;
   step?: string;
+  /** Decimal places shown; stored values are °C, so a converted °F reads 1.01 at two places. */
+  places?: number;
   min?: number;
   max?: number;
   className?: string;
 }) {
-  const [draft, setDraft] = useState(typeof value === "number" ? String(round(toDisplay(value))) : "");
+  const [draft, setDraft] = useState(typeof value === "number" ? String(round(toDisplay(value), places)) : "");
   return (
     <Input
       type="number"
@@ -161,8 +163,8 @@ export function NodeInspector({ id, type, config, onChange, onDelete, kind, unit
 }) {
   const set = (patch: Config) => onChange({ ...config, ...patch });
   const Icon = NODE_ICONS[type];
-  const temp = { toDisplay: (c: number) => toUnit(c, unit), fromDisplay: (v: number) => fromUnit(v, unit), step: "0.1" };
-  const delta = { toDisplay: (c: number) => deltaToUnit(c, unit), fromDisplay: (v: number) => deltaFromUnit(v, unit), step: "0.1" };
+  const temp = { toDisplay: (c: number) => toUnit(c, unit), fromDisplay: (v: number) => fromUnit(v, unit), step: "0.1", places: 1 };
+  const delta = { toDisplay: (c: number) => deltaToUnit(c, unit), fromDisplay: (v: number) => deltaFromUnit(v, unit), step: "0.1", places: 1 };
   const minutes = { toDisplay: (s: number) => s / 60, fromDisplay: (m: number) => m * 60, step: "1", min: 0, max: 60 };
 
   let fields: ReactNode = null;
@@ -286,6 +288,7 @@ export function NodeInspector({ id, type, config, onChange, onDelete, kind, unit
     }
     case "control.thermostat": {
       const cool = config.mode === "cool";
+      const from = (config.setpointFrom ?? "fixed") as SetpointSource;
       const sp = Number(config.setpointC);
       const hy = Number(config.hysteresisC ?? 0.5);
       fields = (
@@ -303,19 +306,34 @@ export function NodeInspector({ id, type, config, onChange, onDelete, kind, unit
               <option value="cool">Cool</option>
             </select>
           </div>
+          <div>
+            <label className={label}>Target</label>
+            <select className={select} value={from} onChange={(e) => set({ setpointFrom: e.target.value })}>
+              {(Object.keys(SETPOINT_LABELS) as SetpointSource[]).map((s) => <option key={s} value={s}>{SETPOINT_LABELS[s]}</option>)}
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={label}>Target °{unit}</label>
-              <NumberField value={config.setpointC} onChange={(v) => set({ setpointC: v })} {...temp} />
-            </div>
+            {from === "fixed" && (
+              <div>
+                <label className={label}>Target °{unit}</label>
+                <NumberField value={config.setpointC} onChange={(v) => set({ setpointC: v })} {...temp} />
+              </div>
+            )}
             <div>
               <label className={label}>Swing °{unit}</label>
               <NumberField value={config.hysteresisC ?? 0.5} onChange={(v) => set({ hysteresisC: v })} {...delta} min={0.1} />
             </div>
           </div>
-          {Number.isFinite(sp) && Number.isFinite(hy) && (
+          {from === "fixed" ? (
+            Number.isFinite(sp) && Number.isFinite(hy) && (
+              <p className={hint}>
+                On {cool ? "above" : "below"} {toUnit(cool ? sp + hy : sp - hy, unit).toFixed(1)}°{unit}, off again at {toUnit(sp, unit).toFixed(1)}°{unit}.
+              </p>
+            )
+          ) : (
             <p className={hint}>
-              On {cool ? "above" : "below"} {toUnit(cool ? sp + hy : sp - hy, unit).toFixed(1)}°{unit}, off again at {toUnit(sp, unit).toFixed(1)}°{unit}.
+              Uses the ideal {from === "fermentIdeal" ? "fermentation" : "conditioning"} temperature of the brew the sensor is assigned to: the
+              brew's own if set, else its recipe's. If there's no brew or no temperature set, the flow switches its relays off and alerts you.
             </p>
           )}
           <div className="grid grid-cols-2 gap-2">

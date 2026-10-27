@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { db, flowsTable, flowRunsTable, type Flow, type FlowGraph, type FlowRun } from "@workspace/db";
-import { desc, eq } from "drizzle-orm";
+import { db, flowsTable, flowRunsTable, flowRecipesTable, recipesTable, type Flow, type FlowGraph, type FlowRun } from "@workspace/db";
+import { desc, eq, inArray } from "drizzle-orm";
 import { CreateFlowBody, UpdateFlowBody } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
 import { relayConflicts, type FlowProblem } from "../lib/flows/graph";
 import {
   validateFlow,
+  flowRecipeLinks,
   relayOwners,
   reloadFlows,
   getFlowStatus,
@@ -16,10 +17,29 @@ import {
 const router = Router();
 
 /** Problems that stop a flow from being enabled, including relay conflicts. */
-function problemsFor(flow: Pick<Flow, "id" | "graph">): { problems: FlowProblem[]; kind: "temperature" | "schedule" | null; relays: number[] } {
-  const { problems, compiled } = validateFlow(flow.graph);
-  if (!compiled) return { problems, kind: null, relays: [] };
+function problemsFor(flow: Pick<Flow, "id" | "graph">, linkedRecipes: number): { problems: FlowProblem[]; kind: "temperature" | "schedule" | null; relays: number[] } {
+  const { problems, compiled } = validateFlow(flow.graph, linkedRecipes);
+  if (!compiled) return { problems, kind: validateFlow(flow.graph).compiled?.kind ?? null, relays: [] };
   return { problems: relayConflicts(compiled, relayOwners(), flow.id), kind: compiled.kind, relays: compiled.relays };
+}
+
+async function recipeIdsOf(flowId: number): Promise<number[]> {
+  return ((await flowRecipeLinks([flowId])).get(flowId) ?? []).map((r) => r.id);
+}
+
+/** Null if every id is a real recipe, else an error message. */
+async function checkRecipeIds(ids: number[]): Promise<string | null> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return null;
+  const found = await db.select({ id: recipesTable.id }).from(recipesTable).where(inArray(recipesTable.id, unique));
+  return found.length === unique.length ? null : "One or more of those recipes doesn't exist";
+}
+
+/** Replace a flow's recipe links. */
+async function setRecipeLinks(tx: Pick<typeof db, "delete" | "insert">, flowId: number, ids: number[]): Promise<void> {
+  await tx.delete(flowRecipesTable).where(eq(flowRecipesTable.flowId, flowId));
+  const unique = [...new Set(ids)];
+  if (unique.length > 0) await tx.insert(flowRecipesTable).values(unique.map((recipeId) => ({ flowId, recipeId })));
 }
 
 async function latestRun(flowId: number): Promise<FlowRun | null> {
@@ -32,9 +52,10 @@ async function latestRun(flowId: number): Promise<FlowRun | null> {
   return run ?? null;
 }
 
-async function toApi(flow: Flow) {
-  const { problems, kind, relays } = problemsFor(flow);
-  return { ...flow, kind, problems, relayDeviceIds: relays, lastRun: await latestRun(flow.id) };
+async function toApi(flow: Flow, recipeIds?: number[]) {
+  const ids = recipeIds ?? (await recipeIdsOf(flow.id));
+  const { problems, kind, relays } = problemsFor(flow, ids.length);
+  return { ...flow, kind, problems, relayDeviceIds: relays, recipeIds: ids, lastRun: await latestRun(flow.id) };
 }
 
 async function findFlow(id: number): Promise<Flow | undefined> {
@@ -45,7 +66,8 @@ async function findFlow(id: number): Promise<Flow | undefined> {
 // ── GET /flows ─────────────────────────────────────────────────────────────
 router.get("/", async (_req, res) => {
   const flows = await db.select().from(flowsTable).orderBy(flowsTable.name);
-  res.json(await Promise.all(flows.map(toApi)));
+  const links = await flowRecipeLinks(flows.map((f) => f.id));
+  res.json(await Promise.all(flows.map((f) => toApi(f, (links.get(f.id) ?? []).map((r) => r.id)))));
 });
 
 // ── POST /flows ────────────────────────────────────────────────────────────
@@ -53,16 +75,23 @@ router.get("/", async (_req, res) => {
 router.post("/", async (req, res) => {
   const body = CreateFlowBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
-  const [flow] = await db
-    .insert(flowsTable)
-    .values({
-      name: body.data.name.trim(),
-      description: body.data.description?.trim() || null,
-      graph: body.data.graph as FlowGraph,
-      enabled: false,
-    })
-    .returning();
-  return res.status(201).json(await toApi(flow!));
+  const recipeIds = body.data.recipeIds ?? [];
+  const bad = await checkRecipeIds(recipeIds);
+  if (bad) return res.status(400).json({ error: bad });
+  const flow = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(flowsTable)
+      .values({
+        name: body.data.name.trim(),
+        description: body.data.description?.trim() || null,
+        graph: body.data.graph as FlowGraph,
+        enabled: false,
+      })
+      .returning();
+    await setRecipeLinks(tx, row!.id, recipeIds);
+    return row!;
+  });
+  return res.status(201).json(await toApi(flow));
 });
 
 // ── GET /flows/:id ─────────────────────────────────────────────────────────
@@ -83,26 +112,38 @@ router.put("/:id", async (req, res) => {
   const existing = await findFlow(id);
   if (!existing) return res.status(404).json({ error: "Flow not found" });
 
-  if (body.data.graph && existing.enabled) {
+  const recipeIds = body.data.recipeIds;
+  if (recipeIds) {
+    const bad = await checkRecipeIds(recipeIds);
+    if (bad) return res.status(400).json({ error: bad, problems: [] });
+  }
+
+  if ((body.data.graph || recipeIds) && existing.enabled) {
     // A running flow can't be swapped for a broken one; disable it to keep editing.
-    const { problems } = problemsFor({ id, graph: body.data.graph as FlowGraph });
+    const graph = (body.data.graph ?? existing.graph) as FlowGraph;
+    const linked = recipeIds ? new Set(recipeIds).size : (await recipeIdsOf(id)).length;
+    const { problems } = problemsFor({ id, graph }, linked);
     if (problems.length > 0) {
       return res.status(400).json({ error: `Can't save while the flow is on: ${problemsSummary(problems)}`, problems });
     }
   }
 
-  const [flow] = await db
-    .update(flowsTable)
-    .set({
-      ...(body.data.name !== undefined && { name: body.data.name.trim() }),
-      ...(body.data.description !== undefined && { description: body.data.description?.trim() || null }),
-      ...(body.data.graph !== undefined && { graph: body.data.graph as FlowGraph, lastError: null }),
-      updatedAt: new Date(),
-    })
-    .where(eq(flowsTable.id, id))
-    .returning();
-  if (flow!.enabled) await reloadFlows();
-  return res.json(await toApi(flow!));
+  const flow = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(flowsTable)
+      .set({
+        ...(body.data.name !== undefined && { name: body.data.name.trim() }),
+        ...(body.data.description !== undefined && { description: body.data.description?.trim() || null }),
+        ...(body.data.graph !== undefined && { graph: body.data.graph as FlowGraph, lastError: null }),
+        updatedAt: new Date(),
+      })
+      .where(eq(flowsTable.id, id))
+      .returning();
+    if (recipeIds) await setRecipeLinks(tx, id, recipeIds);
+    return row!;
+  });
+  if (flow.enabled) await reloadFlows();
+  return res.json(await toApi(flow));
 });
 
 // ── DELETE /flows/:id ──────────────────────────────────────────────────────
@@ -121,7 +162,7 @@ router.post("/:id/enable", async (req, res) => {
   const existing = await findFlow(id);
   if (!existing) return res.status(404).json({ error: "Flow not found" });
 
-  const { problems } = problemsFor(existing);
+  const { problems } = problemsFor(existing, (await recipeIdsOf(id)).length);
   if (problems.length > 0) {
     return res.status(400).json({ error: `Fix these first: ${problemsSummary(problems)}`, problems });
   }
@@ -188,8 +229,8 @@ router.get("/:id/status", async (req, res) => {
   const s = getFlowStatus(id);
   if (!s) {
     return res.json({
-      flowId: id, running: false, kind: problemsFor(flow).kind, lastTickAt: null, tempC: null,
-      failsafe: null, waiting: false, nextRunAt: null, nodes: {},
+      flowId: id, running: false, kind: problemsFor(flow, 0).kind, lastTickAt: null, tempC: null,
+      failsafe: null, waiting: false, standby: null, nextRunAt: null, nodes: {},
     });
   }
   return res.json({ ...s, running: true });

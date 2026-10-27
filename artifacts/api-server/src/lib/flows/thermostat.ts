@@ -23,7 +23,7 @@ export type ThermostatReason = "heating" | "cooling" | "idle" | "holding_min_on"
 
 export type ThermostatStep = { on: boolean; reason: ThermostatReason };
 
-export function thermostatStep(cfg: ThermostatConfig, tempC: number, relay: RelayTiming, now: number): ThermostatStep {
+export function thermostatStep(cfg: Omit<ThermostatConfig, "outputDeviceId" | "setpointFrom">, tempC: number, relay: RelayTiming, now: number): ThermostatStep {
   const heat = cfg.mode === "heat";
   const want = relay.on
     ? (heat ? tempC < cfg.setpointC : tempC > cfg.setpointC)

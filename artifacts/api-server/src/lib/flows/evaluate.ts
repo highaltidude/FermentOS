@@ -1,4 +1,4 @@
-import { compareTemp, inTimeWindow, stageAgePasses, type FlowNode } from "./nodes.js";
+import { compareTemp, inTimeWindow, stageAgePasses, type FlowNode, type ThermostatConfig } from "./nodes.js";
 import { thermostatStep, type RelayTiming, type ThermostatReason } from "./thermostat.js";
 import type { CompiledFlow } from "./graph.js";
 
@@ -18,12 +18,32 @@ export type TickInput = {
 };
 
 export type BrewContext = {
+  /** The brew's name, for messages. */
+  name: string;
+  recipeId: number | null;
   status: string;
   /** When the brew last entered its current stage. */
   stageStartedAt: Date | null;
+  /** Ideal temperatures for the brew (its own, else its recipe's), in °C. */
+  fermentIdealC: number | null;
+  conditionIdealC: number | null;
 };
 
-export type NodeState ={ active: boolean; relayOn?: boolean; reason?: ThermostatReason };
+export type NodeState = { active: boolean; relayOn?: boolean; reason?: ThermostatReason; targetC?: number };
+
+const TARGET_LABELS = { fermentIdeal: "fermentation", conditionIdeal: "conditioning" } as const;
+
+/** A thermostat's target this tick, or why there isn't one. */
+export function thermostatTarget(
+  cfg: Pick<ThermostatConfig, "setpointFrom" | "setpointC">,
+  brew: BrewContext | null,
+): { ok: true; targetC: number } | { ok: false; message: string } {
+  if (cfg.setpointFrom === "fixed") return { ok: true, targetC: cfg.setpointC };
+  if (!brew) return { ok: false, message: "No brew is assigned to the temperature sensor, so there's no target to follow" };
+  const targetC = cfg.setpointFrom === "fermentIdeal" ? brew.fermentIdealC : brew.conditionIdealC;
+  if (targetC == null) return { ok: false, message: `${brew.name} has no ideal ${TARGET_LABELS[cfg.setpointFrom]} temperature set` };
+  return { ok: true, targetC };
+}
 
 export type TickResult = {
   /** Desired relay state for every relay the flow owns. */
@@ -33,6 +53,8 @@ export type TickResult = {
   notify: Extract<FlowNode, { type: "action.notify" }>[];
   /** Relays wanted by more than one reached step; the engine fails safe on these. */
   conflicts: { relayId: number; nodeIds: string[] }[];
+  /** Reached thermostats that should follow the brew but have no target; the engine fails safe. */
+  missingTargets: { nodeId: string; message: string }[];
 };
 
 function conditionPasses(node: FlowNode, input: TickInput): boolean {
@@ -51,7 +73,7 @@ function conditionPasses(node: FlowNode, input: TickInput): boolean {
 }
 
 export function evaluateTemperatureTick(flow: CompiledFlow, input: TickInput): TickResult {
-  const result: TickResult = { desired: new Map(), nodes: {}, notify: [], conflicts: [] };
+  const result: TickResult = { desired: new Map(), nodes: {}, notify: [], conflicts: [], missingTargets: [] };
   for (const n of flow.nodes.values()) result.nodes[n.id] = { active: false };
   const now = input.now.getTime();
   const claimedBy = new Map<number, string[]>();
@@ -63,8 +85,14 @@ export function evaluateTemperatureTick(flow: CompiledFlow, input: TickInput): T
     result.nodes[node.id] = state;
 
     if (node.type === "control.thermostat") {
+      const target = thermostatTarget(node.config, input.brew);
+      if (!target.ok) {
+        result.missingTargets.push({ nodeId: node.id, message: target.message });
+        return;
+      }
       const relay = input.relays.get(node.config.outputDeviceId) ?? { on: false, since: null };
-      const step = thermostatStep(node.config, input.tempC, relay, now);
+      const step = thermostatStep({ ...node.config, setpointC: target.targetC }, input.tempC, relay, now);
+      state.targetC = target.targetC;
       state.relayOn = step.on;
       state.reason = step.reason;
       result.desired.set(node.config.outputDeviceId, { on: step.on, nodeId: node.id, reason: step.reason });

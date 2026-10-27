@@ -13,7 +13,7 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertTriangle, ArrowLeft, Loader2, Monitor, Play, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2, Monitor, Play, Save, X } from "lucide-react";
 import {
   useGetFlow,
   getGetFlowQueryKey,
@@ -30,6 +30,7 @@ import {
   useListOutputDevices,
   getListOutputDevicesQueryKey,
   useListSensorDevices,
+  useListRecipes,
   type Flow,
   type FlowGraph,
   type FlowGraphNodeType,
@@ -92,8 +93,8 @@ function toGraph(nodes: FlowCanvasNode[], edges: Edge[]): FlowGraph {
   };
 }
 
-const snapshot = (name: string, description: string, graph: FlowGraph) =>
-  JSON.stringify({ name: name.trim(), description: description.trim(), graph });
+const snapshot = (name: string, description: string, graph: FlowGraph, recipeIds: number[]) =>
+  JSON.stringify({ name: name.trim(), description: description.trim(), graph, recipeIds: [...recipeIds].sort() });
 
 function newNodeId(type: FlowGraphNodeType, nodes: FlowCanvasNode[]): string {
   const base = type.split(".")[1]!.toLowerCase();
@@ -147,11 +148,14 @@ function Editor({ flow }: { flow: Flow | null }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
   const [name, setName] = useState(flow?.name ?? "");
   const [description, setDescription] = useState(flow?.description ?? "");
+  const [recipeIds, setRecipeIds] = useState<number[]>(flow?.recipeIds ?? []);
   const [problems, setProblems] = useState<FlowProblem[]>(flow?.problems ?? []);
-  const [saved, setSaved] = useState(() => snapshot(flow?.name ?? "", flow?.description ?? "", toGraph(initial.nodes, initial.edges)));
+  const [saved, setSaved] = useState(() =>
+    snapshot(flow?.name ?? "", flow?.description ?? "", toGraph(initial.nodes, initial.edges), flow?.recipeIds ?? []));
+  const { data: recipes = [] } = useListRecipes({});
 
   const graph = useMemo(() => toGraph(nodes, edges), [nodes, edges]);
-  const dirty = snapshot(name, description, graph) !== saved;
+  const dirty = snapshot(name, description, graph, recipeIds) !== saved;
   const kind = flowKindOf(graph);
   const hasTrigger = graph.nodes.some((n) => nodeCategory(n.type) === "trigger");
   const selected = nodes.filter((n) => n.selected);
@@ -216,12 +220,12 @@ function Editor({ flow }: { flow: Flow | null }) {
   const saving = create.isPending || update.isPending;
 
   const save = async () => {
-    const body = { name: name.trim() || "Untitled flow", description: description.trim() || null, graph };
+    const body = { name: name.trim() || "Untitled flow", description: description.trim() || null, graph, recipeIds };
     try {
       const result = flow ? await update.mutateAsync({ id: flow.id, data: body }) : await create.mutateAsync({ data: body });
       setName(body.name);
       setProblems(result.problems);
-      setSaved(snapshot(body.name, description, graph));
+      setSaved(snapshot(body.name, description, graph, recipeIds));
       qc.setQueryData(getGetFlowQueryKey(result.id), result);
       refresh(result.id);
       toast(result.problems.length > 0
@@ -502,6 +506,35 @@ function Editor({ flow }: { flow: Flow | null }) {
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Notes</label>
                     <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="text-sm" placeholder="What this flow is for" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Recipes</label>
+                    {recipeIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-1.5">
+                        {recipeIds.map((rid) => (
+                          <span key={rid} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-xs">
+                            {recipes.find((r) => r.id === rid)?.name ?? `Recipe ${rid}`}
+                            <button type="button" onClick={() => setRecipeIds((ids) => ids.filter((x) => x !== rid))} title="Unlink" className="text-muted-foreground hover:text-destructive">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <select
+                      className="w-full text-sm bg-background border border-border rounded-md px-2 h-8 text-foreground"
+                      value=""
+                      onChange={(e) => { const v = Number(e.target.value); if (v) setRecipeIds((ids) => [...ids, v]); }}
+                      disabled={kind === "schedule"}
+                    >
+                      <option value="">{kind === "schedule" ? "Schedule flows can't follow a recipe" : "Link a recipe…"}</option>
+                      {recipes.filter((r) => !recipeIds.includes(r.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {recipeIds.length > 0
+                        ? "Runs only while a brew of one of these recipes is on the sensor; otherwise it stands by with its relays off."
+                        : "Not linked: runs for whatever brew is on the sensor."}
+                    </p>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {kind === "temperature"

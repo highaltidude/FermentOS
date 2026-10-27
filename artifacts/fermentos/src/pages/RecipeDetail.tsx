@@ -41,6 +41,7 @@ import { StartBrewDialog } from "@/components/StartBrewDialog";
 import { VariantChips, VariantSwitcher } from "@/components/VariantChips";
 import { apiErrorMessage, shortageLines } from "@/lib/inventoryShortage";
 import { ingredientsForVariant, isMultiVariant, VARIANT_LABELS, variantListLabel } from "@/lib/recipeVariants";
+import { RecipeFlowsCard } from "@/components/flows/RecipeFlowsCard";
 
 const STEP_PHASE_COLORS: Record<string, string> = {
   mash: "bg-amber-100 text-amber-800 border-amber-200",
@@ -839,6 +840,8 @@ export default function RecipeDetail() {
           </div>
         )}
       </div>
+
+      <RecipeFlowsCard recipeId={id} recipeName={recipe.name} hasFermentTemp={recipe.fermentTempIdeal != null} />
 
       {/* Brewing Steps */}
       {(() => {

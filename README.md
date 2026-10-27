@@ -69,7 +69,7 @@ install to a tracked first batch.
 - **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is checked in the background every five minutes, whether or not anyone has the app open, can notify you when it happens, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
 - **Shelly relays** — Switch a heat wrap, fridge or pump with a Shelly 1 (SHSW-1) over your local network, by hand or for a set number of minutes that the relay itself counts down. A temperature add-on probe on the Shelly is read too and can be logged to a brew like an iSpindel. See [Connect a Shelly relay](#connect-a-shelly-relay)
-- **Brew Flows** — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule, and cold crash automatically a set number of days into conditioning. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
+- **Brew Flows** — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule, and cold crash automatically a set number of days into conditioning. Flows can follow each brew's own temperatures and be linked to recipes, so they only run while a batch of that recipe is on their sensor. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
@@ -675,6 +675,12 @@ In **Fermentation temperature**, tick **Cold crash after conditioning starts** a
 Days count from when the brew that the temperature sensor is assigned to was moved to Conditioning, by you or by auto-advance. Moving a batch back to Fermenting stops the crash. When the brew isn't at one of those stages, or no brew is assigned to the sensor, the fridge stays off.
 
 On the canvas, the same thing is built from **Days in stage** steps: "Conditioning for less than 3 days" leads to the holding thermostat, and "Conditioning for at least 3 days" leads to the crash thermostat. Thermostats on different branches may share one relay, so they can take turns. If two of them are ever reached at the same time, the flow switches the relay off and alerts you rather than guessing.
+
+#### Follow each brew's temperatures, and link flows to recipes
+
+Tick **Use the brew's own temperatures** in **Fermentation temperature** and the flow aims for the ideal **fermentation** temperature while the brew on the sensor is fermenting, and its ideal **conditioning** temperature while it's conditioning: the brew's own values if you set them on the brew, otherwise its recipe's. On the canvas this is a thermostat's **Target** setting. If no brew is assigned to the sensor, or the temperature it should follow isn't set, the flow switches its relays off and alerts you.
+
+To tie a flow to a recipe, open the recipe and use the **Brew Flows** card: **New** creates a fermentation flow that follows the brew's temperatures and is linked to the recipe; **Link an existing flow** links one you already have. In the editor, the flow's **Recipes** setting does the same. A linked flow runs only while a brew of one of its recipes is assigned to its temperature sensor. The rest of the time it **stands by**: its relays stay off and the Flows page says why, but it doesn't alert you, so a fermenter between batches is quiet. Link the same flow to every recipe you brew in that fermenter and it picks up each batch as you assign the sensor. Only temperature flows can be linked.
 
 #### Run a relay on a timer
 
@@ -1673,16 +1679,16 @@ Passwords are never returned; responses carry `hasPassword` instead. Once a rela
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/flows` | List flows. Each includes `kind` (`temperature` \| `schedule`, or `null` while invalid), `problems` (`[{ nodeId, message }]`), the relays it switches (`relayDeviceIds`), `lastError` and `lastRun` |
-| POST | `/api/flows` | Create a flow — body `{ "name": string, "description"?: string, "graph": FlowGraph }`. New flows start turned off, so a half-built graph can be saved |
+| GET | `/api/flows` | List flows. Each includes `kind` (`temperature` \| `schedule`, or `null` while invalid), `problems` (`[{ nodeId, message }]`), the relays it switches (`relayDeviceIds`), the recipes it's linked to (`recipeIds`), `lastError` and `lastRun` |
+| POST | `/api/flows` | Create a flow — body `{ "name": string, "description"?: string, "graph": FlowGraph, "recipeIds"?: number[] }`. New flows start turned off, so a half-built graph can be saved. Unknown recipe ids → `400` |
 | GET | `/api/flows/:id` | Get one flow |
-| PUT | `/api/flows/:id` | Update any of `name`, `description`, `graph`. A flow that is on only accepts a graph with no problems (`400` with `problems`) |
+| PUT | `/api/flows/:id` | Update any of `name`, `description`, `graph`, `recipeIds` (replaces the links). A flow that is on only accepts changes that leave it with no problems (`400` with `problems`). Only temperature flows can be linked to recipes |
 | DELETE | `/api/flows/:id` | Delete a flow; relays it controlled are switched off |
 | POST | `/api/flows/:id/enable` | Turn a flow on. `400` with `problems` if the graph is invalid or a relay it switches belongs to another flow that's on |
 | POST | `/api/flows/:id/disable` | Turn a flow off; relays it controlled are switched off |
 | POST | `/api/flows/:id/run` | Run a schedule flow now (`202`); the outcome lands in its runs |
 | GET | `/api/flows/:id/runs` | What the flow has done, newest first — query param `limit` (default 50, max 200). Kept for 14 days |
-| GET | `/api/flows/:id/status` | Live state: `running`, `tempC`, `failsafe` (why relays are being held off, or `null`), `waiting`, `nextRunAt`, and per-node `{ active, relayOn?, reason? }` |
+| GET | `/api/flows/:id/status` | Live state: `running`, `tempC`, `failsafe` (why relays are being held off, or `null`), `waiting`, `standby` (why a recipe-linked flow is idle, or `null`), `nextRunAt`, and per-node `{ active, relayOn?, reason?, targetC? }` |
 
 While a flow controls a relay, `POST /api/devices/:id/relay` and `DELETE /api/devices/:id` return `409`, and the device's `controlledBy` names the flow.
 
@@ -1711,7 +1717,7 @@ Node types and their `config` (temperatures are always °C):
 | `condition.timeWindow` | `from`, `to` (`HH:MM`), `days` (0 = Sunday; empty = every day) | Windows may cross midnight |
 | `condition.brewStatus` | `statuses` (any of `brew_day`, `fermenting`, `conditioning`, `packaged`) | The brew the temperature sensor is assigned to; temperature flows only |
 | `condition.stageAge` | `status` (one stage, as above), `op` (`atLeast`, `lessThan`), `days` (0–365, tenths allowed) | Passes while that brew is in `status` and has been for at least / less than `days`, counted from when it last entered the stage; temperature flows only |
-| `control.thermostat` | `outputDeviceId`, `mode` (`heat`/`cool`), `setpointC`, `hysteresisC` (default 0.5), `minOnSec`, `minOffSec` (default 300 when cooling) | Temperature flows only; must end its branch. One relay may be used by thermostats on different branches, never twice down one branch; if two are reached at once the flow fails off |
+| `control.thermostat` | `outputDeviceId`, `mode` (`heat`/`cool`), `setpointFrom` (`fixed` — the default — `fermentIdeal` or `conditionIdeal`), `setpointC` (used when `fixed`), `hysteresisC` (default 0.5), `minOnSec`, `minOffSec` (default 300 when cooling) | `fermentIdeal` / `conditionIdeal` follow the ideal temperature of the brew on the sensor (its own, else its recipe's); with no brew or no value set the flow fails off. Temperature flows only; must end its branch. One relay may be used by thermostats on different branches, never twice down one branch; if two are reached at once the flow fails off |
 | `action.relay` | `outputDeviceId`, `action` (`on`, `off`, `onFor`), `minutes` (for `onFor`) | Temperature flows use `on`; schedule flows use `onFor` or `off`, never an open-ended `on` |
 | `action.notify` | `message` — `{flow}` and `{temp}` are filled in | Sent each time the step is newly reached |
 | `action.delay` | `minutes` | Schedule flows only |

@@ -26,6 +26,7 @@ export const BACKUP_REGISTRY = [
   "system_health_samples",
   "output_devices",
   "flows",
+  "flow_recipes",
 ] as const;
 
 export type BackedUpTable = (typeof BACKUP_REGISTRY)[number];

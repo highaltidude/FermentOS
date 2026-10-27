@@ -1,5 +1,6 @@
-import { pgTable, serial, text, integer, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, jsonb, boolean, primaryKey } from "drizzle-orm/pg-core";
 import { sensorDevicesTable } from "./sensors";
+import { recipesTable } from "./recipes";
 
 // Devices FermentOS switches (relays), as opposed to sensor_devices, which it
 // only reads. The first driver is the Shelly Gen1 HTTP API (SHSW-1).
@@ -83,3 +84,19 @@ export const flowRunsTable = pgTable("flow_runs", {
 });
 
 export type FlowRun = typeof flowRunsTable.$inferSelect;
+
+// Recipes a flow is linked to. A linked flow only acts while the brew on its
+// temperature sensor was brewed from one of these recipes, and stands by (its
+// relays off) otherwise. No rows = the flow runs for whatever brew is there.
+export const flowRecipesTable = pgTable(
+  "flow_recipes",
+  {
+    flowId: integer("flow_id")
+      .notNull()
+      .references(() => flowsTable.id, { onDelete: "cascade" }),
+    recipeId: integer("recipe_id")
+      .notNull()
+      .references(() => recipesTable.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.flowId, t.recipeId] })],
+);

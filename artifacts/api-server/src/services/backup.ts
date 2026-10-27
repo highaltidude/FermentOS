@@ -6,6 +6,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import SftpClient from "ssh2-sftp-client";
 import { logger } from "../lib/logger.js";
 import { commandErrorReason } from "../lib/commandError.js";
+import { isBackupOverdue } from "../lib/backupCatchUp.js";
 import { getConfigValue, setConfigValue } from "./appConfig.js";
 
 export type SftpConfig = {
@@ -251,6 +252,7 @@ async function runScheduledBackup(): Promise<void> {
 }
 
 let activeCronJob: ScheduledTask | null = null;
+const CATCH_UP_DELAY_MS = 2 * 60_000;
 
 function cronExpression(schedule: BackupConfig["schedule"]): string | null {
   if (schedule === "daily") return "0 2 * * *";
@@ -310,6 +312,16 @@ export async function initBackupScheduler() {
     const cfg = await getConfig();
     warnIfLocalPathUnwritable(localBackupDir(cfg));
     startScheduler(cfg.schedule);
+
+    const status = await getStatus();
+    if (isBackupOverdue(cfg.schedule, status, new Date())) {
+      logger.warn({ lastRun: status.lastRun, schedule: cfg.schedule }, "Scheduled backup was missed; running it shortly");
+      // A short delay keeps the dump clear of everything else starting up.
+      setTimeout(() => {
+        logger.info("Running missed scheduled backup");
+        runScheduledBackup().catch((e) => logger.error({ e }, "Missed scheduled backup error"));
+      }, CATCH_UP_DELAY_MS).unref();
+    }
   } catch (e) {
     logger.error({ e }, "Failed to init backup scheduler");
   }

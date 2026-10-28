@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { apiError, NewFlowDialog } from "@/pages/Flows";
 import { FlowStatusLine } from "./FlowStatusLine";
+import { ExperimentalBadge } from "./ExperimentalBadge";
 
 /**
  * Flows linked to a recipe. A linked flow only acts while a brew of this recipe
@@ -50,7 +51,10 @@ export function RecipeFlowsCard({ recipeId, recipeName, hasFermentTemp }: { reci
     <div className="bg-card border border-card-border rounded-lg">
       <div className="px-4 py-3 border-b border-card-border flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Brew Flows</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">Brew Flows</h2>
+            <ExperimentalBadge className="text-[10px] px-1.5" />
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">Automations that run while a batch of this recipe is on their sensor</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => setShowNew(true)} disabled={devices.length === 0}>

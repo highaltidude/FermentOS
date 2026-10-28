@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/ui/score-picker";
 import { BrewStatusBadge } from "@/components/BrewStatusBadge";
+import { ExperimentalBadge } from "@/components/flows/ExperimentalBadge";
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: number | string; icon: React.ElementType; color: string }) {
   return (
@@ -100,7 +101,10 @@ function FlowsCard() {
       <div className="bg-card border border-card-border rounded-lg px-4 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors cursor-pointer">
         <Workflow className="w-4 h-4 text-muted-foreground shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground">Brew Flows</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-foreground">Brew Flows</p>
+            <ExperimentalBadge className="text-[10px] px-1.5" />
+          </div>
           <p className="text-xs text-muted-foreground truncate">
             {enabled.length === 0 ? "None running" : `${enabled.length} running: ${enabled.map((f) => f.name).join(", ")}`}
           </p>

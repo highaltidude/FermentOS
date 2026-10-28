@@ -41,7 +41,7 @@ const navItems = [
   { href: "/brew-sessions", label: "Brew Log", icon: Beer },
   { href: "/ingredients", label: "Ingredients", icon: Package },
   { href: "/equipment", label: "Equipment", icon: Wrench },
-  { href: "/flows", label: "Flows", icon: Workflow },
+  { href: "/flows", label: "Flows", icon: Workflow, badge: "Exp" },
   { href: "/calculators", label: "Calculators", icon: Calculator },
 ];
 
@@ -61,8 +61,8 @@ function IndicatorDot({ indicator }: { indicator: Indicator }) {
 }
 
 function NavItem({
-  href, label, icon: Icon, indicator,
-}: { href: string; label: string; icon: React.ElementType; indicator?: Indicator }) {
+  href, label, icon: Icon, indicator, badge,
+}: { href: string; label: string; icon: React.ElementType; indicator?: Indicator; badge?: string }) {
   const [isActive] = useRoute(href === "/" ? "/" : `${href}*`);
   return (
     <Link href={href}>
@@ -78,6 +78,11 @@ function NavItem({
           {indicator && <IndicatorDot indicator={indicator} />}
         </span>
         {label}
+        {badge && (
+          <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-1.5 rounded border border-current opacity-70" title="Experimental">
+            {badge}
+          </span>
+        )}
       </span>
     </Link>
   );

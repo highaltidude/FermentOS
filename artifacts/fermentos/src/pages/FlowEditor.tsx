@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { FlowStatusLine } from "@/components/flows/FlowStatusLine";
+import { ExperimentalBadge } from "@/components/flows/ExperimentalBadge";
 import {
   CATEGORY_STYLES, FlowCanvasContext, NODE_ICONS, nodeTypes, type FlowCanvasInfo, type FlowCanvasNode,
 } from "@/components/flows/FlowNodeCard";
@@ -357,6 +358,7 @@ function Editor({ flow }: { flow: Flow | null }) {
             className="h-8 text-sm font-semibold max-w-xs"
           />
         )}
+        <ExperimentalBadge className="hidden sm:inline-flex text-[10px] px-1.5" />
         <div className="text-xs text-muted-foreground min-w-0">
           {enabled && <FlowStatusLine status={status} unit={unit} />}
         </div>

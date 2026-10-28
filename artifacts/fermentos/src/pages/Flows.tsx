@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { FlowStatusLine } from "@/components/flows/FlowStatusLine";
+import { ExperimentalBadge } from "@/components/flows/ExperimentalBadge";
 import { useToast } from "@/hooks/use-toast";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { getErrorMessage, cn } from "@/lib/utils";
@@ -59,7 +60,10 @@ export default function Flows() {
     <div className="p-6 max-w-4xl mx-auto space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Brew Flows</h1>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h1 className="text-xl font-bold text-foreground whitespace-nowrap">Brew Flows</h1>
+            <ExperimentalBadge />
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">Automations that switch your relays from a temperature or on a schedule.</p>
         </div>
         <Button size="sm" onClick={() => setShowNew(true)} disabled={devices.length === 0}>

@@ -7,6 +7,7 @@ import {
   consumeRecipeIngredientsTx,
   type InventoryShortage,
 } from "./inventoryEnforcement";
+import { captureRecipeSnapshot } from "./recipeSnapshot";
 
 type CreateBrewSessionInput = ReturnType<typeof CreateBrewSessionBody.parse>;
 
@@ -63,7 +64,10 @@ export async function createBrewSession(data: CreateBrewSessionInput): Promise<C
     }
     recipeVariant = data.recipeVariant;
   }
-  const values = { ...rest, recipeVariant, brewDate: String(brewDate) };
+  // A record of the recipe as brewed, for version history. Taken again when
+  // the session leaves brew_day, in case the recipe is edited before then.
+  const recipeSnapshot = recipeId ? await captureRecipeSnapshot(recipeId, recipeVariant) : null;
+  const values = { ...rest, recipeVariant, recipeSnapshot, brewDate: String(brewDate) };
 
   if (recipeId && (await isInventoryEnforcementEnabled())) {
     return db.transaction(async (tx) => {

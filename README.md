@@ -64,6 +64,7 @@ install to a tracked first batch.
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
 - **Optional HTTPS** — Turn it on from Settings (or with one command) to put FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
+- **Recipe version history** — Every batch keeps a copy of its recipe as brewed, so the recipe page shows what changed from one brew to the next and since the last one. **Fork** a recipe to try a variation as its own recipe, keeping its Brew Flow links, with stats across every version. See [Your first brew](#your-first-brew)
 - **Ingredients** — Malts, hops, yeast, and adjuncts with quantities and expiry dates. Compare prices across several suppliers per item, with a preferred supplier shown at a glance. Optionally block a brew day when you are short of something, and deduct what the recipe uses from stock when you start one
 - **Equipment** — A register of your kit: category, condition, brand and model, serial number, purchase date and price
 - **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is checked in the background every five minutes, whether or not anyone has the app open, can notify you when it happens, and can be set globally or per batch
@@ -334,6 +335,22 @@ flavor and balance, mouthfeel and carbonation, an overall score out of ten, any
 off-flavors, and whether you would brew it again. Those scores roll up to an
 average on the recipe, so over time each recipe carries the record of every
 batch you have made from it.
+
+**Tweaking a recipe between batches.** Each batch keeps a copy of its recipe as
+brewed, taken when the session is created and again when it leaves Brew Day. So
+you can edit a recipe freely after a brew: the recipe page's **Version History**
+card lists every batch with what changed since the one before it (hops added or
+dropped, amounts, timings, OG and so on), and what you've changed since the last
+brew. A batch's own page has a **Recipe as brewed** card showing exactly what it
+was made with. Batches still in progress follow the live recipe for their boil
+timer, dry hop reminders and temperature targets, so an edit mid-ferment still
+counts. Batches logged before this feature show as "not recorded".
+
+To try a bigger change without touching the original, click **Fork** on the
+recipe. You get a copy (named "… v2" by default) with the same ingredients,
+steps and Brew Flow links to change as you like. The recipe page links a fork to
+the recipe it came from and lists its own forks, and the Batch History card adds
+the batch count and average score across every version.
 
 ---
 
@@ -1238,9 +1255,11 @@ response shape, is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
 | POST | `/api/recipes` | Create a recipe |
 | POST | `/api/recipes/import` | Create a recipe with its ingredients and steps in one call |
 | POST | `/api/recipes/import/morebeer/parse` | Read a MoreBeer kit-sheet PDF into a draft (saves nothing) |
-| GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, and batch rating summary |
+| GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, batch rating summary, and fork lineage |
 | PUT | `/api/recipes/:id` | Update a recipe |
-| DELETE | `/api/recipes/:id` | Delete a recipe |
+| DELETE | `/api/recipes/:id` | Delete a recipe (its forks move up to its own parent) |
+| POST | `/api/recipes/:id/fork` | Copy a recipe, its ingredients, steps and Brew Flow links into a new recipe forked from it |
+| GET | `/api/recipes/:id/history` | The recipe's brews, newest first, with what changed between each and since the last one |
 | GET | `/api/recipes/styles` | Recipe counts grouped by style |
 | GET | `/api/recipes/:id/ingredients` | List ingredients for a recipe |
 | POST | `/api/recipes/:id/ingredients` | Add an ingredient |
@@ -1306,6 +1325,24 @@ drives the dry hop reminders.
 clear `use`, `timingMinutes`, `dryHopDay`, `notes` or `variants`.
 
 Ingredients are returned in the order they were added.
+
+**Forks and version history.** `POST /api/recipes/:id/fork` takes an optional
+`{ "name": "Pacific IPA v2" }` (the default is the parent's name with the next
+version number) and returns `201` with the new recipe. Every recipe carries
+`parentRecipeId`; `GET /api/recipes/:id` adds `parent` and `forks` (each
+`{ id, name }`) and `familyStats` (`recipeCount`, `batchCount`,
+`ratedBatchCount`, `avgScore` across the recipe and every recipe related to it
+by forking, or `null` when it has none).
+
+Each brew session records its recipe as brewed when it is created and again when
+it leaves Brew Day. `GET /api/recipes/:id/history` returns `brews` (each with
+`recorded: false` for sessions from before this, and `changes` against the
+previous recorded brew, `null` for the first) and `sinceLastBrew`.
+`GET /api/brew-sessions/:id/recipe-snapshot` returns that session's `snapshot`
+and `changesSinceBrew`. A change has a `kind` (`field`, `ingredient_added`,
+`ingredient_removed`, `ingredient_changed`, `step_added`, `step_removed`,
+`step_changed`) with `field`/`from`/`to` or the `ingredient`/`step` involved and
+its `previousIngredient`/`previousStep`.
 
 **Recipe versions.** A recipe's `variants` is `null` for an ordinary recipe, or
 a list drawn from `lme` | `dme` | `all_grain` when it can be brewed more than
@@ -1381,6 +1418,7 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 | GET | `/api/brew-sessions` | List all brew sessions — optional query params `status`, `recipeId` |
 | POST | `/api/brew-sessions` | Create a brew session |
 | GET | `/api/brew-sessions/:id` | Get a brew session with status log |
+| GET | `/api/brew-sessions/:id/recipe-snapshot` | The recipe as this batch was brewed, and what has changed in it since |
 | PUT | `/api/brew-sessions/:id` | Update a brew session |
 | DELETE | `/api/brew-sessions/:id` | Delete a brew session |
 | GET | `/api/brew-sessions/:id/readings` | List fermentation readings |

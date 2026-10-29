@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 // The versions a kit recipe can be brewed as. Same values as inventory's
 // maltTypeEnum, declared here because inventory.ts already imports this file.
@@ -10,6 +10,9 @@ export const recipesTable = pgTable("recipes", {
   style: text("style").notNull(),
   // Null for an ordinary single-version recipe. Set only by import.
   variants: text("variants", { enum: recipeVariantEnum }).array(),
+  // The recipe this one was forked from. Null for an original. Deleting a
+  // parent re-points its forks at the grandparent (see routes/recipes.ts).
+  parentRecipeId: integer("parent_recipe_id").references((): AnyPgColumn => recipesTable.id, { onDelete: "set null" }),
   batchSizeGallons: real("batch_size_gallons").notNull(),
   originalGravity: real("original_gravity"),
   finalGravity: real("final_gravity"),

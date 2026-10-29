@@ -16,9 +16,11 @@ import { parseIdParam } from "../lib/http";
 import { SESSION_UPLOADS_DIR } from "../lib/paths";
 import { scheduleBoilAlerts, clearBoilAlerts } from "../services/boilScheduler";
 import { createBrewSession, recipeVariantsOf } from "../services/brewSessionCreate";
+import { captureRecipeSnapshot, withoutSnapshot } from "../services/recipeSnapshot";
 import { loadDryHopSchedule, scheduleForSession } from "../services/dryHops";
 import { getAutoConditioning } from "../services/autoConditioning";
 import { overrulesAutoAdvance } from "../lib/autoAdvance";
+import { diffRecipeSnapshots } from "../lib/recipeHistory";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -66,7 +68,7 @@ router.get("/brew-sessions", async (req, res) => {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(brewSessionsTable.brewDate));
 
-  return res.json(rows);
+  return res.json(rows.map(withoutSnapshot));
 });
 
 router.post("/brew-sessions", async (req, res) => {
@@ -82,7 +84,7 @@ router.post("/brew-sessions", async (req, res) => {
       error: `This recipe has several versions — choose one of: ${outcome.variants.join(", ")}`,
     });
   }
-  return res.status(201).json(outcome.session);
+  return res.status(201).json(withoutSnapshot(outcome.session));
 });
 
 router.get("/brew-sessions/:id", async (req, res) => {
@@ -108,7 +110,25 @@ router.get("/brew-sessions/:id", async (req, res) => {
       .orderBy(brewSessionStatusLogTable.changedAt),
   ]);
 
-  return res.json({ ...session, readings, statusLog });
+  return res.json({ ...withoutSnapshot(session), readings, statusLog });
+});
+
+// The recipe as this batch was brewed, and what has changed in it since.
+router.get("/brew-sessions/:id/recipe-snapshot", async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
+
+  const [session] = await db
+    .select({ recipeId: brewSessionsTable.recipeId, recipeSnapshot: brewSessionsTable.recipeSnapshot })
+    .from(brewSessionsTable)
+    .where(eq(brewSessionsTable.id, id));
+  if (!session) return res.status(404).json({ error: "Brew session not found" });
+
+  const snapshot = session.recipeSnapshot ?? null;
+  const live = snapshot && session.recipeId != null
+    ? await captureRecipeSnapshot(session.recipeId, snapshot.variant)
+    : null;
+  return res.json({ snapshot, changesSinceBrew: snapshot && live ? diffRecipeSnapshots(snapshot, live) : null });
 });
 
 router.put("/brew-sessions/:id", async (req, res) => {
@@ -171,6 +191,18 @@ router.put("/brew-sessions/:id", async (req, res) => {
     }
   }
 
+  // Re-take the recipe-as-brewed record when the batch is pointed at another
+  // recipe or version, and when brew day ends: sessions are often made ahead
+  // of time, and edits up to then are part of what was brewed. Unlinking the
+  // recipe keeps the record it had.
+  const nextRecipeId = body.data.recipeId !== undefined ? body.data.recipeId : existing[0].recipeId;
+  const nextVariant = updatePayload.recipeVariant !== undefined ? updatePayload.recipeVariant : existing[0].recipeVariant;
+  const leavesBrewDay = existing[0].status === "brew_day" && body.data.status !== undefined && body.data.status !== "brew_day";
+  if (nextRecipeId != null && (leavesBrewDay || nextRecipeId !== existing[0].recipeId || nextVariant !== existing[0].recipeVariant)) {
+    const snapshot = await captureRecipeSnapshot(nextRecipeId, nextVariant ?? null);
+    if (snapshot) updatePayload.recipeSnapshot = snapshot;
+  }
+
   const [session] = await db.update(brewSessionsTable).set(updatePayload).where(eq(brewSessionsTable.id, id)).returning();
   if (!session) return res.status(404).json({ error: "Brew session not found" });
 
@@ -204,7 +236,7 @@ router.put("/brew-sessions/:id", async (req, res) => {
     devicesUnassigned = result.length;
   }
 
-  return res.json({ ...session, devicesUnassigned });
+  return res.json({ ...withoutSnapshot(session), devicesUnassigned });
 });
 
 router.delete("/brew-sessions/:id", async (req, res) => {
@@ -390,7 +422,7 @@ router.post("/brew-sessions/:id/boil", async (req, res) => {
   await scheduleBoilAlerts(id).catch((err) =>
     req.log.error({ err, brewSessionId: id }, "Failed to schedule boil alerts"));
 
-  return res.json(session);
+  return res.json(withoutSnapshot(session!));
 });
 
 // Dry hop schedule. Marking an addition added is what clears its repeating
@@ -445,7 +477,7 @@ router.put("/brew-sessions/:id/rating", async (req, res) => {
     .where(eq(brewSessionsTable.id, id))
     .returning();
   if (!session) return res.status(404).json({ error: "Brew session not found" });
-  return res.json(session);
+  return res.json(withoutSnapshot(session!));
 });
 
 router.delete("/brew-sessions/:id/rating", async (req, res) => {

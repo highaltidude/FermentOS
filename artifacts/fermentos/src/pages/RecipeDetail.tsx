@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation, Link } from "wouter";
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Loader2, GitBranch } from "lucide-react";
 import {
   useGetRecipe,
   useUpdateRecipe,
@@ -14,6 +14,11 @@ import {
   useReorderRecipeSteps,
   useListInventory,
   useCreateBrewSession,
+  useForkRecipe,
+  useGetRecipeHistory,
+  getGetRecipeHistoryQueryKey,
+  getListRecipesQueryKey,
+  getListFlowsQueryKey,
   getGetRecipeQueryKey,
   type IngredientType,
   type IngredientUse,
@@ -42,6 +47,8 @@ import { VariantChips, VariantSwitcher } from "@/components/VariantChips";
 import { apiErrorMessage, shortageLines } from "@/lib/inventoryShortage";
 import { ingredientsForVariant, isMultiVariant, VARIANT_LABELS, variantListLabel } from "@/lib/recipeVariants";
 import { RecipeFlowsCard } from "@/components/flows/RecipeFlowsCard";
+import { RecipeChangeList } from "@/components/RecipeChangeList";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const STEP_PHASE_COLORS: Record<string, string> = {
   mash: "bg-amber-100 text-amber-800 border-amber-200",
@@ -539,7 +546,7 @@ export default function RecipeDetail() {
   const [pickedVariant, setPickedVariant] = useState<RecipeVariant | null | undefined>(undefined);
   const tempUnit = useFermentTempUnit();
 
-  const { data: recipe, isLoading } = useGetRecipe(id, { query: { enabled: !!id, queryKey: getGetRecipeQueryKey(id) } });
+  const { data: recipe, isLoading, dataUpdatedAt: recipeUpdatedAt } = useGetRecipe(id, { query: { enabled: !!id, queryKey: getGetRecipeQueryKey(id) } });
 
   const updateMutation = useUpdateRecipe({
     mutation: {
@@ -588,6 +595,28 @@ export default function RecipeDetail() {
       onError: (err: unknown) => { toast({ title: "Failed to delete recipe", description: getErrorMessage(err), variant: "destructive" }); },
     },
   });
+
+  const [forkName, setForkName] = useState<string | null>(null);
+  const forkMutation = useForkRecipe({
+    mutation: {
+      onSuccess: (fork) => {
+        qc.invalidateQueries({ queryKey: getListRecipesQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(id) });
+        // The fork inherits the parent's flow links.
+        qc.invalidateQueries({ queryKey: getListFlowsQueryKey() });
+        setForkName(null);
+        navigate(`/recipes/${fork.id}`);
+        toast({ title: `Forked from ${recipe?.name ?? "recipe"}` });
+      },
+      onError: (err: unknown) => { toast({ title: "Failed to fork recipe", description: getErrorMessage(err), variant: "destructive" }); },
+    },
+  });
+
+  const { data: history } = useGetRecipeHistory(id, { query: { enabled: !!id, queryKey: getGetRecipeHistoryQueryKey(id) } });
+  // Every edit on this page refetches the recipe; "changed since last brew" follows it.
+  useEffect(() => {
+    if (recipeUpdatedAt) qc.invalidateQueries({ queryKey: getGetRecipeHistoryQueryKey(id) });
+  }, [recipeUpdatedAt, id, qc]);
 
   const deleteIngredientMutation = useDeleteRecipeIngredient({
     mutation: {
@@ -708,6 +737,9 @@ export default function RecipeDetail() {
               Start Brew Session
             </Button>
             <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="w-3.5 h-3.5 mr-1.5" />Edit</Button>
+            <Button variant="outline" size="sm" onClick={() => setForkName(nextVersionName(recipe.name))} title="Fork: copy this recipe as a new version">
+              <GitBranch className="w-3.5 h-3.5 mr-1.5" />Fork
+            </Button>
             <Button variant="destructive" size="sm" onClick={() => { if (confirm("Delete this recipe?")) deleteMutation.mutate({ id }); }}>
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
@@ -732,6 +764,25 @@ export default function RecipeDetail() {
                 <span className="text-xs text-muted-foreground">Versions: {variantListLabel(recipeVariants)}</span>
               )}
             </div>
+            {(recipe.parent || recipe.forks.length > 0) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mb-3">
+                <GitBranch className="w-3.5 h-3.5" />
+                {recipe.parent && (
+                  <span>Forked from <Link href={`/recipes/${recipe.parent.id}`} className="text-primary hover:underline">{recipe.parent.name}</Link></span>
+                )}
+                {recipe.forks.length > 0 && (
+                  <span>
+                    Forks:{" "}
+                    {recipe.forks.map((f, i) => (
+                      <span key={f.id}>
+                        {i > 0 && ", "}
+                        <Link href={`/recipes/${f.id}`} className="text-primary hover:underline">{f.name}</Link>
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-3">
               {([
                 { label: "Batch Size", value: `${recipe.batchSizeGallons} gal` },
@@ -987,7 +1038,86 @@ export default function RecipeDetail() {
             ))
           )}
         </div>
+        {recipe.familyStats && (
+          <div className="px-4 py-2.5 border-t border-card-border flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>
+              All {recipe.familyStats.recipeCount} versions: {recipe.familyStats.batchCount} batch{recipe.familyStats.batchCount === 1 ? "" : "es"}
+            </span>
+            <ScoreBadge value={recipe.familyStats.avgScore} suffix={`avg of ${recipe.familyStats.ratedBatchCount}`} />
+          </div>
+        )}
       </div>
+
+      {/* Version History — what changed in the recipe from one brew to the next */}
+      {history && history.brews.length > 0 && (
+        <div className="bg-card border border-card-border rounded-lg">
+          <div className="px-4 py-3 border-b border-card-border">
+            <h2 className="text-sm font-semibold text-foreground">Version History</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {history.sinceLastBrew && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-medium text-foreground mb-1.5">Changed since last brew</div>
+                {history.sinceLastBrew.length > 0
+                  ? <RecipeChangeList changes={history.sinceLastBrew} />
+                  : <p className="text-xs text-muted-foreground">No changes since the last brew.</p>}
+              </div>
+            )}
+            {history.brews.map((brew) => (
+              <div key={brew.id} className="px-4 py-3">
+                <div className="flex items-center gap-3 mb-1.5">
+                  <Link href={`/brew-sessions/${brew.id}`} className="text-sm font-medium text-foreground hover:text-primary">
+                    {formatDate(brew.brewDate)}
+                  </Link>
+                  {brew.recipeVariant && <span className="text-xs text-muted-foreground">{VARIANT_LABELS[brew.recipeVariant]}</span>}
+                  <span className="ml-auto"><ScoreBadge value={brew.overallScore} /></span>
+                </div>
+                {!brew.recorded ? (
+                  <p className="text-xs text-muted-foreground">Not recorded (brewed before version history).</p>
+                ) : brew.changes == null ? (
+                  <p className="text-xs text-muted-foreground">First recorded brew.</p>
+                ) : brew.changes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Same recipe as the brew before.</p>
+                ) : (
+                  <RecipeChangeList changes={brew.changes} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Dialog open={forkName != null} onOpenChange={(open) => { if (!open) setForkName(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Fork this recipe</DialogTitle>
+            <DialogDescription>
+              Makes a copy with the same ingredients, steps and Brew Flow links to change freely. This recipe and its brews stay as they are.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Name</label>
+            <Input value={forkName ?? ""} onChange={(e) => setForkName(e.target.value)} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setForkName(null)}>Cancel</Button>
+            <Button
+              onClick={() => forkMutation.mutate({ id, data: { name: forkName?.trim() || undefined } })}
+              disabled={forkMutation.isPending}
+            >
+              {forkMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1.5" />}
+              Fork
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+/** "Pale Ale" → "Pale Ale v2", "Pale Ale v2" → "Pale Ale v3". Mirrors the server's default fork name. */
+function nextVersionName(name: string): string {
+  const trimmed = name.trim();
+  const match = /^(.*\S)\s+v(\d+)$/i.exec(trimmed);
+  return match ? `${match[1]} v${Number(match[2]) + 1}` : `${trimmed} v2`;
 }

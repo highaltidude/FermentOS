@@ -277,6 +277,11 @@ export const ListRecipesResponseItem = zod.object({
     .describe(
       "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
     ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -397,6 +402,11 @@ export const CreateRecipeResponse = zod.object({
     .describe(
       "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
     ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -619,6 +629,11 @@ export const ImportRecipeResponse = zod.object({
     .describe(
       "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
     ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -810,6 +825,11 @@ export const GetRecipeResponse = zod
       .describe(
         "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
       ),
+    parentRecipeId: zod
+      .number()
+      .int()
+      .nullish()
+      .describe("The recipe this one was forked from. Null for an original."),
     batchSizeGallons: zod.number(),
     originalGravity: zod.number().nullish(),
     finalGravity: zod.number().nullish(),
@@ -959,6 +979,36 @@ export const GetRecipeResponse = zod
         .describe(
           "Every rated batch brewed from this recipe, oldest first — the recipe's track record.",
         ),
+      parent: zod
+        .union([
+          zod.object({
+            id: zod.number().int(),
+            name: zod.string(),
+          }),
+          zod.null(),
+        ])
+        .describe("The recipe this one was forked from."),
+      forks: zod
+        .array(
+          zod.object({
+            id: zod.number().int(),
+            name: zod.string(),
+          }),
+        )
+        .describe("Recipes forked from this one."),
+      familyStats: zod
+        .union([
+          zod.object({
+            recipeCount: zod.number().int(),
+            batchCount: zod.number().int(),
+            ratedBatchCount: zod.number().int(),
+            avgScore: zod.number().nullable(),
+          }),
+          zod.null(),
+        ])
+        .describe(
+          "Batch stats across this recipe and every recipe related to it by forking. Null when it has no relatives.",
+        ),
     }),
   );
 
@@ -1029,6 +1079,11 @@ export const UpdateRecipeResponse = zod.object({
     .describe(
       "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
     ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -1086,6 +1141,7 @@ export const UpdateRecipeResponse = zod.object({
 });
 
 /**
+ * Its forks are re-pointed at its own parent. Its brew sessions keep their recipe snapshots.
  * @summary Delete a recipe
  */
 export const DeleteRecipeParams = zod.object({
@@ -1093,6 +1149,392 @@ export const DeleteRecipeParams = zod.object({
 });
 
 export const DeleteRecipeResponse = zod.void();
+
+/**
+ * Copies the recipe, its ingredients, its steps and its Brew Flow links into a new recipe whose parent is this one.
+ * @summary Fork a recipe
+ */
+export const ForkRecipeParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const ForkRecipeBody = zod.object({
+  name: zod
+    .string()
+    .optional()
+    .describe(
+      'Name for the fork. Defaults to the parent\'s name with the next version number, e.g. "Pale Ale v2".',
+    ),
+});
+
+export const ForkRecipeResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
+  batchSizeGallons: zod.number(),
+  originalGravity: zod.number().nullish(),
+  finalGravity: zod.number().nullish(),
+  abv: zod.number().nullish(),
+  ibu: zod.number().nullish(),
+  colorSrm: zod.number().nullish(),
+  estimatedBrewTimeMinutes: zod.number().int().nullish(),
+  efficiencyPercent: zod.number().nullish(),
+  caloriesPerServing: zod.number().int().nullish(),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
+  daysPlanned: zod.number().int().nullish(),
+  daysBrewing: zod.number().int().nullish(),
+  daysFermenting: zod.number().int().nullish(),
+  daysConditioning: zod.number().int().nullish(),
+  daysPackaged: zod.number().int().nullish(),
+  avgScore: zod
+    .number()
+    .nullish()
+    .describe(
+      "Mean overallScore across every rated batch of this recipe, 1-10.",
+    ),
+  ratedBatchCount: zod
+    .number()
+    .int()
+    .describe("Batches carrying a scorecard. Always <= batchCount."),
+  batchCount: zod.number().int(),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary What changed in a recipe brew-to-brew
+ */
+export const GetRecipeHistoryParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetRecipeHistoryResponse = zod.object({
+  brews: zod
+    .array(
+      zod.object({
+        id: zod.number().int(),
+        brewDate: zod.string().date(),
+        recipeVariant: zod.union([
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+          zod.null(),
+        ]),
+        overallScore: zod.number().int().nullable(),
+        recorded: zod
+          .boolean()
+          .describe(
+            "False for brews from before version history, which have no snapshot.",
+          ),
+        changes: zod
+          .array(
+            zod
+              .object({
+                kind: zod.enum([
+                  "field",
+                  "ingredient_added",
+                  "ingredient_removed",
+                  "ingredient_changed",
+                  "step_added",
+                  "step_removed",
+                  "step_changed",
+                ]),
+                field: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe.",
+                  ),
+                from: zod
+                  .union([zod.number(), zod.string(), zod.null()])
+                  .optional(),
+                to: zod
+                  .union([zod.number(), zod.string(), zod.null()])
+                  .optional(),
+                ingredient: zod
+                  .object({
+                    name: zod.string(),
+                    type: zod.enum([
+                      "malt",
+                      "hop",
+                      "yeast",
+                      "adjunct",
+                      "water_agent",
+                      "other",
+                    ]),
+                    amount: zod.number(),
+                    unit: zod.string(),
+                    use: zod.union([
+                      zod.enum([
+                        "mash",
+                        "steep",
+                        "boil",
+                        "dry_hop",
+                        "whirlpool",
+                        "primary",
+                        "secondary",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    timingMinutes: zod.number().int().nullable(),
+                    dryHopDay: zod.number().int().nullable(),
+                    notes: zod.string().nullable(),
+                  })
+                  .optional(),
+                previousIngredient: zod
+                  .object({
+                    name: zod.string(),
+                    type: zod.enum([
+                      "malt",
+                      "hop",
+                      "yeast",
+                      "adjunct",
+                      "water_agent",
+                      "other",
+                    ]),
+                    amount: zod.number(),
+                    unit: zod.string(),
+                    use: zod.union([
+                      zod.enum([
+                        "mash",
+                        "steep",
+                        "boil",
+                        "dry_hop",
+                        "whirlpool",
+                        "primary",
+                        "secondary",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    timingMinutes: zod.number().int().nullable(),
+                    dryHopDay: zod.number().int().nullable(),
+                    notes: zod.string().nullable(),
+                  })
+                  .optional(),
+                step: zod
+                  .object({
+                    position: zod.number().int(),
+                    phase: zod.union([
+                      zod.enum([
+                        "mash",
+                        "boil",
+                        "fermentation",
+                        "conditioning",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    body: zod.string(),
+                    durationMinutes: zod.number().int().nullable(),
+                  })
+                  .optional(),
+                previousStep: zod
+                  .object({
+                    position: zod.number().int(),
+                    phase: zod.union([
+                      zod.enum([
+                        "mash",
+                        "boil",
+                        "fermentation",
+                        "conditioning",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    body: zod.string(),
+                    durationMinutes: zod.number().int().nullable(),
+                  })
+                  .optional(),
+              })
+              .describe(
+                "One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.",
+              ),
+          )
+          .nullable()
+          .describe(
+            "What changed since the previous recorded brew. Null when there is nothing to compare with.",
+          ),
+      }),
+    )
+    .describe("Brews of this recipe, newest first."),
+  sinceLastBrew: zod
+    .array(
+      zod
+        .object({
+          kind: zod.enum([
+            "field",
+            "ingredient_added",
+            "ingredient_removed",
+            "ingredient_changed",
+            "step_added",
+            "step_removed",
+            "step_changed",
+          ]),
+          field: zod
+            .string()
+            .optional()
+            .describe(
+              "The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe.",
+            ),
+          from: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          to: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          ingredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          previousIngredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          step: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+          previousStep: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+        })
+        .describe(
+          "One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.",
+        ),
+    )
+    .nullable()
+    .describe(
+      "What has changed in the recipe since its latest recorded brew. Null when no brew has been recorded.",
+    ),
+});
 
 /**
  * @summary List ingredients for a recipe
@@ -2407,6 +2849,232 @@ export const DeleteBrewSessionParams = zod.object({
 });
 
 export const DeleteBrewSessionResponse = zod.void();
+
+/**
+ * @summary The recipe as this batch was brewed
+ */
+export const GetBrewSessionRecipeSnapshotParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetBrewSessionRecipeSnapshotResponse = zod.object({
+  snapshot: zod.union([
+    zod
+      .object({
+        capturedAt: zod.string().datetime({ offset: true }),
+        variant: zod.union([
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+          zod.null(),
+        ]),
+        recipe: zod.object({
+          name: zod.string(),
+          style: zod.string(),
+          batchSizeGallons: zod.number(),
+          originalGravity: zod.number().nullish(),
+          finalGravity: zod.number().nullish(),
+          abv: zod.number().nullish(),
+          ibu: zod.number().nullish(),
+          colorSrm: zod.number().nullish(),
+          efficiencyPercent: zod.number().nullish(),
+          fermentTempMin: zod.number().nullish(),
+          fermentTempMax: zod.number().nullish(),
+          fermentTempIdeal: zod.number().nullish(),
+          conditionTempMin: zod.number().nullish(),
+          conditionTempMax: zod.number().nullish(),
+          conditionTempIdeal: zod.number().nullish(),
+          notes: zod.string().nullish(),
+        }),
+        ingredients: zod
+          .array(
+            zod.object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            }),
+          )
+          .describe("Only the ingredients of the version that was brewed."),
+        steps: zod.array(
+          zod.object({
+            position: zod.number().int(),
+            phase: zod.union([
+              zod.enum([
+                "mash",
+                "boil",
+                "fermentation",
+                "conditioning",
+                "packaging",
+                "other",
+              ]),
+              zod.null(),
+            ]),
+            body: zod.string(),
+            durationMinutes: zod.number().int().nullable(),
+          }),
+        ),
+      })
+      .describe(
+        "A recipe as a batch was brewed. A record only; running batches follow the live recipe.",
+      ),
+    zod.null(),
+  ]),
+  changesSinceBrew: zod
+    .array(
+      zod
+        .object({
+          kind: zod.enum([
+            "field",
+            "ingredient_added",
+            "ingredient_removed",
+            "ingredient_changed",
+            "step_added",
+            "step_removed",
+            "step_changed",
+          ]),
+          field: zod
+            .string()
+            .optional()
+            .describe(
+              "The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe.",
+            ),
+          from: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          to: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          ingredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          previousIngredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          step: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+          previousStep: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+        })
+        .describe(
+          "One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.",
+        ),
+    )
+    .nullable()
+    .describe(
+      "What has changed in the recipe since this batch was brewed. Null without a snapshot or a linked recipe.",
+    ),
+});
 
 /**
  * @summary Save the tasting scorecard for a brew session

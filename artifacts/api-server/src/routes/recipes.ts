@@ -1,6 +1,6 @@
 import express, { Router, type RequestHandler, type Response } from "express";
 import { eq, ilike, or, and, avg, count, sql, asc, inArray } from "drizzle-orm";
-import { db, recipesTable, recipeIngredientsTable, recipeStepsTable, brewSessionsTable } from "@workspace/db";
+import { db, recipesTable, recipeIngredientsTable, recipeStepsTable, brewSessionsTable, flowRecipesTable } from "@workspace/db";
 import {
   CreateRecipeBody,
   UpdateRecipeBody,
@@ -11,11 +11,14 @@ import {
   UpdateRecipeStepBody,
   ReorderRecipeStepsBody,
   ImportRecipeBody,
+  ForkRecipeBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
 import { parseMorebeerKitSheet } from "../lib/morebeerKitSheet";
 import { normalizeIngredientVariants, normalizeRecipeVariants } from "../lib/recipeVariants";
 import { extractPdfTextItems } from "../services/pdfText";
+import { reloadFlows } from "../services/flowEngine";
+import { buildRecipeSnapshot, diffRecipeSnapshots, nextVersionName, recipeBrewHistory, recipeFamily } from "../lib/recipeHistory";
 
 const router = Router();
 
@@ -167,6 +170,83 @@ router.post("/recipes/import", async (req, res) => {
   return res.status(201).json({ ...recipe, avgScore: null, ratedBatchCount: 0, batchCount: 0 });
 });
 
+// ── Fork ──────────────────────────────────────────────────────────────────
+
+router.post("/recipes/:id/fork", async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
+  const body = ForkRecipeBody.safeParse(req.body ?? {});
+  if (!body.success) return res.status(400).json({ error: "Invalid request body" });
+
+  const [parent] = await db.select().from(recipesTable).where(eq(recipesTable.id, id));
+  if (!parent) return res.status(404).json({ error: "Recipe not found" });
+
+  const { id: _id, createdAt: _created, updatedAt: _updated, ...fields } = parent;
+  const name = body.data.name?.trim() || nextVersionName(parent.name);
+
+  // One transaction, like import: the fork arrives whole or not at all.
+  const { fork, linkedFlows } = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(recipesTable)
+      .values({ ...fields, name, parentRecipeId: id })
+      .returning();
+    const forkId = created!.id;
+    const [ingredients, steps, links] = await Promise.all([
+      tx.select().from(recipeIngredientsTable).where(eq(recipeIngredientsTable.recipeId, id)).orderBy(asc(recipeIngredientsTable.id)),
+      tx.select().from(recipeStepsTable).where(eq(recipeStepsTable.recipeId, id)),
+      tx.select().from(flowRecipesTable).where(eq(flowRecipesTable.recipeId, id)),
+    ]);
+    if (ingredients.length > 0) {
+      await tx.insert(recipeIngredientsTable).values(ingredients.map(({ id: _i, ...i }) => ({ ...i, recipeId: forkId })));
+    }
+    if (steps.length > 0) {
+      await tx.insert(recipeStepsTable).values(steps.map(({ id: _s, ...s }) => ({ ...s, recipeId: forkId })));
+    }
+    // A fork is the same beer, so it keeps the parent's automation.
+    if (links.length > 0) {
+      await tx.insert(flowRecipesTable).values(links.map((l) => ({ flowId: l.flowId, recipeId: forkId })));
+    }
+    return { fork: created!, linkedFlows: links.length };
+  });
+
+  if (linkedFlows > 0) {
+    await reloadFlows().catch((err) => req.log.error({ err }, "Failed to reload flows after fork"));
+  }
+  req.log.info({ recipeId: id, forkId: fork.id }, "Recipe forked");
+  return res.status(201).json({ ...fork, avgScore: null, ratedBatchCount: 0, batchCount: 0 });
+});
+
+// ── Version history ───────────────────────────────────────────────────────
+
+router.get("/recipes/:id/history", async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
+
+  const [recipe] = await db.select().from(recipesTable).where(eq(recipesTable.id, id));
+  if (!recipe) return res.status(404).json({ error: "Recipe not found" });
+
+  const [brews, ingredients, steps] = await Promise.all([
+    db
+      .select({
+        id: brewSessionsTable.id,
+        brewDate: brewSessionsTable.brewDate,
+        recipeVariant: brewSessionsTable.recipeVariant,
+        overallScore: brewSessionsTable.overallScore,
+        recipeSnapshot: brewSessionsTable.recipeSnapshot,
+      })
+      .from(brewSessionsTable)
+      .where(eq(brewSessionsTable.recipeId, id)),
+    recipeIngredients(id),
+    orderedRecipeSteps(id),
+  ]);
+
+  const { entries, latestSnapshot } = recipeBrewHistory(brews.map((b) => ({ ...b, brewDate: String(b.brewDate) })));
+  const sinceLastBrew = latestSnapshot
+    ? diffRecipeSnapshots(latestSnapshot, buildRecipeSnapshot(recipe, ingredients, steps, latestSnapshot.variant))
+    : null;
+  return res.json({ brews: entries, sinceLastBrew });
+});
+
 const KIT_SHEET_ERRORS = {
   no_text: "This PDF has no readable text — it looks like a scan. Download the kit sheet from MoreBeer rather than scanning the printed one.",
   unrecognized_sheet: "This does not look like a MoreBeer kit sheet: no ingredient lists were found in it.",
@@ -268,8 +348,43 @@ router.get("/recipes/:id", async (req, res) => {
     avgScore: roundScore(stats?.avgScore),
     ratedBatchCount: stats?.ratedBatchCount ?? 0,
     batchCount: stats?.batchCount ?? 0,
+    ...(await recipeLineage(recipe.id, recipe.parentRecipeId)),
   });
 });
+
+/** Where a recipe sits among its forks, and how the whole family has brewed. */
+async function recipeLineage(id: number, parentRecipeId: number | null) {
+  const all = await db
+    .select({ id: recipesTable.id, name: recipesTable.name, parentRecipeId: recipesTable.parentRecipeId })
+    .from(recipesTable);
+  const byId = new Map(all.map((r) => [r.id, r]));
+  const parentRow = parentRecipeId != null ? byId.get(parentRecipeId) : undefined;
+  const forks = all.filter((r) => r.parentRecipeId === id).map(({ id: forkId, name }) => ({ id: forkId, name }));
+
+  const family = recipeFamily(all, id);
+  let familyStats = null;
+  if (family.length > 1) {
+    const [s] = await db
+      .select({
+        avgScore: avg(brewSessionsTable.overallScore),
+        ratedBatchCount: count(brewSessionsTable.overallScore),
+        batchCount: count(brewSessionsTable.id),
+      })
+      .from(brewSessionsTable)
+      .where(inArray(brewSessionsTable.recipeId, family));
+    familyStats = {
+      recipeCount: family.length,
+      avgScore: roundScore(s?.avgScore),
+      ratedBatchCount: s?.ratedBatchCount ?? 0,
+      batchCount: s?.batchCount ?? 0,
+    };
+  }
+  return {
+    parent: parentRow ? { id: parentRow.id, name: parentRow.name } : null,
+    forks,
+    familyStats,
+  };
+}
 
 router.put("/recipes/:id", async (req, res) => {
   const id = parseIdParam(req, res);
@@ -291,7 +406,20 @@ router.delete("/recipes/:id", async (req, res) => {
   const id = parseIdParam(req, res);
   if (id === undefined) return;
 
-  await db.delete(recipesTable).where(eq(recipesTable.id, id));
+  // Forks move up to the deleted recipe's own parent, so a family keeps its
+  // shape when a middle version goes. Its brews keep their recipe snapshots.
+  await db.transaction(async (tx) => {
+    const [gone] = await tx
+      .select({ parentRecipeId: recipesTable.parentRecipeId })
+      .from(recipesTable)
+      .where(eq(recipesTable.id, id));
+    if (!gone) return;
+    await tx
+      .update(recipesTable)
+      .set({ parentRecipeId: gone.parentRecipeId })
+      .where(eq(recipesTable.parentRecipeId, id));
+    await tx.delete(recipesTable).where(eq(recipesTable.id, id));
+  });
   return res.status(204).send();
 });
 

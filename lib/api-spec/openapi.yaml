@@ -270,11 +270,63 @@ paths:
       operationId: deleteRecipe
       tags: [recipes]
       summary: Delete a recipe
+      description: Its forks are re-pointed at its own parent. Its brew sessions keep their recipe snapshots.
       parameters:
         - $ref: "#/components/parameters/IdParam"
       responses:
         "204":
           description: Deleted
+
+  /recipes/{id}/fork:
+    post:
+      operationId: forkRecipe
+      tags: [recipes]
+      summary: Fork a recipe
+      description: >-
+        Copies the recipe, its ingredients, its steps and its Brew Flow links
+        into a new recipe whose parent is this one.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForkRecipeBody"
+      responses:
+        "201":
+          description: The new recipe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipe"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /recipes/{id}/history:
+    get:
+      operationId: getRecipeHistory
+      tags: [recipes]
+      summary: What changed in a recipe brew-to-brew
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: The recipe's brews with their changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeHistory"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /recipes/{id}/ingredients:
     get:
@@ -526,6 +578,27 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /brew-sessions/{id}/recipe-snapshot:
+    get:
+      operationId: getBrewSessionRecipeSnapshot
+      tags: [brew-sessions]
+      summary: The recipe as this batch was brewed
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: The snapshot and what has changed in the recipe since
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewSessionRecipeSnapshot"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /brew-sessions/{id}/rating:
     put:
@@ -2667,6 +2740,10 @@ components:
           description: The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.
           items:
             $ref: "#/components/schemas/RecipeVariant"
+        parentRecipeId:
+          type: integer
+          nullable: true
+          description: The recipe this one was forked from. Null for an original.
         batchSizeGallons:
           type: number
         originalGravity:
@@ -2770,7 +2847,248 @@ components:
               description: Every rated batch brewed from this recipe, oldest first — the recipe's track record.
               items:
                 $ref: "#/components/schemas/RatedBatch"
-          required: [ingredients, steps, ratedBatches]
+            parent:
+              $ref: "#/components/schemas/RecipeLink"
+              nullable: true
+              description: The recipe this one was forked from.
+            forks:
+              type: array
+              description: Recipes forked from this one.
+              items:
+                $ref: "#/components/schemas/RecipeLink"
+            familyStats:
+              $ref: "#/components/schemas/RecipeFamilyStats"
+              nullable: true
+              description: Batch stats across this recipe and every recipe related to it by forking. Null when it has no relatives.
+          required: [ingredients, steps, ratedBatches, parent, forks, familyStats]
+
+    RecipeLink:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+      required: [id, name]
+
+    RecipeFamilyStats:
+      type: object
+      properties:
+        recipeCount:
+          type: integer
+        batchCount:
+          type: integer
+        ratedBatchCount:
+          type: integer
+        avgScore:
+          type: number
+          nullable: true
+      required: [recipeCount, batchCount, ratedBatchCount, avgScore]
+
+    ForkRecipeBody:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name for the fork. Defaults to the parent's name with the next version number, e.g. "Pale Ale v2".
+
+    RecipeSnapshotIngredient:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        amount:
+          type: number
+        unit:
+          type: string
+        use:
+          $ref: "#/components/schemas/IngredientUse"
+          nullable: true
+        timingMinutes:
+          type: integer
+          nullable: true
+        dryHopDay:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [name, type, amount, unit, use, timingMinutes, dryHopDay, notes]
+
+    RecipeSnapshotStep:
+      type: object
+      properties:
+        position:
+          type: integer
+        phase:
+          $ref: "#/components/schemas/StepPhase"
+          nullable: true
+        body:
+          type: string
+        durationMinutes:
+          type: integer
+          nullable: true
+      required: [position, phase, body, durationMinutes]
+
+    RecipeSnapshot:
+      type: object
+      description: A recipe as a batch was brewed. A record only; running batches follow the live recipe.
+      properties:
+        capturedAt:
+          type: string
+          format: date-time
+        variant:
+          $ref: "#/components/schemas/RecipeVariant"
+          nullable: true
+        recipe:
+          type: object
+          properties:
+            name:
+              type: string
+            style:
+              type: string
+            batchSizeGallons:
+              type: number
+            originalGravity:
+              type: number
+              nullable: true
+            finalGravity:
+              type: number
+              nullable: true
+            abv:
+              type: number
+              nullable: true
+            ibu:
+              type: number
+              nullable: true
+            colorSrm:
+              type: number
+              nullable: true
+            efficiencyPercent:
+              type: number
+              nullable: true
+            fermentTempMin:
+              type: number
+              nullable: true
+            fermentTempMax:
+              type: number
+              nullable: true
+            fermentTempIdeal:
+              type: number
+              nullable: true
+            conditionTempMin:
+              type: number
+              nullable: true
+            conditionTempMax:
+              type: number
+              nullable: true
+            conditionTempIdeal:
+              type: number
+              nullable: true
+            notes:
+              type: string
+              nullable: true
+          required: [name, style, batchSizeGallons]
+        ingredients:
+          type: array
+          description: Only the ingredients of the version that was brewed.
+          items:
+            $ref: "#/components/schemas/RecipeSnapshotIngredient"
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecipeSnapshotStep"
+      required: [capturedAt, variant, recipe, ingredients, steps]
+
+    RecipeChange:
+      type: object
+      description: >-
+        One difference between two versions of a recipe. field changes carry
+        field/from/to; ingredient changes carry ingredient (and
+        previousIngredient when changed); step changes likewise.
+      properties:
+        kind:
+          type: string
+          enum: [field, ingredient_added, ingredient_removed, ingredient_changed, step_added, step_removed, step_changed]
+        field:
+          type: string
+          description: The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe.
+        from:
+          oneOf:
+            - type: number
+            - type: string
+          nullable: true
+        to:
+          oneOf:
+            - type: number
+            - type: string
+          nullable: true
+        ingredient:
+          $ref: "#/components/schemas/RecipeSnapshotIngredient"
+        previousIngredient:
+          $ref: "#/components/schemas/RecipeSnapshotIngredient"
+        step:
+          $ref: "#/components/schemas/RecipeSnapshotStep"
+        previousStep:
+          $ref: "#/components/schemas/RecipeSnapshotStep"
+      required: [kind]
+
+    RecipeHistoryBrew:
+      type: object
+      properties:
+        id:
+          type: integer
+        brewDate:
+          type: string
+          format: date
+        recipeVariant:
+          $ref: "#/components/schemas/RecipeVariant"
+          nullable: true
+        overallScore:
+          type: integer
+          nullable: true
+        recorded:
+          type: boolean
+          description: False for brews from before version history, which have no snapshot.
+        changes:
+          type: array
+          nullable: true
+          description: What changed since the previous recorded brew. Null when there is nothing to compare with.
+          items:
+            $ref: "#/components/schemas/RecipeChange"
+      required: [id, brewDate, recipeVariant, overallScore, recorded, changes]
+
+    RecipeHistory:
+      type: object
+      properties:
+        brews:
+          type: array
+          description: Brews of this recipe, newest first.
+          items:
+            $ref: "#/components/schemas/RecipeHistoryBrew"
+        sinceLastBrew:
+          type: array
+          nullable: true
+          description: What has changed in the recipe since its latest recorded brew. Null when no brew has been recorded.
+          items:
+            $ref: "#/components/schemas/RecipeChange"
+      required: [brews, sinceLastBrew]
+
+    BrewSessionRecipeSnapshot:
+      type: object
+      properties:
+        snapshot:
+          $ref: "#/components/schemas/RecipeSnapshot"
+          nullable: true
+        changesSinceBrew:
+          type: array
+          nullable: true
+          description: What has changed in the recipe since this batch was brewed. Null without a snapshot or a linked recipe.
+          items:
+            $ref: "#/components/schemas/RecipeChange"
+      required: [snapshot, changesSinceBrew]
 
     RatedBatch:
       type: object

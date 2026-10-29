@@ -18,6 +18,7 @@ import {
   useGetTempAlertReadings,
   getGetTempAlertReadingsQueryKey,
   getGetBrewSessionDryHopsQueryKey,
+  getGetBrewSessionRecipeSnapshotQueryKey,
   type BrewStatus,
   type PackagingMethod,
 } from "@workspace/api-client-react";
@@ -43,6 +44,7 @@ import { RateBatchWizard } from "@/components/RateBatchWizard";
 import { BrewStatusBadge } from "@/components/BrewStatusBadge";
 import { TempRangeFields } from "@/components/TempRangeFields";
 import { DryHopCard } from "@/components/DryHopCard";
+import { RecipeAsBrewedCard } from "@/components/RecipeAsBrewedCard";
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: BrewStatus; onStatusChange: (s: BrewStatus) => void; isPending?: boolean }) {
   const idx = BREW_STATUSES.indexOf(status);
@@ -172,6 +174,8 @@ export default function BrewSessionDetail() {
     mutation: {
       onSuccess: (data) => {
         qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
+        // Leaving brew day or changing the recipe re-records the recipe as brewed.
+        qc.invalidateQueries({ queryKey: getGetBrewSessionRecipeSnapshotQueryKey(id) });
         // A status change moves the dry hop schedule (conditioning start).
         qc.invalidateQueries({ queryKey: getGetBrewSessionDryHopsQueryKey(id) });
         setEditing(false);
@@ -188,7 +192,7 @@ export default function BrewSessionDetail() {
 
   const quickStatusMutation = useUpdateBrewSession({
     mutation: {
-      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); setPackagingPrompt(null); toast({ title: `Status → ${STATUS_LABELS[data.status] ?? data.status}` }); },
+      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); qc.invalidateQueries({ queryKey: getGetBrewSessionRecipeSnapshotQueryKey(id) }); setPackagingPrompt(null); toast({ title: `Status → ${STATUS_LABELS[data.status] ?? data.status}` }); },
     },
   });
 
@@ -755,6 +759,8 @@ export default function BrewSessionDetail() {
           </div>
         </div>
       </div>
+
+      <RecipeAsBrewedCard brewSessionId={id} />
 
       {/* Response — Stage History */}
       <div className="bg-card border border-card-border rounded-lg">

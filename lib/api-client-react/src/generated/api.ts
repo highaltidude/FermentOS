@@ -24,6 +24,7 @@ import type {
   BoilControlBody,
   BrewSensorTelemetry,
   BrewSession,
+  BrewSessionRecipeSnapshot,
   BrewSessionWithReadings,
   BreweryNameBody,
   BreweryNameResponse,
@@ -51,6 +52,7 @@ import type {
   FlowRun,
   FlowStatus,
   FlowValidationError,
+  ForkRecipeBody,
   GetISpindelStatus200,
   GetSystemHealthHistoryParams,
   GetUpcomingBrewsParams,
@@ -82,6 +84,7 @@ import type {
   ReadingRetentionBody,
   ReadingRetentionResponse,
   Recipe,
+  RecipeHistory,
   RecipeIngredient,
   RecipeStep,
   RecipeWithIngredients,
@@ -1190,6 +1193,7 @@ export const getDeleteRecipeUrl = (id: number) => {
 };
 
 /**
+ * Its forks are re-pointed at its own parent. Its brew sessions keep their recipe snapshots.
  * @summary Delete a recipe
  */
 export const deleteRecipe = async (
@@ -1271,6 +1275,211 @@ export const useDeleteRecipe = <
 > => {
   return useMutation(getDeleteRecipeMutationOptions(options));
 };
+
+export const getForkRecipeUrl = (id: number) => {
+  return `/api/recipes/${id}/fork`;
+};
+
+/**
+ * Copies the recipe, its ingredients, its steps and its Brew Flow links into a new recipe whose parent is this one.
+ * @summary Fork a recipe
+ */
+export const forkRecipe = async (
+  id: number,
+  forkRecipeBody?: ForkRecipeBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Recipe> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<Recipe>(getForkRecipeUrl(id), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(forkRecipeBody),
+  });
+};
+
+export const getForkRecipeMutationKey = () => ["forkRecipe"] as const;
+
+export const getForkRecipeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forkRecipe>>,
+    TError,
+    ForkRecipeMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof forkRecipe>>,
+  TError,
+  ForkRecipeMutationVariables,
+  TContext
+> => {
+  const mutationKey = getForkRecipeMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof forkRecipe>>,
+    ForkRecipeMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return forkRecipe(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ForkRecipeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof forkRecipe>>
+>;
+export type ForkRecipeMutationBody = BodyType<ForkRecipeBody> | undefined;
+export type ForkRecipeMutationError = ErrorType<ErrorResponse>;
+export type ForkRecipeMutationVariables = {
+  id: number;
+  data?: BodyType<ForkRecipeBody>;
+};
+
+/**
+ * @summary Fork a recipe
+ */
+export const useForkRecipe = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forkRecipe>>,
+    TError,
+    ForkRecipeMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof forkRecipe>>,
+  TError,
+  ForkRecipeMutationVariables,
+  TContext
+> => {
+  return useMutation(getForkRecipeMutationOptions(options));
+};
+
+export const getGetRecipeHistoryUrl = (id: number) => {
+  return `/api/recipes/${id}/history`;
+};
+
+/**
+ * @summary What changed in a recipe brew-to-brew
+ */
+export const getRecipeHistory = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RecipeHistory> => {
+  return customFetch<RecipeHistory>(getGetRecipeHistoryUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecipeHistoryQueryKey = (id: number) => {
+  return [`/api/recipes/${id}/history`] as const;
+};
+
+export const getGetRecipeHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecipeHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecipeHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRecipeHistoryQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecipeHistory>>
+  > = ({ signal }) => getRecipeHistory(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecipeHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecipeHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecipeHistory>>
+>;
+export type GetRecipeHistoryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary What changed in a recipe brew-to-brew
+ */
+
+export function useGetRecipeHistory<
+  TData = Awaited<ReturnType<typeof getRecipeHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecipeHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecipeHistoryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
 
 export const getListRecipeIngredientsUrl = (id: number) => {
   return `/api/recipes/${id}/ingredients`;
@@ -2719,6 +2928,98 @@ export const useDeleteBrewSession = <
 > => {
   return useMutation(getDeleteBrewSessionMutationOptions(options));
 };
+
+export const getGetBrewSessionRecipeSnapshotUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/recipe-snapshot`;
+};
+
+/**
+ * @summary The recipe as this batch was brewed
+ */
+export const getBrewSessionRecipeSnapshot = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<BrewSessionRecipeSnapshot> => {
+  return customFetch<BrewSessionRecipeSnapshot>(
+    getGetBrewSessionRecipeSnapshotUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetBrewSessionRecipeSnapshotQueryKey = (id: number) => {
+  return [`/api/brew-sessions/${id}/recipe-snapshot`] as const;
+};
+
+export const getGetBrewSessionRecipeSnapshotQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBrewSessionRecipeSnapshot>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewSessionRecipeSnapshot>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBrewSessionRecipeSnapshotQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBrewSessionRecipeSnapshot>>
+  > = ({ signal }) =>
+    getBrewSessionRecipeSnapshot(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBrewSessionRecipeSnapshot>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBrewSessionRecipeSnapshotQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBrewSessionRecipeSnapshot>>
+>;
+export type GetBrewSessionRecipeSnapshotQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary The recipe as this batch was brewed
+ */
+
+export function useGetBrewSessionRecipeSnapshot<
+  TData = Awaited<ReturnType<typeof getBrewSessionRecipeSnapshot>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewSessionRecipeSnapshot>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBrewSessionRecipeSnapshotQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
 
 export const getUpsertBrewRatingUrl = (id: number) => {
   return `/api/brew-sessions/${id}/rating`;

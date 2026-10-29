@@ -560,6 +560,11 @@ export interface Recipe {
    * @nullable
    */
   variants?: RecipeVariant[] | null;
+  /**
+   * The recipe this one was forked from. Null for an original.
+   * @nullable
+   */
+  parentRecipeId?: number | null;
   batchSizeGallons: number;
   /** @nullable */
   originalGravity?: number | null;
@@ -686,12 +691,164 @@ export interface RatedBatch {
   overallScore: number;
 }
 
+export interface RecipeLink {
+  id: number;
+  name: string;
+}
+
+export interface RecipeFamilyStats {
+  recipeCount: number;
+  batchCount: number;
+  ratedBatchCount: number;
+  /** @nullable */
+  avgScore: number | null;
+}
+
 export type RecipeWithIngredients = Recipe & {
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   /** Every rated batch brewed from this recipe, oldest first — the recipe's track record. */
   ratedBatches: RatedBatch[];
+  /** The recipe this one was forked from. */
+  parent: RecipeLink | null;
+  /** Recipes forked from this one. */
+  forks: RecipeLink[];
+  /** Batch stats across this recipe and every recipe related to it by forking. Null when it has no relatives. */
+  familyStats: RecipeFamilyStats | null;
 };
+
+export interface ForkRecipeBody {
+  /** Name for the fork. Defaults to the parent's name with the next version number, e.g. "Pale Ale v2". */
+  name?: string;
+}
+
+export interface RecipeSnapshotIngredient {
+  name: string;
+  type: IngredientType;
+  amount: number;
+  unit: string;
+  use: IngredientUse | null;
+  /** @nullable */
+  timingMinutes: number | null;
+  /** @nullable */
+  dryHopDay: number | null;
+  /** @nullable */
+  notes: string | null;
+}
+
+export interface RecipeSnapshotStep {
+  position: number;
+  phase: StepPhase | null;
+  body: string;
+  /** @nullable */
+  durationMinutes: number | null;
+}
+
+export type RecipeSnapshotRecipe = {
+  name: string;
+  style: string;
+  batchSizeGallons: number;
+  /** @nullable */
+  originalGravity?: number | null;
+  /** @nullable */
+  finalGravity?: number | null;
+  /** @nullable */
+  abv?: number | null;
+  /** @nullable */
+  ibu?: number | null;
+  /** @nullable */
+  colorSrm?: number | null;
+  /** @nullable */
+  efficiencyPercent?: number | null;
+  /** @nullable */
+  fermentTempMin?: number | null;
+  /** @nullable */
+  fermentTempMax?: number | null;
+  /** @nullable */
+  fermentTempIdeal?: number | null;
+  /** @nullable */
+  conditionTempMin?: number | null;
+  /** @nullable */
+  conditionTempMax?: number | null;
+  /** @nullable */
+  conditionTempIdeal?: number | null;
+  /** @nullable */
+  notes?: string | null;
+};
+
+/**
+ * A recipe as a batch was brewed. A record only; running batches follow the live recipe.
+ */
+export interface RecipeSnapshot {
+  capturedAt: string;
+  variant: RecipeVariant | null;
+  recipe: RecipeSnapshotRecipe;
+  /** Only the ingredients of the version that was brewed. */
+  ingredients: RecipeSnapshotIngredient[];
+  steps: RecipeSnapshotStep[];
+}
+
+export type RecipeChangeKind =
+  (typeof RecipeChangeKind)[keyof typeof RecipeChangeKind];
+
+export const RecipeChangeKind = {
+  field: "field",
+  ingredient_added: "ingredient_added",
+  ingredient_removed: "ingredient_removed",
+  ingredient_changed: "ingredient_changed",
+  step_added: "step_added",
+  step_removed: "step_removed",
+  step_changed: "step_changed",
+} as const;
+
+/**
+ * One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.
+ */
+export interface RecipeChange {
+  kind: RecipeChangeKind;
+  /** The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe. */
+  field?: string;
+  from?: number | string | null;
+  to?: number | string | null;
+  ingredient?: RecipeSnapshotIngredient;
+  previousIngredient?: RecipeSnapshotIngredient;
+  step?: RecipeSnapshotStep;
+  previousStep?: RecipeSnapshotStep;
+}
+
+export interface RecipeHistoryBrew {
+  id: number;
+  brewDate: string;
+  recipeVariant: RecipeVariant | null;
+  /** @nullable */
+  overallScore: number | null;
+  /** False for brews from before version history, which have no snapshot. */
+  recorded: boolean;
+  /**
+   * What changed since the previous recorded brew. Null when there is nothing to compare with.
+   * @nullable
+   */
+  changes: RecipeChange[] | null;
+}
+
+export interface RecipeHistory {
+  /** Brews of this recipe, newest first. */
+  brews: RecipeHistoryBrew[];
+  /**
+   * What has changed in the recipe since its latest recorded brew. Null when no brew has been recorded.
+   * @nullable
+   */
+  sinceLastBrew: RecipeChange[] | null;
+}
+
+export interface BrewSessionRecipeSnapshot {
+  snapshot: RecipeSnapshot | null;
+  /**
+   * What has changed in the recipe since this batch was brewed. Null without a snapshot or a linked recipe.
+   * @nullable
+   */
+  changesSinceBrew: RecipeChange[] | null;
+}
 
 export interface CreateRecipeStepBody {
   body: string;

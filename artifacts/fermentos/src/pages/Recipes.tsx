@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Plus, Search, BookOpen, ChevronRight, Beaker, Clock, FlaskConical, FileUp } from "lucide-react";
+import { Plus, Search, BookOpen, ChevronRight, Beaker, Clock, FlaskConical, FileUp, GitBranch } from "lucide-react";
 import { useListRecipes, useGetRecipeStyles } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,6 +114,13 @@ export default function Recipes() {
                         <span className="flex items-center gap-1">
                           <FlaskConical className="w-3 h-3" />
                           {recipe.batchCount} {recipe.batchCount === 1 ? "batch" : "batches"}
+                        </span>
+                      )}
+                      {recipe.parentRecipeId != null && (
+                        <span className="flex items-center gap-1">
+                          <GitBranch className="w-3 h-3" />
+                          {/* The parent may be filtered out of this list, so fall back to a plain label. */}
+                          Fork of {recipes.find((r) => r.id === recipe.parentRecipeId)?.name ?? "another recipe"}
                         </span>
                       )}
                     </div>

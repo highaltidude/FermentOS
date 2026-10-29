@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, brewSessionsTable, recipesTable } from "@workspace/db";
+import { db, brewSessionsTable, brewSessionStatusLogTable, recipesTable } from "@workspace/db";
 import type { CreateBrewSessionBody } from "@workspace/api-zod";
 import { isMultiVariant, type RecipeVariant } from "../lib/recipeVariants";
 import {
@@ -37,6 +37,11 @@ async function insertSession(
   values: any,
 ): Promise<typeof brewSessionsTable.$inferSelect> {
   const [session] = await executor.insert(brewSessionsTable).values(values).returning();
+  // A batch entered part-way through (already fermenting or conditioning) gets
+  // its stage start logged too: dry hop days and "days in stage" count from it.
+  if (session && session.status !== "brew_day") {
+    await executor.insert(brewSessionStatusLogTable).values({ brewSessionId: session.id, status: session.status, changedAt: new Date() });
+  }
   return session;
 }
 

@@ -43,7 +43,7 @@ describe("shouldAutoAdvance", () => {
 });
 
 describe("overrulesAutoAdvance", () => {
-  const moveBack = { fromStatus: "conditioning", toStatus: "fermenting", perBrew: null, global: true, setsPerBrew: false };
+  const moveBack = { fromStatus: "conditioning", toStatus: "fermenting", perBrew: null, global: true, requested: undefined };
 
   it("treats moving back from Conditioning with auto-advance on as overruling it", () => {
     expect(overrulesAutoAdvance(moveBack)).toBe(true);
@@ -60,7 +60,13 @@ describe("overrulesAutoAdvance", () => {
     expect(overrulesAutoAdvance({ ...moveBack, perBrew: false })).toBe(false);
   });
 
-  it("leaves it to the request when it sets the switch itself", () => {
-    expect(overrulesAutoAdvance({ ...moveBack, setsPerBrew: true })).toBe(false);
+  it("leaves it to the request when it changes the switch itself", () => {
+    expect(overrulesAutoAdvance({ ...moveBack, requested: true })).toBe(false);
+    expect(overrulesAutoAdvance({ ...moveBack, requested: false })).toBe(false);
+  });
+
+  it("still overrules when the request resends the switch unchanged, as the edit form does", () => {
+    expect(overrulesAutoAdvance({ ...moveBack, requested: null })).toBe(true);
+    expect(overrulesAutoAdvance({ ...moveBack, perBrew: true, requested: true })).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable, type brewStatusEnum } from "@workspace/db";
-import { eq, isNotNull, and, gte, lte } from "drizzle-orm";
+import { eq, isNotNull, and, gte, lte, inArray } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
 import { batteryWarningLevel } from "../lib/batteryUtil";
 import { getConfigValue } from "./appConfig";
@@ -31,6 +31,28 @@ export function calcConnectionStatus(
   if (elapsed < intervalMs * 2) return "connected";
   if (elapsed < intervalMs * 4) return "warning";
   return "offline";
+}
+
+type ConnectionStatus = ReturnType<typeof calcConnectionStatus>;
+const CONNECTION_RANK: Record<ConnectionStatus, number> = { connected: 3, warning: 2, offline: 1, unknown: 0 };
+
+/**
+ * With several devices logging to one brew (a Shelly probe next to an
+ * iSpindel), each is judged against its own report interval and the brew is
+ * as connected as its best device; mixing one device's last-seen time with
+ * another's interval made the offline alert come and go.
+ */
+export function bestConnectionStatus(
+  devices: { id: number; lastSeenAt: Date | null }[],
+  readings: { deviceId: number; reportedInterval?: number | null }[],
+): ConnectionStatus {
+  let best: ConnectionStatus = "unknown";
+  for (const d of devices) {
+    const interval = [...readings].reverse().find((r) => r.deviceId === d.id)?.reportedInterval ?? null;
+    const s = calcConnectionStatus(d.lastSeenAt, interval);
+    if (CONNECTION_RANK[s] > CONNECTION_RANK[best]) best = s;
+  }
+  return best;
 }
 
 export function buildAlerts(
@@ -181,9 +203,21 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
   const { status, range: tempRange, originalGravity } = await resolveTempRange(brewId);
   const insights = calcInsights(readings, originalGravity);
 
-  const connectionStatus = calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
+  const activeIds = [...new Set(assignments.filter((a) => a.unassignedAt == null).map((a) => a.deviceId))];
+  const connectionStatus = activeIds.length > 1
+    ? bestConnectionStatus(await db.select().from(sensorDevicesTable).where(inArray(sensorDevicesTable.id, activeIds)), readings)
+    : calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
 
-  const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
+  // Battery comes from the last reading that has one, so a probe without a
+  // battery logging in between doesn't clear and re-raise the alert.
+  const batteryReading = [...readings].reverse().find((r) => r.batteryPercentEstimate != null && (activeIds.length === 0 || activeIds.includes(r.deviceId)));
+  const alertReading = latestReading && {
+    ...latestReading,
+    battery: batteryReading?.battery ?? null,
+    batteryPercentEstimate: batteryReading?.batteryPercentEstimate ?? null,
+  };
+
+  const alerts = buildAlerts(device ?? { lastSeenAt: null }, alertReading, connectionStatus, tempRange);
 
   if (isGravityStalled(readings)) {
     alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });

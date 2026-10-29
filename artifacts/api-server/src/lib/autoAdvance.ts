@@ -30,20 +30,23 @@ export function shouldAutoAdvance(input: {
 
 /**
  * Pulling a batch back from Conditioning to Fermenting is the brewer
- * overruling auto-advance. Unless the same request sets the per-batch switch
- * itself, it has to go off, or the next check would advance the batch again.
+ * overruling auto-advance. Unless the same request changes the per-batch
+ * switch itself, it has to go off, or the next check would advance the batch
+ * again. `requested` is the switch as sent: the edit form always sends it, so
+ * resending the value it already has doesn't count as choosing it.
  */
 export function overrulesAutoAdvance(input: {
   fromStatus: string;
   toStatus: string | undefined;
   perBrew: boolean | null | undefined;
   global: boolean;
-  setsPerBrew: boolean;
+  requested: boolean | null | undefined;
 }): boolean {
+  const setsPerBrew = input.requested !== undefined && input.requested !== (input.perBrew ?? null);
   return (
     input.fromStatus === "conditioning" &&
     input.toStatus === "fermenting" &&
-    !input.setsPerBrew &&
+    !setsPerBrew &&
     effectiveAutoAdvance(input.perBrew, input.global)
   );
 }

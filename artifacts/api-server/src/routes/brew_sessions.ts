@@ -171,7 +171,7 @@ router.put("/brew-sessions/:id", async (req, res) => {
     toStatus: body.data.status,
     perBrew: existing[0].autoAdvanceToConditioning,
     global: await getAutoConditioning(),
-    setsPerBrew: body.data.autoAdvanceToConditioning !== undefined,
+    requested: body.data.autoAdvanceToConditioning,
   })) {
     updatePayload.autoAdvanceToConditioning = false;
   }

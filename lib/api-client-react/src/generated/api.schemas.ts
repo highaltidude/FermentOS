@@ -2340,6 +2340,13 @@ export type GetSystemHealthHistoryParams = {
   hours?: number;
 };
 
+export type DeleteOutputDeviceParams = {
+  /**
+   * Remove it even if the relay can't be switched off first
+   */
+  force?: boolean;
+};
+
 export type ListFlowRunsParams = {
   /**
    * @minimum 1

@@ -1721,8 +1721,8 @@ are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 | POST | `/api/devices/probe` | Check an address before adding it — body `{ "host": string, "username"?: string, "password"?: string }`. Always `200`; `ok` is `false` with an `error` when the device can't be reached, isn't a Shelly, or rejects the credentials. Also reports `model`, `generation`, `isPill`, `pillMode`, `hasRelay` and `relayChannels` |
 | POST | `/api/devices` | Add a device — body `{ "name": string, "host": string, "channel"?: number, "username"?: string, "password"?: string }`. `deviceType` and `model` are detected from the device; `400` when it can't be reached |
 | GET | `/api/devices/:id` | Get one device |
-| PATCH | `/api/devices/:id` | Update any of `name`, `host`, `channel`, `username`, `password`, `enabled`. Omit `password` to keep it; send `null` to clear it. A new `host` is probed again to detect its type |
-| DELETE | `/api/devices/:id` | Switch the relay off (if it has one) and remove the device. The probe's sensor device and its readings are kept |
+| PATCH | `/api/devices/:id` | Update any of `name`, `host`, `channel`, `username`, `password`, `enabled`. Omit `password` to keep it; send `null` to clear it. A new `host` is probed again to detect its type. Disabling the device, or changing its `host` or `channel`, switches the old relay off first; disabling also unassigns its probe from its brew |
+| DELETE | `/api/devices/:id` | Switch the relay off (if it has one) and remove the device. If the relay can't be switched off the device is kept and `502` is returned; add `?force=true` to remove it anyway. The probe is unassigned from its brew, and its sensor device and readings are kept |
 | POST | `/api/devices/:id/relay` | Switch by hand — body `{ "on": boolean, "durationSec"?: number }`. With `durationSec` the Shelly switches itself back off after that many seconds. Returns `409` when the device has no relay, `502` when it can't be reached |
 | POST | `/api/devices/:id/safe-defaults` | Set the relay to come back off after a power cut. Returns `409` when the device has no relay, `502` when it can't be reached |
 

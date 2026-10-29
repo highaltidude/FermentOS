@@ -1812,11 +1812,23 @@ paths:
       summary: Remove a relay device. Its probe's sensor history is kept.
       parameters:
         - $ref: "#/components/parameters/IdParam"
+        - name: force
+          in: query
+          required: false
+          description: Remove it even if the relay can't be switched off first
+          schema:
+            type: boolean
       responses:
         "204":
           description: Deleted
         "409":
           description: An enabled flow controls this relay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The relay couldn't be switched off, so the device was kept; retry with force=true to remove it anyway
           content:
             application/json:
               schema:

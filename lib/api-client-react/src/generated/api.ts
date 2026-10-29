@@ -42,6 +42,7 @@ import type {
   DashboardSummary,
   DefaultReadingsShownBody,
   DefaultReadingsShownResponse,
+  DeleteOutputDeviceParams,
   DryHopScheduleItem,
   Equipment,
   ErrorResponse,
@@ -9357,8 +9358,23 @@ export const useUpdateOutputDevice = <
   return useMutation(getUpdateOutputDeviceMutationOptions(options));
 };
 
-export const getDeleteOutputDeviceUrl = (id: number) => {
-  return `/api/devices/${id}`;
+export const getDeleteOutputDeviceUrl = (
+  id: number,
+  params?: DeleteOutputDeviceParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/devices/${id}?${stringifiedParams}`
+    : `/api/devices/${id}`;
 };
 
 /**
@@ -9366,9 +9382,10 @@ export const getDeleteOutputDeviceUrl = (id: number) => {
  */
 export const deleteOutputDevice = async (
   id: number,
+  params?: DeleteOutputDeviceParams,
   options?: Parameters<typeof customFetch>[1],
 ): Promise<void> => {
-  return customFetch<void>(getDeleteOutputDeviceUrl(id), {
+  return customFetch<void>(getDeleteOutputDeviceUrl(id, params), {
     ...options,
     method: "DELETE",
   });
@@ -9407,9 +9424,9 @@ export const getDeleteOutputDeviceMutationOptions = <
     Awaited<ReturnType<typeof deleteOutputDevice>>,
     DeleteOutputDeviceMutationVariables
   > = (props) => {
-    const { id } = props ?? {};
+    const { id, params } = props ?? {};
 
-    return deleteOutputDevice(id, requestOptions);
+    return deleteOutputDevice(id, params, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -9420,7 +9437,10 @@ export type DeleteOutputDeviceMutationResult = NonNullable<
 >;
 
 export type DeleteOutputDeviceMutationError = ErrorType<ErrorResponse>;
-export type DeleteOutputDeviceMutationVariables = { id: number };
+export type DeleteOutputDeviceMutationVariables = {
+  id: number;
+  params?: DeleteOutputDeviceParams;
+};
 
 /**
  * @summary Remove a relay device. Its probe's sensor history is kept.

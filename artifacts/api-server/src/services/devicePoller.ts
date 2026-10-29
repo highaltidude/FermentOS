@@ -36,7 +36,7 @@ export type LiveDeviceState = {
 const live = new Map<number, LiveDeviceState>();
 const lastStateWrite = new Map<number, number>();
 const lastProbeLog = new Map<number, number>();
-let running = false;
+let running: Promise<void> | null = null;
 
 export function getLiveState(deviceId: number): LiveDeviceState | null {
   return live.get(deviceId) ?? null;
@@ -136,16 +136,25 @@ export async function pollAllDevices(): Promise<void> {
   );
 }
 
+/**
+ * Poll every device now, or wait for the pass already under way. Two passes at
+ * once could save their device states out of order.
+ */
+export function pollNow(): Promise<void> {
+  if (running) return running;
+  running = pollAllDevices()
+    .catch((err) => logger.error({ err }, "Device poll pass failed"))
+    .finally(() => {
+      running = null;
+    });
+  return running;
+}
+
 export function startDevicePoller(): void {
   cron.schedule(POLL_SCHEDULE, () => {
     // A slow device can make one pass outlast the interval; skip rather than pile up.
     if (running) return;
-    running = true;
-    pollAllDevices()
-      .catch((err) => logger.error({ err }, "Device poll pass failed"))
-      .finally(() => {
-        running = false;
-      });
+    void pollNow();
   });
   logger.info("Output device poller started");
 }

@@ -5802,6 +5802,13 @@ export const DeleteOutputDeviceParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const DeleteOutputDeviceQueryParams = zod.object({
+  force: zod.coerce
+    .boolean()
+    .optional()
+    .describe("Remove it even if the relay can't be switched off first"),
+});
+
 export const DeleteOutputDeviceResponse = zod.void();
 
 /**

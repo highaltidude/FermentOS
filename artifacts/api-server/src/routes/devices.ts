@@ -10,8 +10,9 @@ import {
 import { parseIdParam } from "../lib/http";
 import { normaliseShellyHost, isPill, type ShellyInfo } from "../lib/shellyParse";
 import { probeShelly, getShellyStatus, getPillMode, setShellyRelay, applyShellySafeDefaults } from "../services/shelly";
-import { getLiveState, isReachable, noteRelayState, forgetDevice, pollAllDevices } from "../services/devicePoller";
+import { getLiveState, isReachable, noteRelayState, forgetDevice, pollNow } from "../services/devicePoller";
 import { relayOwners } from "../services/flowEngine";
+import { closeActiveAssignment } from "../services/sensorDevices";
 
 const router = Router();
 
@@ -112,7 +113,7 @@ router.post("/", async (req, res) => {
     })
     .returning();
   // Poll straight away so the list shows real state instead of "unreachable".
-  await pollAllDevices().catch(() => {});
+  await pollNow();
   return res.status(201).json(toApi((await findDevice(device!.id)) ?? device!));
 });
 
@@ -133,6 +134,8 @@ router.patch("/:id", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
 
   const { host: rawHost, password, username, ...rest } = body.data;
+  const before = await findDevice(id);
+  if (!before) return res.status(404).json({ error: "Device not found" });
   let host: string | undefined;
   let detected: ShellyInfo | undefined;
   if (rawHost !== undefined) {
@@ -161,6 +164,18 @@ router.patch("/:id", async (req, res) => {
     .returning();
   if (!device) return res.status(404).json({ error: "Device not found" });
 
+  // Disabling or re-addressing a device ends FermentOS's hold on it, so switch
+  // the old relay off (best effort: it may be why the address is changing)
+  // rather than leave it in whatever state it was. A disabled device's probe
+  // stops reporting, so it comes off its brew too.
+  const disabled = rest.enabled === false && before.enabled;
+  const moved = (host !== undefined && host !== before.host) || (rest.channel !== undefined && rest.channel !== before.channel);
+  if ((disabled || moved) && hasRelay(before)) {
+    const off = await setShellyRelay(before, false);
+    if (!off.ok) req.log.warn({ deviceId: id, reason: off.reason }, "Could not switch the old relay off");
+  }
+  if (disabled && device.probeSensorDeviceId != null) await closeActiveAssignment(device.probeSensorDeviceId);
+
   // Keep the probe's sensor name in step, so brew charts show the new name.
   if (rest.name !== undefined && device.probeSensorDeviceId != null) {
     await db
@@ -184,8 +199,16 @@ router.delete("/:id", async (req, res) => {
   const owner = relayOwners().get(id);
   if (owner) return res.status(409).json({ error: `Turn off the flow "${owner.name}" before removing this relay` });
   if (device) {
-    // Don't leave a heater running on a relay nothing manages any more.
-    if (hasRelay(device)) await setShellyRelay(device, false);
+    // Don't leave a heater running on a relay nothing manages any more. If it
+    // can't be reached, say so and let the brewer decide (force=true).
+    if (hasRelay(device)) {
+      const off = await setShellyRelay(device, false);
+      if (!off.ok && req.query.force !== "true") {
+        return res.status(502).json({ error: `Couldn't switch ${device.name} off: ${off.reason}` });
+      }
+    }
+    // Its probe stops reporting, so it comes off its brew; the history stays.
+    if (device.probeSensorDeviceId != null) await closeActiveAssignment(device.probeSensorDeviceId);
     await db.delete(outputDevicesTable).where(eq(outputDevicesTable.id, id));
     forgetDevice(id);
   }

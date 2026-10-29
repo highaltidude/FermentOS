@@ -47,6 +47,15 @@ describe("thermostat setpointFrom", () => {
     expect(thermostatTarget({ setpointFrom: "conditionIdeal", setpointC: 18 }, brew({ conditionIdealC: null })))
       .toEqual({ ok: false, message: "Pale Ale has no ideal conditioning temperature set" });
   });
+
+  it("refuses a followed target no fermenter should aim at", () => {
+    // 68 stored as °F but read as °C after the unit setting was flipped.
+    expect(thermostatTarget({ setpointFrom: "fermentIdeal", setpointC: 18 }, brew({ fermentIdealC: 68 })))
+      .toMatchObject({ ok: false, message: expect.stringMatching(/out of range/) });
+    // 20 stored as °C but read as °F: -6.7 °C.
+    expect(thermostatTarget({ setpointFrom: "fermentIdeal", setpointC: 18 }, brew({ fermentIdealC: (20 - 32) * 5 / 9 })).ok).toBe(false);
+    expect(thermostatTarget({ setpointFrom: "conditionIdeal", setpointC: 18 }, brew({ conditionIdealC: 0 }))).toEqual({ ok: true, targetC: 0 });
+  });
 });
 
 describe("evaluateTemperatureTick with brew targets", () => {

@@ -1,6 +1,6 @@
 import express, { Router, type RequestHandler, type Response } from "express";
-import { eq, ilike, or, and, avg, count, sql, asc, inArray } from "drizzle-orm";
-import { db, recipesTable, recipeIngredientsTable, recipeStepsTable, brewSessionsTable, flowRecipesTable } from "@workspace/db";
+import { eq, ilike, or, and, avg, count, sql, asc, inArray, ne } from "drizzle-orm";
+import { db, recipesTable, recipeIngredientsTable, recipeStepsTable, brewSessionsTable, flowRecipesTable, flowsTable } from "@workspace/db";
 import {
   CreateRecipeBody,
   UpdateRecipeBody,
@@ -408,18 +408,42 @@ router.delete("/recipes/:id", async (req, res) => {
 
   // Forks move up to the deleted recipe's own parent, so a family keeps its
   // shape when a middle version goes. Its brews keep their recipe snapshots.
-  await db.transaction(async (tx) => {
+  const linkedFlows = await db.transaction(async (tx) => {
     const [gone] = await tx
-      .select({ parentRecipeId: recipesTable.parentRecipeId })
+      .select({ name: recipesTable.name, parentRecipeId: recipesTable.parentRecipeId })
       .from(recipesTable)
       .where(eq(recipesTable.id, id));
-    if (!gone) return;
+    if (!gone) return 0;
     await tx
       .update(recipesTable)
       .set({ parentRecipeId: gone.parentRecipeId })
       .where(eq(recipesTable.parentRecipeId, id));
+
+    // A flow with no recipe links runs for any brew, so one that loses its
+    // only recipe here is switched off rather than left to follow every brew.
+    const flowIds = (await tx
+      .select({ flowId: flowRecipesTable.flowId })
+      .from(flowRecipesTable)
+      .where(eq(flowRecipesTable.recipeId, id))).map((l) => l.flowId);
+    if (flowIds.length > 0) {
+      const stillLinked = new Set((await tx
+        .select({ flowId: flowRecipesTable.flowId })
+        .from(flowRecipesTable)
+        .where(and(inArray(flowRecipesTable.flowId, flowIds), ne(flowRecipesTable.recipeId, id)))).map((l) => l.flowId));
+      const orphaned = flowIds.filter((f) => !stillLinked.has(f));
+      if (orphaned.length > 0) {
+        await tx
+          .update(flowsTable)
+          .set({ enabled: false, lastError: `Turned off: its only recipe, ${gone.name}, was deleted` })
+          .where(inArray(flowsTable.id, orphaned));
+      }
+    }
     await tx.delete(recipesTable).where(eq(recipesTable.id, id));
+    return flowIds.length;
   });
+  if (linkedFlows > 0) {
+    await reloadFlows().catch((err) => req.log.error({ err }, "Failed to reload flows after recipe delete"));
+  }
   return res.status(204).send();
 });
 

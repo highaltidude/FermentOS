@@ -202,7 +202,7 @@ router.post("/:id/run", async (req, res) => {
     return res.status(400).json({ error: "Only an enabled schedule flow can be run by hand" });
   }
   // A run can include delays of many minutes, so don't hold the request open.
-  void runScheduleFlow(id, "manual");
+  runScheduleFlow(id, "manual").catch((err) => req.log.error({ err, flowId: id }, "Manual flow run failed"));
   return res.status(202).json({ ok: true, message: "Started" });
 });
 

@@ -220,7 +220,12 @@ function Editor({ flow }: { flow: Flow | null }) {
   const run = useRunFlow();
   const saving = create.isPending || update.isPending;
 
+  // A ref, not `saving`: a second Ctrl+S can land before the re-render, and on
+  // a new flow that would create it twice.
+  const saveInFlight = useRef(false);
   const save = async () => {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
     const body = { name: name.trim() || "Untitled flow", description: description.trim() || null, graph, recipeIds };
     try {
       const result = flow ? await update.mutateAsync({ id: flow.id, data: body }) : await create.mutateAsync({ data: body });
@@ -237,6 +242,8 @@ function Editor({ flow }: { flow: Flow | null }) {
       const p = problemsFrom(err);
       if (p) setProblems(p);
       toast({ title: "Couldn't save the flow", description: apiError(err), variant: "destructive" });
+    } finally {
+      saveInFlight.current = false;
     }
   };
   const saveRef = useRef(save);

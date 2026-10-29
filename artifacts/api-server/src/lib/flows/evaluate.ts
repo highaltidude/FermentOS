@@ -33,6 +33,14 @@ export type NodeState = { active: boolean; relayOn?: boolean; reason?: Thermosta
 
 const TARGET_LABELS = { fermentIdeal: "fermentation", conditionIdeal: "conditioning" } as const;
 
+/**
+ * Bounds on a target followed from a brew. Brew temperatures are stored in the
+ * unit of the day, so flipping the unit setting reinterprets them (68 °F read
+ * as 68 °C); a target outside these is treated as missing, not obeyed.
+ */
+export const FOLLOWED_TARGET_MIN_C = -5;
+export const FOLLOWED_TARGET_MAX_C = 40;
+
 /** A thermostat's target this tick, or why there isn't one. */
 export function thermostatTarget(
   cfg: Pick<ThermostatConfig, "setpointFrom" | "setpointC">,
@@ -42,6 +50,12 @@ export function thermostatTarget(
   if (!brew) return { ok: false, message: "No brew is assigned to the temperature sensor, so there's no target to follow" };
   const targetC = cfg.setpointFrom === "fermentIdeal" ? brew.fermentIdealC : brew.conditionIdealC;
   if (targetC == null) return { ok: false, message: `${brew.name} has no ideal ${TARGET_LABELS[cfg.setpointFrom]} temperature set` };
+  if (targetC < FOLLOWED_TARGET_MIN_C || targetC > FOLLOWED_TARGET_MAX_C) {
+    return {
+      ok: false,
+      message: `${brew.name}'s ideal ${TARGET_LABELS[cfg.setpointFrom]} temperature (${targetC.toFixed(1)}°C) is out of range; check it and the temperature unit setting`,
+    };
+  }
   return { ok: true, targetC };
 }
 

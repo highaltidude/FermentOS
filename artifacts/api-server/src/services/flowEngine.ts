@@ -263,6 +263,9 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
   const now = new Date();
   const reading = await readSource(compiled.source!, needsBrew(entry));
   const devices = await loadDevices(compiled.relays);
+  // A reload while we were reading has already switched off what this flow no
+  // longer owns; acting on the old graph now would switch it back on.
+  if (superseded(entry)) return;
 
   // A recipe-linked flow with someone else's brew (or none) on its sensor is
   // idle, not broken: relays off, a note in the log, no alert. It takes
@@ -271,6 +274,7 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
   const standby = standbyReason(entry, reading.brew);
   if (standby) {
     await Promise.all([...devices.values()].map((d) => driveRelay(d, false)));
+    if (superseded(entry)) return;
     notifyActive.set(flow.id, new Set());
     status.set(flow.id, {
       flowId: flow.id,
@@ -286,7 +290,10 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
     if (prev?.standby !== standby) await logRun(flow.id, "tick", "skipped", standby);
     return;
   }
-  if (prev?.standby) await logRun(flow.id, "tick", "ok", `Running: ${reading.brew!.name} is on the sensor`);
+  // No brew means the recipe links were removed while standing by.
+  if (prev?.standby) {
+    await logRun(flow.id, "tick", "ok", reading.brew ? `Running: ${reading.brew.name} is on the sensor` : "Running: no longer linked to a recipe");
+  }
 
   let failsafe = reading.stale;
   const missing = compiled.relays.filter((id) => !devices.has(id));
@@ -309,6 +316,7 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
 
   const holdOff = async (reason: string, quiet: boolean) => {
     await Promise.all([...devices.values()].map((d) => driveRelay(d, false)));
+    if (superseded(entry)) return;
     notifyActive.set(flow.id, new Set());
     status.set(flow.id, next);
     if (!quiet && prev?.failsafe !== reason) {
@@ -349,12 +357,20 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
   const temp = await formatTemp(reading.tempC);
   if (prev?.failsafe) await logRun(flow.id, "tick", "ok", `Recovered: temperature ${temp}`);
 
+  const refused: string[] = [];
   for (const [deviceId, want] of result.desired) {
     const device = devices.get(deviceId)!;
+    if (superseded(entry)) return;
     const { changed, ok } = await driveRelay(device, want.on);
+    if (want.on && superseded(entry) && !relayOwners().has(deviceId)) {
+      await driveRelay(device, false);
+      return;
+    }
     if (!ok) {
-      // The poller will mark it unreachable after a few misses and the next
-      // tick fails safe; until then the device's own timer bounds the damage.
+      // An unreachable relay fails safe on the next tick once the poller
+      // notices; one that answers polls but refuses commands never would, so
+      // it's reported here. The device's own timer bounds the damage.
+      refused.push(device.name);
       continue;
     }
     if (changed) {
@@ -376,7 +392,18 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
     }
   }
   notifyActive.set(flow.id, new Set(result.notify.map((n) => n.id)));
-  await setLastError(flow.id, null);
+
+  const refusal = refused.length > 0 ? `${refused.join(", ")} didn't accept the command to switch` : null;
+  if (refusal && flow.lastError !== refusal) {
+    await logRun(flow.id, "tick", "error", refusal);
+    await notify(flow, "relay not switching", `${refusal}. Check the device is set up as a relay and reachable.`, "flow_failsafe");
+  }
+  await setLastError(flow.id, refusal);
+}
+
+/** Whether a reload has replaced or removed this flow since the tick began. */
+function superseded(entry: ActiveFlow): boolean {
+  return active.get(entry.flow.id) !== entry;
 }
 
 async function runTick(): Promise<void> {
@@ -388,12 +415,13 @@ async function runTick(): Promise<void> {
       logger.error({ err, flowId: entry.flow.id }, "Flow tick failed");
       const message = err instanceof Error ? err.message : String(err);
       await allOff(entry.compiled.relays).catch(() => {});
+      if (superseded(entry)) continue;
       const prev = status.get(entry.flow.id);
       if (prev?.failsafe !== "error") {
         await logRun(entry.flow.id, "tick", "error", `Relays off after an error: ${message}`);
-        await notify(entry.flow, "relays switched off", `The flow hit an error (${message}) and its relays were switched off.`, "flow_failsafe");
+        await notify(entry.flow, "relays switched off", `The flow hit an error (${message}) and its relays were switched off.`, "flow_failsafe").catch(() => {});
       }
-      status.set(entry.flow.id, { ...(prev ?? emptyStatus(entry)), failsafe: "error", lastTickAt: new Date() });
+      status.set(entry.flow.id, { ...(prev ?? emptyStatus(entry)), failsafe: "error", standby: null, lastTickAt: new Date() });
       await setLastError(entry.flow.id, message).catch(() => {});
     }
   }
@@ -423,7 +451,7 @@ export async function runScheduleFlow(flowId: number, trigger: "schedule" | "man
   if (!entry || entry.compiled.kind !== "schedule") return { ok: false, message: "Flow is not an enabled schedule flow" };
   const { flow, compiled } = entry;
   const gen = generation;
-  const devices = await loadDevices(compiled.relays);
+  let devices = new Map<number, OutputDevice>();
   const done: string[] = [];
 
   const visit = async (node: FlowNode): Promise<void> => {
@@ -444,6 +472,12 @@ export async function runScheduleFlow(flowId: number, trigger: "schedule" | "man
         if (!device) throw new Error("A relay this flow switches has been removed");
         const on = node.config.action === "onFor";
         const { ok } = await driveRelay(device, on, on ? node.config.minutes! * 60 : undefined);
+        // Edited or disabled while the command was in flight: the reload's
+        // "off" may have landed first, so don't leave the relay on behind it.
+        if (on && gen !== generation && !relayOwners().has(device.id)) {
+          await driveRelay(device, false);
+          return;
+        }
         if (!ok) throw new Error(`Couldn't reach ${device.name}`);
         done.push(on ? `${device.name} on for ${node.config.minutes} min` : `${device.name} off`);
         break;
@@ -459,6 +493,7 @@ export async function runScheduleFlow(flowId: number, trigger: "schedule" | "man
   };
 
   try {
+    devices = await loadDevices(compiled.relays);
     await visit(compiled.trigger);
     const message = done.length > 0 ? done.join("; ") : "Nothing to do";
     await logRun(flow.id, trigger, done.length > 0 ? "ok" : "skipped", message);
@@ -468,8 +503,8 @@ export async function runScheduleFlow(flowId: number, trigger: "schedule" | "man
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err, flowId }, "Schedule flow run failed");
     await logRun(flow.id, trigger, "error", message);
-    await setLastError(flow.id, message);
-    await notify(flow, "run failed", message, "flow_failsafe");
+    await setLastError(flow.id, message).catch(() => {});
+    await notify(flow, "run failed", message, "flow_failsafe").catch(() => {});
     return { ok: false, message };
   }
 }
@@ -481,7 +516,24 @@ export async function runScheduleFlow(flowId: number, trigger: "schedule" | "man
  * after any flow is created, changed, enabled, disabled or deleted. Relays an
  * outgoing flow controlled are switched off unless another flow now owns them.
  */
-export async function reloadFlows(): Promise<void> {
+export function reloadFlows(): Promise<void> {
+  // One at a time: two interleaved reloads would each schedule every schedule
+  // flow, and the task handle the first one set would leak and fire forever.
+  const run = reloadQueue.catch(() => {}).then(loadFlows);
+  reloadQueue = run;
+  return run;
+}
+
+let reloadQueue: Promise<void> = Promise.resolve();
+/** False until a reload has succeeded; the tick retries until one does. */
+let loaded = false;
+
+async function loadFlows(): Promise<void> {
+  // Read everything first: if the database is unavailable the flows already
+  // running keep running rather than all being dropped.
+  const flows = await db.select().from(flowsTable).where(eq(flowsTable.enabled, true));
+  const links = await flowRecipeLinks(flows.map((f) => f.id));
+
   generation++;
   const before = new Set([...active.values()].flatMap((a) => a.compiled.relays));
 
@@ -489,8 +541,6 @@ export async function reloadFlows(): Promise<void> {
   scheduleTasks.clear();
   active.clear();
 
-  const flows = await db.select().from(flowsTable).where(eq(flowsTable.enabled, true));
-  const links = await flowRecipeLinks(flows.map((f) => f.id));
   for (const flow of flows) {
     const recipes = links.get(flow.id) ?? [];
     const { compiled, problems } = validateFlow(flow.graph, recipes.length);
@@ -498,7 +548,7 @@ export async function reloadFlows(): Promise<void> {
       // Shouldn't happen — the API refuses to enable an invalid flow — but a
       // restore or a manual DB edit could get here.
       logger.warn({ flowId: flow.id, problems }, "Enabled flow is invalid; skipping");
-      await setLastError(flow.id, problems[0]?.message ?? "Flow is invalid");
+      await setLastError(flow.id, problems[0]?.message ?? "Flow is invalid").catch(() => {});
       continue;
     }
     const entry = { flow, compiled, recipes };
@@ -519,6 +569,7 @@ export async function reloadFlows(): Promise<void> {
 
   const after = new Set([...active.values()].flatMap((a) => a.compiled.relays));
   const released = [...before].filter((id) => !after.has(id));
+  loaded = true;
   if (released.length > 0) await allOff(released);
 
   logger.info({ enabled: active.size }, "Brew flows loaded");
@@ -546,12 +597,19 @@ export function problemsSummary(problems: FlowProblem[]): string {
  */
 export async function startFlowEngine(): Promise<void> {
   startedAt = Date.now();
-  const flows = await db.select().from(flowsTable).where(eq(flowsTable.enabled, true));
-  const relays = new Set<number>();
-  for (const flow of flows) for (const r of validateFlow(flow.graph).compiled?.relays ?? []) relays.add(r);
-  await allOff([...relays]).catch((err) => logger.error({ err }, "Failed to switch flow relays off at boot"));
+  try {
+    const flows = await db.select().from(flowsTable).where(eq(flowsTable.enabled, true));
+    const relays = new Set<number>();
+    for (const flow of flows) for (const r of validateFlow(flow.graph).compiled?.relays ?? []) relays.add(r);
+    await allOff([...relays]);
+  } catch (err) {
+    logger.error({ err }, "Failed to switch flow relays off at boot");
+  }
 
-  await reloadFlows();
-  cron.schedule(TICK_SCHEDULE, () => void tick());
+  await reloadFlows().catch((err) => logger.error({ err }, "Failed to load flows at boot; retrying every tick"));
+  cron.schedule(TICK_SCHEDULE, () => {
+    if (loaded) void tick();
+    else reloadFlows().catch((err) => logger.error({ err }, "Failed to load flows"));
+  });
   logger.info("Flow engine started");
 }

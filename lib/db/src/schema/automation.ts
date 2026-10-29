@@ -2,24 +2,31 @@ import { pgTable, serial, text, integer, timestamp, jsonb, boolean, primaryKey }
 import { sensorDevicesTable } from "./sensors";
 import { recipesTable } from "./recipes";
 
-// Devices FermentOS switches (relays), as opposed to sensor_devices, which it
-// only reads. The first driver is the Shelly Gen1 HTTP API (SHSW-1).
-export const outputDeviceTypeEnum = ["shelly_gen1"] as const;
+// Shelly devices FermentOS polls and switches, as opposed to sensor_devices,
+// which it only reads. Two drivers: the Gen1 REST API (SHSW-1) and the Gen2+
+// RPC API (Plus, Pro, Gen3, Gen4, The Pill). Most are relays; The Pill in
+// OneWire mode is a temperature probe with no relay.
+export const outputDeviceTypeEnum = ["shelly_gen1", "shelly_gen2"] as const;
 
 export type OutputDeviceState = {
   ison: boolean | null;
   tempC: number | null;
   rssi: number | null;
+  /** Missing on rows written before Gen2+ support, all of which were relays. */
+  hasRelay?: boolean;
 };
 
 export const outputDevicesTable = pgTable("output_devices", {
   id: serial("id").primaryKey(),
   deviceType: text("device_type", { enum: outputDeviceTypeEnum }).notNull().default("shelly_gen1"),
+  // Model code as the device reports it, e.g. "SHSW-1". Null on rows added before it was recorded.
+  model: text("model"),
   name: text("name").notNull(),
   // Hostname or IP on the LAN, without scheme (e.g. "192.168.1.40").
   host: text("host").notNull(),
   channel: integer("channel").notNull().default(0),
-  // HTTP Basic credentials, only set when the device has restricted login on.
+  // Credentials, only set when the device has restricted login on: HTTP Basic
+  // on Gen1, digest on Gen2+ (where the username is always "admin").
   // Stored in plaintext like the app's other secrets; never returned by the API.
   username: text("username"),
   password: text("password"),

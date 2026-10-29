@@ -54,17 +54,20 @@ function NumberField({ value, onChange, toDisplay = (v) => v, fromDisplay = (v) 
 }
 
 function RelaySelect({ value, onChange, devices, flowId }: { value: unknown; onChange: (id: number | null) => void; devices: OutputDevice[]; flowId: number | null }) {
+  // Probe-only devices (The Pill in OneWire mode) can't be switched. Keep the
+  // current choice listed even so, so a Pill moved out of SSR mode shows up as the problem.
+  const relays = devices.filter((d) => d.state.hasRelay || d.id === value);
   return (
     <div>
       <label className={label}>Relay</label>
       <select className={select} value={typeof value === "number" ? value : ""} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
         <option value="">Choose a relay…</option>
-        {devices.map((d) => {
+        {relays.map((d) => {
           const other = d.controlledBy && d.controlledBy.flowId !== flowId ? d.controlledBy.name : null;
-          return <option key={d.id} value={d.id}>{d.name}{other ? ` (used by ${other})` : ""}</option>;
+          return <option key={d.id} value={d.id}>{d.name}{!d.state.hasRelay ? " (no relay)" : other ? ` (used by ${other})` : ""}</option>;
         })}
       </select>
-      {devices.length === 0 && <p className={hint}>Add a Shelly relay in Settings → System → Integrations first.</p>}
+      {relays.length === 0 && <p className={hint}>Add a Shelly relay in Settings → System → Integrations first.</p>}
     </div>
   );
 }

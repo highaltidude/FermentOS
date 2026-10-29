@@ -34,6 +34,7 @@ export function RecipeFlowsCard({ recipeId, recipeName, hasFermentTemp }: { reci
   const [pick, setPick] = useState("");
   const { data: flows = [] } = useListFlows({ query: { queryKey: getListFlowsQueryKey() } });
   const { data: devices = [] } = useListOutputDevices({ query: { queryKey: getListOutputDevicesQueryKey() } });
+  const hasRelays = devices.some((d) => d.state.hasRelay);
 
   const linked = flows.filter((f) => f.recipeIds.includes(recipeId));
   // Only temperature flows have a brew to match; a flow still being built (no kind yet) can be linked and finished later.
@@ -57,19 +58,19 @@ export function RecipeFlowsCard({ recipeId, recipeName, hasFermentTemp }: { reci
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">Automations that run while a batch of this recipe is on their sensor</p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setShowNew(true)} disabled={devices.length === 0}>
+        <Button size="sm" variant="outline" onClick={() => setShowNew(true)} disabled={!hasRelays}>
           <Plus className="w-3.5 h-3.5 mr-1" />New
         </Button>
       </div>
       <div className="p-4 space-y-3">
-        {devices.length === 0 && (
+        {!hasRelays && (
           <p className="text-xs text-muted-foreground">
             Flows switch Shelly relays. Add one under{" "}
             <Link href="/settings?tab=system&section=connectivity" className="text-primary underline underline-offset-2">Settings → System → Integrations</Link> first.
           </p>
         )}
         {linked.length === 0 ? (
-          devices.length > 0 && (
+          hasRelays && (
             <p className="text-sm text-muted-foreground">
               No flows linked. Create one to hold this recipe's fermentation temperature, or link one you already have.
             </p>

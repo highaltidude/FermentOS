@@ -4812,7 +4812,17 @@ export const DisableHttpsResponse = zod.object({
  */
 export const ListOutputDevicesResponseItem = zod.object({
   id: zod.number().int(),
-  deviceType: zod.enum(["shelly_gen1"]),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
   name: zod.string(),
   host: zod.string(),
   channel: zod.number().int(),
@@ -4830,10 +4840,17 @@ export const ListOutputDevicesResponseItem = zod.object({
   state: zod.object({
     reachable: zod.boolean(),
     ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
     tempC: zod
       .number()
       .nullable()
-      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
@@ -4856,7 +4873,7 @@ export const ListOutputDevicesResponse = zod.array(
 );
 
 /**
- * @summary Add a relay device
+ * @summary Add a Shelly device. Its generation and model are detected from the device.
  */
 
 export const createOutputDeviceBodyChannelMin = 0;
@@ -4871,7 +4888,17 @@ export const CreateOutputDeviceBody = zod.object({
 
 export const CreateOutputDeviceResponse = zod.object({
   id: zod.number().int(),
-  deviceType: zod.enum(["shelly_gen1"]),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
   name: zod.string(),
   host: zod.string(),
   channel: zod.number().int(),
@@ -4889,10 +4916,17 @@ export const CreateOutputDeviceResponse = zod.object({
   state: zod.object({
     reachable: zod.boolean(),
     ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
     tempC: zod
       .number()
       .nullable()
-      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
@@ -4912,7 +4946,7 @@ export const CreateOutputDeviceResponse = zod.object({
 });
 
 /**
- * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ * @summary Check that an address answers as a Shelly device (any generation), before adding it
  */
 
 export const ProbeOutputDeviceBody = zod.object({
@@ -4926,8 +4960,27 @@ export const ProbeOutputDeviceResponse = zod.object({
   error: zod.string().nullable(),
   host: zod.string().describe("The address as it will be stored"),
   model: zod.string().nullable().describe("Shelly model code, e.g. SHSW-1"),
+  generation: zod
+    .number()
+    .int()
+    .nullable()
+    .describe("Shelly API generation; 1 for Gen1, 2 or more for the RPC API"),
+  isPill: zod.boolean().describe("True when the device is The Pill by Shelly"),
+  pillMode: zod
+    .string()
+    .nullable()
+    .describe(
+      "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, …); null for other devices",
+    ),
   authRequired: zod.boolean(),
   ison: zod.boolean().nullable(),
+  hasRelay: zod
+    .boolean()
+    .describe("Whether the device has a relay on channel 0"),
+  relayChannels: zod
+    .number()
+    .int()
+    .describe("How many relay channels the device has"),
   tempC: zod.number().nullable(),
 });
 
@@ -4940,7 +4993,17 @@ export const GetOutputDeviceParams = zod.object({
 
 export const GetOutputDeviceResponse = zod.object({
   id: zod.number().int(),
-  deviceType: zod.enum(["shelly_gen1"]),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
   name: zod.string(),
   host: zod.string(),
   channel: zod.number().int(),
@@ -4958,10 +5021,17 @@ export const GetOutputDeviceResponse = zod.object({
   state: zod.object({
     reachable: zod.boolean(),
     ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
     tempC: zod
       .number()
       .nullable()
-      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
@@ -5000,7 +5070,17 @@ export const UpdateOutputDeviceBody = zod.object({
 
 export const UpdateOutputDeviceResponse = zod.object({
   id: zod.number().int(),
-  deviceType: zod.enum(["shelly_gen1"]),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
   name: zod.string(),
   host: zod.string(),
   channel: zod.number().int(),
@@ -5018,10 +5098,17 @@ export const UpdateOutputDeviceResponse = zod.object({
   state: zod.object({
     reachable: zod.boolean(),
     ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
     tempC: zod
       .number()
       .nullable()
-      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
@@ -5073,7 +5160,17 @@ export const SetOutputDeviceRelayBody = zod.object({
 
 export const SetOutputDeviceRelayResponse = zod.object({
   id: zod.number().int(),
-  deviceType: zod.enum(["shelly_gen1"]),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
   name: zod.string(),
   host: zod.string(),
   channel: zod.number().int(),
@@ -5091,10 +5188,17 @@ export const SetOutputDeviceRelayResponse = zod.object({
   state: zod.object({
     reachable: zod.boolean(),
     ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
     tempC: zod
       .number()
       .nullable()
-      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),
@@ -5122,7 +5226,17 @@ export const ApplyOutputDeviceSafeDefaultsParams = zod.object({
 
 export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
   id: zod.number().int(),
-  deviceType: zod.enum(["shelly_gen1"]),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
   name: zod.string(),
   host: zod.string(),
   channel: zod.number().int(),
@@ -5140,10 +5254,17 @@ export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
   state: zod.object({
     reachable: zod.boolean(),
     ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
     tempC: zod
       .number()
       .nullable()
-      .describe("Add-on probe temperature in °C, null when no probe is fitted"),
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
     rssi: zod.number().int().nullable(),
     lastError: zod.string().nullable(),
   }),

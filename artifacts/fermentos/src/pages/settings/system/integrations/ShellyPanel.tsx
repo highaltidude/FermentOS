@@ -26,10 +26,38 @@ import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { getErrorMessage } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const emptyForm = { name: "", host: "", username: "", password: "" };
+const emptyForm = { name: "", host: "", username: "", password: "", channel: "0" };
 
 function formatTemp(tempC: number, unit: "C" | "F"): string {
   return unit === "F" ? `${(tempC * 9 / 5 + 32).toFixed(1)}°F` : `${tempC.toFixed(1)}°C`;
+}
+
+const PILL_MODES: Record<string, string> = {
+  onewire: "OneWire probe mode",
+  ssr: "SSR relay mode",
+  dht22: "DHT22 mode",
+  analog_in: "analog input mode",
+  digital_io: "digital I/O mode",
+};
+
+/** What the probe found, as one sentence for the add dialog. */
+function describeProbe(p: ProbeOutputDeviceResult, unit: "C" | "F"): string {
+  const what = p.isPill
+    ? `The Pill${p.pillMode ? ` (${PILL_MODES[p.pillMode] ?? `${p.pillMode} mode`})` : ""}`
+    : `a ${p.model}`;
+  const parts = [`Found ${what} at ${p.host}.`];
+  if (p.relayChannels > 1) parts.push(`It has ${p.relayChannels} relay channels; pick one below and add each separately.`);
+  else if (p.hasRelay) parts.push(`Relay is ${p.ison ? "on" : "off"}.`);
+  if (p.tempC != null) parts.push(`Probe reads ${formatTemp(p.tempC, unit)}.`);
+  else if (p.hasRelay) parts.push("No temperature probe fitted.");
+  if (!p.hasRelay && p.tempC == null) {
+    parts.push(p.isPill
+      ? "It has no relay and no probe reading yet. For a temperature probe, set it to OneWire mode in the Shelly app and plug in a DS18B20; for a relay, use SSR mode."
+      : "It has no relay on this channel and no probe reading.");
+  } else if (!p.hasRelay) {
+    parts.push("No relay, so it will be added as a temperature probe only.");
+  }
+  return parts.join(" ");
 }
 
 export function ShellyPanel() {
@@ -60,15 +88,15 @@ export function ShellyPanel() {
   });
   const createDevice = useCreateOutputDevice({
     mutation: {
-      onSuccess: () => { invalidate(); closeAdd(); toast({ title: "Relay added" }); },
-      onError: onError("Could not add relay"),
+      onSuccess: () => { invalidate(); closeAdd(); toast({ title: "Device added" }); },
+      onError: onError("Could not add device"),
     },
   });
   const updateDevice = useUpdateOutputDevice({
-    mutation: { onSuccess: () => { invalidate(); setEditingId(null); }, onError: onError("Could not update relay") },
+    mutation: { onSuccess: () => { invalidate(); setEditingId(null); }, onError: onError("Could not update device") },
   });
   const deleteDevice = useDeleteOutputDevice({
-    mutation: { onSuccess: () => { invalidate(); toast({ title: "Relay removed" }); }, onError: onError("Could not remove relay") },
+    mutation: { onSuccess: () => { invalidate(); toast({ title: "Device removed" }); }, onError: onError("Could not remove device") },
   });
   const setRelay = useSetOutputDeviceRelay({
     mutation: {
@@ -96,21 +124,24 @@ export function ShellyPanel() {
       <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
         <ToggleRight className="w-4 h-4 text-muted-foreground" />
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Shelly Relays</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Switch a heat wrap, fridge or pump with a Shelly 1 (SHSW-1) on your network. A temperature add-on probe is read too.</p>
+          <h2 className="text-sm font-semibold text-foreground">Shelly Devices</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Switch a heat wrap, fridge or pump with a Shelly relay on your network (Shelly 1, Plus, Pro, Gen3, Gen4), and read a
+            DS18B20 temperature probe, from a Shelly add-on or The Pill by Shelly.
+          </p>
         </div>
       </div>
 
       <div className="p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Relays</p>
+          <p className="text-xs font-medium text-muted-foreground">Devices</p>
           <Button type="button" size="sm" variant="outline" onClick={() => setShowAdd(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" />Add relay
+            <Plus className="w-3.5 h-3.5 mr-1" />Add device
           </Button>
         </div>
 
         {devices.length === 0 && (
-          <p className="text-xs text-muted-foreground py-2">No relays yet. Add one by its IP address — you'll find it in the Shelly app or your router's device list.</p>
+          <p className="text-xs text-muted-foreground py-2">No devices yet. Add one by its IP address — you'll find it in the Shelly app or your router's device list.</p>
         )}
 
         <div className="space-y-2">
@@ -137,12 +168,13 @@ export function ShellyPanel() {
                       <div className="group flex items-center gap-2">
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${d.state.reachable ? "bg-green-500" : "bg-destructive"}`} />
                         <span className="text-sm font-medium text-foreground">{d.name}</span>
-                        <span className="text-xs text-muted-foreground font-mono">· {d.host}</span>
+                        <span className="text-xs text-muted-foreground font-mono">· {d.host}{d.channel > 0 ? ` ch ${d.channel}` : ""}</span>
+                        {d.model && <span className="text-xs text-muted-foreground">· {d.model}</span>}
                         <button
                           type="button"
                           className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                           onClick={() => { setEditingId(d.id); setEditName(d.name); }}
-                          title="Rename relay"
+                          title="Rename device"
                         >
                           <Pencil className="w-3 h-3" />
                         </button>
@@ -151,9 +183,13 @@ export function ShellyPanel() {
 
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                       {d.state.reachable ? (
-                        <span className={d.state.ison ? "text-green-600 dark:text-green-400 font-medium" : ""}>
-                          {d.state.ison ? "On" : "Off"}
-                        </span>
+                        d.state.hasRelay ? (
+                          <span className={d.state.ison ? "text-green-600 dark:text-green-400 font-medium" : ""}>
+                            {d.state.ison ? "On" : "Off"}
+                          </span>
+                        ) : (
+                          <span>Temperature probe only</span>
+                        )
                       ) : (
                         <span className="text-destructive flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />{d.state.lastError ?? "Unreachable"}
@@ -164,7 +200,7 @@ export function ShellyPanel() {
                     </div>
 
                     {/* Manual control */}
-                    {locked ? (
+                    {!d.state.hasRelay ? null : locked ? (
                       <p className="text-xs text-muted-foreground mt-2">
                         Controlled by the flow{" "}
                         <Link href="/flows" className="text-primary underline underline-offset-2">{d.controlledBy!.name}</Link>
@@ -251,20 +287,25 @@ export function ShellyPanel() {
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                    {d.state.hasRelay && (
+                      <button
+                        type="button"
+                        onClick={() => safeDefaults.mutate({ id: d.id })}
+                        disabled={!d.state.reachable}
+                        className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                        title="Make the relay come back off after a power cut"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => safeDefaults.mutate({ id: d.id })}
-                      disabled={!d.state.reachable}
-                      className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                      title="Make the relay come back off after a power cut"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { if (confirm(`Remove "${d.name}"? The relay will be switched off.`)) deleteDevice.mutate({ id: d.id }); }}
+                      onClick={() => {
+                        const msg = d.state.hasRelay ? `Remove "${d.name}"? The relay will be switched off.` : `Remove "${d.name}"?`;
+                        if (confirm(msg)) deleteDevice.mutate({ id: d.id });
+                      }}
                       className="text-muted-foreground hover:text-destructive transition-colors"
-                      title="Remove relay"
+                      title="Remove device"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -279,14 +320,17 @@ export function ShellyPanel() {
       <Dialog open={showAdd} onOpenChange={(open) => { if (!open) closeAdd(); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add a Shelly relay</DialogTitle>
+            <DialogTitle>Add a Shelly device</DialogTitle>
           </DialogHeader>
           <form
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
               if (probe?.ok) {
-                createDevice.mutate({ data: { name: form.name || probe.model || "Shelly relay", host: probe.host, ...credentials } });
+                const fallbackName = probe.isPill ? "The Pill" : probe.model || "Shelly relay";
+                createDevice.mutate({
+                  data: { name: form.name || fallbackName, host: probe.host, channel: Number(form.channel) || 0, ...credentials },
+                });
               } else {
                 probeDevice.mutate({ data: { host: form.host, ...credentials } });
               }
@@ -310,7 +354,15 @@ export function ShellyPanel() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Username <span className="font-normal">(if login is restricted)</span></label>
-                <Input value={form.username} onChange={(e) => { setForm((f) => ({ ...f, username: e.target.value })); setProbe(null); }} className="text-sm" autoComplete="off" />
+                {/* Gen2+ devices, The Pill included, always use "admin". */}
+                <Input
+                  value={form.username}
+                  onChange={(e) => { setForm((f) => ({ ...f, username: e.target.value })); setProbe(null); }}
+                  placeholder={probe?.generation != null && probe.generation >= 2 ? "admin" : undefined}
+                  disabled={probe?.generation != null && probe.generation >= 2}
+                  className="text-sm"
+                  autoComplete="off"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Password</label>
@@ -318,14 +370,24 @@ export function ShellyPanel() {
               </div>
             </div>
 
+            {probe?.ok && probe.relayChannels > 1 && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Relay channel</label>
+                <select
+                  className="w-full text-sm bg-background border border-border rounded-md px-2 h-9 text-foreground"
+                  value={form.channel}
+                  onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}
+                >
+                  {Array.from({ length: probe.relayChannels }, (_, i) => <option key={i} value={i}>Channel {i}</option>)}
+                </select>
+              </div>
+            )}
+
             {probe && (
               probe.ok ? (
                 <p className="text-xs text-green-600 dark:text-green-400 flex items-start gap-1.5">
                   <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                  <span>
-                    Found a {probe.model} at {probe.host}. Relay is {probe.ison ? "on" : "off"}
-                    {probe.tempC != null ? `, probe reads ${formatTemp(probe.tempC, unit)}` : ", no temperature probe fitted"}.
-                  </span>
+                  <span>{describeProbe(probe, unit)}</span>
                 </p>
               ) : (
                 <p className="text-xs text-destructive flex items-start gap-1.5">
@@ -339,7 +401,7 @@ export function ShellyPanel() {
               <Button type="button" variant="ghost" size="sm" onClick={closeAdd}>Cancel</Button>
               <Button type="submit" size="sm" disabled={probeDevice.isPending || createDevice.isPending}>
                 {(probeDevice.isPending || createDevice.isPending) && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
-                {probe?.ok ? "Add relay" : "Check device"}
+                {probe?.ok ? "Add device" : "Check device"}
               </Button>
             </DialogFooter>
           </form>

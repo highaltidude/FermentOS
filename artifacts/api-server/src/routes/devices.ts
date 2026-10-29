@@ -8,12 +8,21 @@ import {
   SetOutputDeviceRelayBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
-import { normaliseShellyHost } from "../lib/shellyParse";
-import { probeShelly, getShellyStatus, setShellyRelay, applyShellySafeDefaults } from "../services/shelly";
+import { normaliseShellyHost, isPill, type ShellyInfo } from "../lib/shellyParse";
+import { probeShelly, getShellyStatus, getPillMode, setShellyRelay, applyShellySafeDefaults } from "../services/shelly";
 import { getLiveState, isReachable, noteRelayState, forgetDevice, pollAllDevices } from "../services/devicePoller";
 import { relayOwners } from "../services/flowEngine";
 
 const router = Router();
+
+const deviceTypeOf = (info: ShellyInfo): OutputDevice["deviceType"] => (info.gen >= 2 ? "shelly_gen2" : "shelly_gen1");
+
+/** Whether the device has a relay, as last seen. Rows from before Gen2+ support were all relays. */
+function hasRelay(device: OutputDevice): boolean {
+  return getLiveState(device.id)?.hasRelay ?? device.lastState?.hasRelay ?? true;
+}
+
+const NO_RELAY = "This device has no relay. If it's The Pill, switch it to SSR mode in the Shelly app to use it as one.";
 
 /** API shape: credentials reduced to hasPassword, live state merged in. */
 function toApi(device: OutputDevice) {
@@ -26,6 +35,7 @@ function toApi(device: OutputDevice) {
     state: {
       reachable: isReachable(live),
       ison: live?.ison ?? lastState?.ison ?? null,
+      hasRelay: hasRelay(device),
       tempC: live?.tempC ?? lastState?.tempC ?? null,
       rssi: live?.rssi ?? lastState?.rssi ?? null,
       lastError: live?.lastError ?? null,
@@ -52,19 +62,31 @@ router.post("/probe", async (req, res) => {
   const host = normaliseShellyHost(body.data.host);
   if (!host) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
 
-  const empty = { host, model: null, authRequired: false, ison: null, tempC: null };
+  const empty = {
+    host, model: null, generation: null, isPill: false, pillMode: null, authRequired: false,
+    ison: null, hasRelay: false, relayChannels: 0, tempC: null,
+  };
   const info = await probeShelly({ host });
   if (!info.ok) return res.json({ ...empty, ok: false, error: info.reason });
 
-  const status = await getShellyStatus({ host, username: body.data.username, password: body.data.password });
-  const base = { ...empty, model: info.value.type, authRequired: info.value.auth };
+  const pill = isPill(info.value);
+  const target = { host, deviceType: deviceTypeOf(info.value), username: body.data.username, password: body.data.password };
+  const status = await getShellyStatus(target);
+  const base = { ...empty, model: info.value.type, generation: info.value.gen, isPill: pill, authRequired: info.value.auth };
   if (!status.ok) {
     const error = info.value.auth && !body.data.password
-      ? "This device has restricted login on; enter its username and password"
+      ? info.value.gen >= 2
+        ? "This device has restricted login on; enter its password (the username is always admin)"
+        : "This device has restricted login on; enter its username and password"
       : status.reason;
     return res.json({ ...base, ok: false, error });
   }
-  return res.json({ ...base, ok: true, error: null, ison: status.value.ison, tempC: status.value.tempC });
+  // The mode only explains what the Pill has; a failed read doesn't stop it being added.
+  const mode = pill ? await getPillMode(target) : null;
+  const { ison, hasRelay, relayChannels, tempC } = status.value;
+  return res.json({
+    ...base, ok: true, error: null, pillMode: mode?.ok ? mode.value : null, ison, hasRelay, relayChannels, tempC,
+  });
 });
 
 // ── POST /devices ──────────────────────────────────────────────────────────
@@ -73,10 +95,15 @@ router.post("/", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
   const host = normaliseShellyHost(body.data.host);
   if (!host) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
+  // Ask the device which API it speaks rather than trusting the client.
+  const info = await probeShelly({ host });
+  if (!info.ok) return res.status(400).json({ error: info.reason });
 
   const [device] = await db
     .insert(outputDevicesTable)
     .values({
+      deviceType: deviceTypeOf(info.value),
+      model: info.value.type,
       name: body.data.name.trim(),
       host,
       channel: body.data.channel ?? 0,
@@ -107,10 +134,15 @@ router.patch("/:id", async (req, res) => {
 
   const { host: rawHost, password, username, ...rest } = body.data;
   let host: string | undefined;
+  let detected: ShellyInfo | undefined;
   if (rawHost !== undefined) {
     const normalised = normaliseShellyHost(rawHost);
     if (!normalised) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
     host = normalised;
+    // A new address may be a different device, possibly of another generation.
+    const info = await probeShelly({ host });
+    if (!info.ok) return res.status(400).json({ error: info.reason });
+    detected = info.value;
   }
 
   const [device] = await db
@@ -119,6 +151,7 @@ router.patch("/:id", async (req, res) => {
       ...rest,
       ...(rest.name !== undefined && { name: rest.name.trim() }),
       ...(host !== undefined && { host }),
+      ...(detected !== undefined && { deviceType: deviceTypeOf(detected), model: detected.type }),
       ...(username !== undefined && { username: username || null }),
       // Omitted keeps the stored password; null or "" clears it.
       ...(password !== undefined && { password: password || null }),
@@ -137,7 +170,7 @@ router.patch("/:id", async (req, res) => {
   }
 
   // A new address or credentials invalidates what we knew about the old one.
-  if (host !== undefined || password !== undefined || username !== undefined || rest.enabled === false) {
+  if (host !== undefined || password !== undefined || username !== undefined || rest.channel !== undefined || rest.enabled === false) {
     forgetDevice(id);
   }
   return res.json(toApi(device));
@@ -152,7 +185,7 @@ router.delete("/:id", async (req, res) => {
   if (owner) return res.status(409).json({ error: `Turn off the flow "${owner.name}" before removing this relay` });
   if (device) {
     // Don't leave a heater running on a relay nothing manages any more.
-    await setShellyRelay(device, false);
+    if (hasRelay(device)) await setShellyRelay(device, false);
     await db.delete(outputDevicesTable).where(eq(outputDevicesTable.id, id));
     forgetDevice(id);
   }
@@ -167,6 +200,7 @@ router.post("/:id/relay", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
   const device = await findDevice(id);
   if (!device) return res.status(404).json({ error: "Device not found" });
+  if (!hasRelay(device)) return res.status(409).json({ error: NO_RELAY });
   // Manual switching would be undone on the next tick anyway; say why instead.
   const owner = relayOwners().get(id);
   if (owner) return res.status(409).json({ error: `The flow "${owner.name}" is controlling this relay; turn it off to switch by hand` });
@@ -184,6 +218,7 @@ router.post("/:id/safe-defaults", async (req, res) => {
   if (id === undefined) return;
   const device = await findDevice(id);
   if (!device) return res.status(404).json({ error: "Device not found" });
+  if (!hasRelay(device)) return res.status(409).json({ error: NO_RELAY });
 
   const result = await applyShellySafeDefaults(device);
   if (!result.ok) return res.status(502).json({ error: result.reason });

@@ -8624,7 +8624,7 @@ export const getCreateOutputDeviceUrl = () => {
 };
 
 /**
- * @summary Add a relay device
+ * @summary Add a Shelly device. Its generation and model are detected from the device.
  */
 export const createOutputDevice = async (
   createOutputDeviceBody: CreateOutputDeviceBody,
@@ -8713,7 +8713,7 @@ export type CreateOutputDeviceMutationVariables = {
 };
 
 /**
- * @summary Add a relay device
+ * @summary Add a Shelly device. Its generation and model are detected from the device.
  */
 export const useCreateOutputDevice = <
   TError = ErrorType<ErrorResponse>,
@@ -8740,7 +8740,7 @@ export const getProbeOutputDeviceUrl = () => {
 };
 
 /**
- * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ * @summary Check that an address answers as a Shelly device (any generation), before adding it
  */
 export const probeOutputDevice = async (
   probeOutputDeviceBody: ProbeOutputDeviceBody,
@@ -8829,7 +8829,7 @@ export type ProbeOutputDeviceMutationVariables = {
 };
 
 /**
- * @summary Check that an address answers as a Shelly Gen1 device, before adding it
+ * @summary Check that an address answers as a Shelly device (any generation), before adding it
  */
 export const useProbeOutputDevice = <
   TError = ErrorType<ErrorResponse>,

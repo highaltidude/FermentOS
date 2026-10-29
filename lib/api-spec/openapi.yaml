@@ -33,7 +33,7 @@ tags:
   - name: flows
     description: Brew Flows — automations that switch relays from temperature or a schedule
   - name: devices
-    description: Relay devices FermentOS switches (Shelly Gen1)
+    description: Shelly devices FermentOS polls and switches (Gen1, and Gen2+ including The Pill)
   - name: system
     description: Host system stats and health history
 paths:
@@ -1636,7 +1636,7 @@ paths:
     post:
       operationId: createOutputDevice
       tags: [devices]
-      summary: Add a relay device
+      summary: Add a Shelly device. Its generation and model are detected from the device.
       requestBody:
         required: true
         content:
@@ -1651,7 +1651,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/OutputDevice"
         "400":
-          description: Invalid input
+          description: Invalid input, or the device can't be reached or isn't a Shelly
           content:
             application/json:
               schema:
@@ -1661,7 +1661,7 @@ paths:
     post:
       operationId: probeOutputDevice
       tags: [devices]
-      summary: Check that an address answers as a Shelly Gen1 device, before adding it
+      summary: Check that an address answers as a Shelly device (any generation), before adding it
       requestBody:
         required: true
         content:
@@ -1782,7 +1782,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: An enabled flow controls this relay
+          description: An enabled flow controls this relay, or the device has no relay
           content:
             application/json:
               schema:
@@ -1810,6 +1810,12 @@ paths:
                 $ref: "#/components/schemas/OutputDevice"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The device has no relay
           content:
             application/json:
               schema:
@@ -2325,7 +2331,12 @@ components:
           type: integer
         deviceType:
           type: string
-          enum: [shelly_gen1]
+          enum: [shelly_gen1, shelly_gen2]
+          description: Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.
+        model:
+          type: string
+          nullable: true
+          description: Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.
         name:
           type: string
         host:
@@ -2361,7 +2372,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, deviceType, name, host, channel, username, hasPassword, enabled, probeSensorDeviceId, lastSeenAt, state, controlledBy, createdAt, updatedAt]
+      required: [id, deviceType, model, name, host, channel, username, hasPassword, enabled, probeSensorDeviceId, lastSeenAt, state, controlledBy, createdAt, updatedAt]
 
     OutputDeviceLiveState:
       type: object
@@ -2371,17 +2382,20 @@ components:
         ison:
           type: boolean
           nullable: true
+        hasRelay:
+          type: boolean
+          description: False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.
         tempC:
           type: number
           nullable: true
-          description: Add-on probe temperature in °C, null when no probe is fitted
+          description: Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted
         rssi:
           type: integer
           nullable: true
         lastError:
           type: string
           nullable: true
-      required: [reachable, ison, tempC, rssi, lastError]
+      required: [reachable, ison, hasRelay, tempC, rssi, lastError]
 
     CreateOutputDeviceBody:
       type: object
@@ -2453,15 +2467,32 @@ components:
           type: string
           nullable: true
           description: Shelly model code, e.g. SHSW-1
+        generation:
+          type: integer
+          nullable: true
+          description: Shelly API generation; 1 for Gen1, 2 or more for the RPC API
+        isPill:
+          type: boolean
+          description: True when the device is The Pill by Shelly
+        pillMode:
+          type: string
+          nullable: true
+          description: The Pill's mode as set in the Shelly app (onewire, ssr, dht22, …); null for other devices
         authRequired:
           type: boolean
         ison:
           type: boolean
           nullable: true
+        hasRelay:
+          type: boolean
+          description: Whether the device has a relay on channel 0
+        relayChannels:
+          type: integer
+          description: How many relay channels the device has
         tempC:
           type: number
           nullable: true
-      required: [ok, error, host, model, authRequired, ison, tempC]
+      required: [ok, error, host, model, generation, isPill, pillMode, authRequired, ison, hasRelay, relayChannels, tempC]
 
     SetOutputDeviceRelayBody:
       type: object

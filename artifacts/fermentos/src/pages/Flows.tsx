@@ -55,6 +55,8 @@ export default function Flows() {
   const [showNew, setShowNew] = useState(false);
   const { data: flows = [], isLoading } = useListFlows({ query: { refetchInterval: 30_000, queryKey: getListFlowsQueryKey() } });
   const { data: devices = [] } = useListOutputDevices({ query: { queryKey: getListOutputDevicesQueryKey() } });
+  // A probe-only device (The Pill in OneWire mode) can feed a flow but not be switched by one.
+  const hasRelays = devices.some((d) => d.state.hasRelay);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
@@ -66,12 +68,12 @@ export default function Flows() {
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">Automations that switch your relays from a temperature or on a schedule.</p>
         </div>
-        <Button size="sm" onClick={() => setShowNew(true)} disabled={devices.length === 0}>
+        <Button size="sm" onClick={() => setShowNew(true)} disabled={!hasRelays}>
           <Plus className="w-4 h-4" />New flow
         </Button>
       </div>
 
-      {devices.length === 0 && (
+      {!hasRelays && (
         <div className="bg-card border border-card-border rounded-lg p-4 text-sm text-muted-foreground">
           Flows switch Shelly relays. Add one under{" "}
           <Link href="/settings?tab=system&section=connectivity" className="text-primary underline underline-offset-2">
@@ -83,7 +85,7 @@ export default function Flows() {
 
       {isLoading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-      ) : flows.length === 0 && devices.length > 0 ? (
+      ) : flows.length === 0 && hasRelays ? (
         <div className="bg-card border border-card-border rounded-lg p-8 text-center">
           <Workflow className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">No flows yet. Start from a template — hold a fermenter at temperature, or run a relay on a timer.</p>
@@ -313,7 +315,8 @@ export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClos
   });
 
   const sourceOptions = tempSourceOptions(sensors, devices);
-  const freeRelays = devices.filter((d) => !d.controlledBy);
+  const relays = devices.filter((d) => d.state.hasRelay);
+  const freeRelays = relays.filter((d) => !d.controlledBy);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -396,7 +399,7 @@ export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClos
                 <option value="">Choose a relay…</option>
                 {freeRelays.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
-              {freeRelays.length < devices.length && (
+              {freeRelays.length < relays.length && (
                 <p className="text-[11px] text-muted-foreground mt-1">Relays already used by an enabled flow aren't listed.</p>
               )}
             </div>

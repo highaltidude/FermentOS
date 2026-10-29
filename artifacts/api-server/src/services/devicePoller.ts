@@ -23,6 +23,8 @@ export const UNREACHABLE_AFTER_FAILURES = 3;
 
 export type LiveDeviceState = {
   ison: boolean | null;
+  /** Null until the device has answered once. */
+  hasRelay: boolean | null;
   tempC: number | null;
   rssi: number | null;
   /** When the device last answered. */
@@ -79,7 +81,7 @@ async function ensureProbeSensor(device: OutputDevice): Promise<number> {
 }
 
 async function pollDevice(device: OutputDevice, now: number): Promise<void> {
-  const prev = live.get(device.id) ?? { ison: null, tempC: null, rssi: null, at: null, failures: 0, lastError: null };
+  const prev = live.get(device.id) ?? { ison: null, hasRelay: null, tempC: null, rssi: null, at: null, failures: 0, lastError: null };
   const result = await getShellyStatus(device);
 
   if (!result.ok) {
@@ -91,15 +93,16 @@ async function pollDevice(device: OutputDevice, now: number): Promise<void> {
     return;
   }
 
-  const { ison, tempC, rssi } = result.value;
-  const changed = prev.ison !== ison || prev.at == null;
-  live.set(device.id, { ison, tempC, rssi, at: new Date(now), failures: 0, lastError: null });
+  // hasRelay changes when The Pill is switched between modes in the Shelly app.
+  const { ison, hasRelay, tempC, rssi } = result.value;
+  const changed = prev.ison !== ison || prev.hasRelay !== hasRelay || prev.at == null;
+  live.set(device.id, { ison, hasRelay, tempC, rssi, at: new Date(now), failures: 0, lastError: null });
 
   if (changed || now - (lastStateWrite.get(device.id) ?? 0) >= STATE_WRITE_INTERVAL_MS) {
     lastStateWrite.set(device.id, now);
     await db
       .update(outputDevicesTable)
-      .set({ lastSeenAt: new Date(now), lastState: { ison, tempC, rssi } })
+      .set({ lastSeenAt: new Date(now), lastState: { ison, hasRelay, tempC, rssi } })
       .where(eq(outputDevicesTable.id, device.id));
   }
 

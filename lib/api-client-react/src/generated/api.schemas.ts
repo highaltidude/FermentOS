@@ -220,19 +220,25 @@ export interface OutputDeviceOwner {
   name: string;
 }
 
+/**
+ * Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.
+ */
 export type OutputDeviceDeviceType =
   (typeof OutputDeviceDeviceType)[keyof typeof OutputDeviceDeviceType];
 
 export const OutputDeviceDeviceType = {
   shelly_gen1: "shelly_gen1",
+  shelly_gen2: "shelly_gen2",
 } as const;
 
 export interface OutputDeviceLiveState {
   reachable: boolean;
   /** @nullable */
   ison: boolean | null;
+  /** False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling. */
+  hasRelay: boolean;
   /**
-   * Add-on probe temperature in °C, null when no probe is fitted
+   * Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted
    * @nullable
    */
   tempC: number | null;
@@ -244,7 +250,13 @@ export interface OutputDeviceLiveState {
 
 export interface OutputDevice {
   id: number;
+  /** Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill. */
   deviceType: OutputDeviceDeviceType;
+  /**
+   * Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.
+   * @nullable
+   */
+  model: string | null;
   name: string;
   host: string;
   channel: number;
@@ -314,9 +326,25 @@ export interface ProbeOutputDeviceResult {
    * @nullable
    */
   model: string | null;
+  /**
+   * Shelly API generation; 1 for Gen1, 2 or more for the RPC API
+   * @nullable
+   */
+  generation: number | null;
+  /** True when the device is The Pill by Shelly */
+  isPill: boolean;
+  /**
+   * The Pill's mode as set in the Shelly app (onewire, ssr, dht22, …); null for other devices
+   * @nullable
+   */
+  pillMode: string | null;
   authRequired: boolean;
   /** @nullable */
   ison: boolean | null;
+  /** Whether the device has a relay on channel 0 */
+  hasRelay: boolean;
+  /** How many relay channels the device has */
+  relayChannels: number;
   /** @nullable */
   tempC: number | null;
 }

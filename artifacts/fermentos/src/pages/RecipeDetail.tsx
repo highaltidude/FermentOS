@@ -1075,9 +1075,13 @@ export default function RecipeDetail() {
                 {!brew.recorded ? (
                   <p className="text-xs text-muted-foreground">Not recorded (brewed before version history).</p>
                 ) : brew.changes == null ? (
-                  <p className="text-xs text-muted-foreground">First recorded brew.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {brew.recipeVariant ? `First recorded ${VARIANT_LABELS[brew.recipeVariant]} brew.` : "First recorded brew."}
+                  </p>
                 ) : brew.changes.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Same recipe as the brew before.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {brew.recipeVariant ? `Same recipe as the ${VARIANT_LABELS[brew.recipeVariant]} brew before.` : "Same recipe as the brew before."}
+                  </p>
                 ) : (
                   <RecipeChangeList changes={brew.changes} />
                 )}

@@ -43,11 +43,14 @@ export function StartBrewDialog({ recipe, variants, initialVariant, open, onOpen
         navigate(`/brew-sessions/${session.id}`);
         toast({ title: "Brew session started!" });
       },
-      onError: (err: unknown) => {
+      // The version sent, not the one selected now: the chips stay clickable
+      // while the request is out.
+      onError: (err: unknown, { data }) => {
         const shortages = shortageLines(err, 12);
+        const sent = data.recipeVariant;
         setProblem(
           shortages
-            ? { title: `Not enough in inventory for the ${VARIANT_LABELS[variant]} version`, lines: shortages }
+            ? { title: sent ? `Not enough in inventory for the ${VARIANT_LABELS[sent]} version` : "Not enough in inventory", lines: shortages }
             : { title: "Failed to start session", lines: [apiErrorMessage(err) ?? "Please try again"] },
         );
       },

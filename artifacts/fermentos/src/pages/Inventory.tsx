@@ -153,7 +153,7 @@ function SupplierSummary({ suppliers, unit }: { suppliers: InventorySupplier[]; 
             <li key={i} className="flex items-center gap-1.5">
               {s.preferred && <Star className="w-3 h-3 fill-amber-400 text-amber-500" />}
               <span>{supplierLabel(s, unit)}</span>
-              {s.url && (
+              {s.url && /^https?:\/\//i.test(s.url) && (
                 <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
                   <ExternalLink className="w-3 h-3" />
                 </a>

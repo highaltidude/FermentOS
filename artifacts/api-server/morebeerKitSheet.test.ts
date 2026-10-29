@@ -189,6 +189,18 @@ describe("other sheet shapes", () => {
     ]);
   });
 
+  it("leaves out a line for a version the sheet doesn't have", () => {
+    const draft = parsed(
+      sheet([
+        { heading: "LME KIT", x: 60, y: 200, lines: ["6 lbs Light Liquid Extract", "1 lb Rice Hulls (All-Grain Only)"] },
+        { heading: "DME KIT", x: 220, y: 200, lines: ["5 lbs Light Dry Extract"] },
+        { heading: "HOPS", x: 60, y: 300, lines: ["1 oz Cascade – Boil 60 min"] },
+      ]),
+    );
+    expect(draft.ingredients.map((i) => i.name)).not.toContain("Rice Hulls");
+    expect(draft.warnings.filter((w) => w.code === "unparsed_line").map((w) => w.sourceText)).toEqual(["1 lb Rice Hulls (All-Grain Only)"]);
+  });
+
   it("copes with a bullet fused to its line", () => {
     const draft = parsed(
       sheet([

@@ -181,15 +181,23 @@ export interface HistoryBrew {
 
 /**
  * A recipe's brews, newest first, each with what changed since the brew
- * before it that has a snapshot. changes is null when there's nothing to
- * compare with: the first recorded brew, or one from before version history.
+ * before it that has a snapshot, of the same version: a snapshot holds only
+ * its own version's ingredients, so LME against all-grain would list the
+ * whole grain bill as changed. changes is null when there's nothing to
+ * compare with: the first recorded brew of that version, or one from before
+ * version history.
  */
 export function recipeBrewHistory(brews: readonly HistoryBrew[]) {
   const oldestFirst = [...brews].sort((a, b) => a.brewDate.localeCompare(b.brewDate) || a.id - b.id);
   let previous: RecipeSnapshot | null = null;
+  const previousOfVariant = new Map<string | null, RecipeSnapshot>();
   const entries = oldestFirst.map((b) => {
-    const changes = b.recipeSnapshot && previous ? diffRecipeSnapshots(previous, b.recipeSnapshot) : null;
-    if (b.recipeSnapshot) previous = b.recipeSnapshot;
+    const before = b.recipeSnapshot ? previousOfVariant.get(b.recipeSnapshot.variant) : undefined;
+    const changes = b.recipeSnapshot && before ? diffRecipeSnapshots(before, b.recipeSnapshot) : null;
+    if (b.recipeSnapshot) {
+      previous = b.recipeSnapshot;
+      previousOfVariant.set(b.recipeSnapshot.variant, b.recipeSnapshot);
+    }
     return {
       id: b.id,
       brewDate: b.brewDate,

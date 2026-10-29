@@ -27,6 +27,15 @@ describe("normalizeSuppliers", () => {
     expect(result.map((s) => s.preferred)).toEqual([false, true, false]);
   });
 
+  it("adds https:// to a bare domain and drops links that aren't web pages", () => {
+    const urls = normalizeSuppliers([
+      { name: "A", url: "morebeer.com/product/x" },
+      { name: "B", url: "http://shop.example" },
+      { name: "C", url: "javascript:alert(1)" },
+    ]).map((s) => s.url);
+    expect(urls).toEqual(["https://morebeer.com/product/x", "http://shop.example", null]);
+  });
+
   it("treats a blank link as no link", () => {
     expect(normalizeSuppliers([{ name: "A", url: "  " }])[0].url).toBeNull();
   });

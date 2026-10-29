@@ -424,6 +424,22 @@ export function parseMorebeerKitSheet(rawPages: PdfPage[]): KitSheetParseResult 
   const warnings: KitSheetWarning[] = [];
   const pending: Pending[] = [];
 
+  /**
+   * A line marked for a version the sheet doesn't have ("All-Grain Only" on an
+   * LME/DME sheet). tidy() would read the empty list as "every version", so
+   * it's left out with a warning instead.
+   */
+  const forMissingVersion = (line: KitLine, sourceText: string): boolean => {
+    if (onlyVariants(line.only)?.length !== 0) return false;
+    warnings.push({
+      code: "unparsed_line",
+      message: `Not imported — marked for ${line.only === "extract" ? "extract" : "all-grain"} brewing only, which this sheet has no version for.`,
+      ingredientIndex: null,
+      sourceText,
+    });
+    return true;
+  };
+
   const missingAmount = (line: KitLine, sourceText: string): Pending["warnings"] =>
     line.amount == null
       ? [{ code: "missing_amount", message: `The sheet gives no amount for ${line.name}.`, sourceText }]
@@ -445,7 +461,7 @@ export function parseMorebeerKitSheet(rawPages: PdfPage[]): KitSheetParseResult 
 
       for (const entry of mine) {
         const line = parseKitLine(entry.text);
-        if (!line.name) continue;
+        if (!line.name || forMissingVersion(line, entry.text)) continue;
         const label = myLabels.filter((l) => l.y < entry.y).sort((a, b) => b.y - a.y)[0];
         const specialty = label ? /special|steep/i.test(label.text) : false;
 
@@ -526,6 +542,7 @@ export function parseMorebeerKitSheet(rawPages: PdfPage[]): KitSheetParseResult 
         continue;
       }
 
+      if (forMissingVersion(line, entry.text)) continue;
       const stated = readUse(line.descriptor);
       merged.push({
         ...base,

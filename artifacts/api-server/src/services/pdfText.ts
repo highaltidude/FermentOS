@@ -37,6 +37,9 @@ export async function extractPdfTextItems(data: Uint8Array): Promise<PdfPage[]> 
     }
     return pages;
   } finally {
-    await pdf.cleanup();
+    // Destroy the loading task, not just cleanup(): cleanup only drops page
+    // caches and leaves the document and its worker transport alive for the
+    // life of the server.
+    await pdf.loadingTask.destroy();
   }
 }

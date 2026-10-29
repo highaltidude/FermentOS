@@ -12,6 +12,18 @@ export type SupplierInput = {
  * links, blank names dropped, and at most one preferred supplier (the first
  * one flagged) so the Ingredients page never has to pick between two.
  */
+/**
+ * A link that opens the shop: a bare domain gets https://, and anything that
+ * isn't http(s) — a javascript: URL, say — is dropped, since it's rendered as
+ * a link.
+ */
+function supplierUrl(raw: string | null | undefined): string | null {
+  const url = raw?.trim();
+  if (!url) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`;
+  return /^https?:\/\/\S+$/i.test(withScheme) ? withScheme : null;
+}
+
 export function normalizeSuppliers(input: SupplierInput[]): InventorySupplier[] {
   let preferredSeen = false;
   return input
@@ -23,7 +35,7 @@ export function normalizeSuppliers(input: SupplierInput[]): InventorySupplier[] 
       return {
         name: s.name,
         price: s.price ?? null,
-        url: s.url?.trim() || null,
+        url: supplierUrl(s.url),
         preferred,
       };
     });

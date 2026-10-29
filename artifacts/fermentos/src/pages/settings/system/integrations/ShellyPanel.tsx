@@ -101,9 +101,7 @@ export function ShellyPanel() {
       onError: (err, { id, params }) => {
         // The relay couldn't be switched off first; only the brewer can say whether it's safe to go on.
         if ((err as { status?: number }).status === 502 && !params?.force) {
-          if (confirm(`${getErrorMessage(err)}.
-
-Remove it anyway? Check the relay is off yourself.`)) {
+          if (confirm(`${getErrorMessage(err)}.\n\nRemove it anyway? Check the relay is off yourself.`)) {
             deleteDevice.mutate({ id, params: { force: true } });
           }
           return;

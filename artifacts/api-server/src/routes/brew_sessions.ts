@@ -155,8 +155,11 @@ router.put("/brew-sessions/:id", async (req, res) => {
     const variants = await recipeVariantsOf(recipeId);
     if (!variants) {
       updatePayload.recipeVariant = null;
-    } else if (body.data.recipeVariant !== undefined) {
-      if (!body.data.recipeVariant || !variants.includes(body.data.recipeVariant)) {
+    } else {
+      // Left out, the stored version has to be one this recipe has: after a
+      // switch of recipe it may be null or the old recipe's.
+      const variant = body.data.recipeVariant !== undefined ? body.data.recipeVariant : existing[0].recipeVariant;
+      if (!variant || !variants.includes(variant)) {
         return res.status(400).json({
           error: `This recipe has several versions — choose one of: ${variants.join(", ")}`,
         });

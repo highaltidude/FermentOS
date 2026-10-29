@@ -126,6 +126,21 @@ describe("recipeBrewHistory", () => {
     const old: RecipeSnapshot | null = null;
     expect(recipeBrewHistory([{ id: 1, brewDate: "2026-01-01", recipeVariant: null, overallScore: null, recipeSnapshot: old }]).latestSnapshot).toBeNull();
   });
+
+  it("compares a brew only with an earlier brew of the same version", () => {
+    const lme = { ...snap([ing({ name: "Light LME", type: "malt", amount: 6, unit: "lb", use: "boil" })]), variant: "lme" as const };
+    const grain = { ...snap([ing({ name: "2-Row", type: "malt", amount: 9, unit: "lb", use: "mash" })]), variant: "all_grain" as const };
+    const grain2 = { ...grain, ingredients: [{ ...grain.ingredients[0]!, amount: 10 }] };
+    const { entries, latestSnapshot } = recipeBrewHistory([
+      { id: 1, brewDate: "2026-01-01", recipeVariant: "lme", overallScore: null, recipeSnapshot: lme },
+      { id: 2, brewDate: "2026-02-01", recipeVariant: "all_grain", overallScore: null, recipeSnapshot: grain },
+      { id: 3, brewDate: "2026-03-01", recipeVariant: "all_grain", overallScore: null, recipeSnapshot: grain2 },
+    ]);
+    expect(entries[2]).toMatchObject({ id: 1, changes: null });
+    expect(entries[1]).toMatchObject({ id: 2, changes: null });
+    expect(entries[0]!.changes).toEqual([expect.objectContaining({ kind: "ingredient_changed" })]);
+    expect(latestSnapshot).toBe(grain2);
+  });
 });
 
 describe("recipeFamily", () => {

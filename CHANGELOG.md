@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.10.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.9.0...fermentos-v1.10.0) (2026-10-30)
+
+
+### Features
+
+* **calculators:** water chemistry calculator with salt suggestions ([8ff65ff](https://github.com/highaltidude/FermentOS/commit/8ff65ffeca74bb4212187ea8efd34955ef26eb45))
+* **devices:** Shelly SHSW-1 relay devices with probe readings and manual control ([a85f9b1](https://github.com/highaltidude/FermentOS/commit/a85f9b1c3d2a744758c6f374ec4346037eda5ffe))
+* **devices:** support The Pill and other Gen2+ Shelly devices ([afa71f6](https://github.com/highaltidude/FermentOS/commit/afa71f669f8e31604843e3292ea239e251e81c1a))
+* dry hop schedule with repeating reminders during conditioning ([61c4abf](https://github.com/highaltidude/FermentOS/commit/61c4abf3a15bd30e690cc1018f7ad902bf516079))
+* **equipment:** add Refractometer category ([8c67fbc](https://github.com/highaltidude/FermentOS/commit/8c67fbc0a609212cbaa6e8a05ede37e85c22eaac))
+* **equipment:** add Refractometer category ([d6b04f8](https://github.com/highaltidude/FermentOS/commit/d6b04f861834826e3ce6b910aa0c294c855bc8a3))
+* **flows:** days-in-stage condition and cold crash template ([90609d9](https://github.com/highaltidude/FermentOS/commit/90609d9a761803d988d014000b88d58a62a8fd32))
+* **flows:** flow engine with thermostat and schedule automations ([c536523](https://github.com/highaltidude/FermentOS/commit/c536523a083b191dd4ac227e6b34c4be6ee2e583))
+* **flows:** link flows to recipes and follow brew temperatures ([382a27e](https://github.com/highaltidude/FermentOS/commit/382a27e8d0dc573b0c3a4b868e3e40536d2233f9))
+* **flows:** mark Brew Flows as experimental ([4b76b0b](https://github.com/highaltidude/FermentOS/commit/4b76b0b48be549780a3171951d36e149b060ab25))
+* **flows:** visual flow editor ([7b0c4cf](https://github.com/highaltidude/FermentOS/commit/7b0c4cf6b9ac1e7d2d2533ad5b2797ae8529a539))
+* **inventory:** track multiple suppliers and prices per ingredient ([9983862](https://github.com/highaltidude/FermentOS/commit/998386204482fa0a29beda110b4e0a0b0aa3229b))
+* **recipes:** fork recipes and track changes brew-to-brew ([5cc075c](https://github.com/highaltidude/FermentOS/commit/5cc075c0475b105bd18c25ce3440aa91f0832d80))
+* **recipes:** import MoreBeer kit sheets as one recipe with LME, DME and all-grain versions ([dd7f733](https://github.com/highaltidude/FermentOS/commit/dd7f733ab56d00dcdfdce846113d15767da1a49e))
+
+
+### Bug Fixes
+
+* **backup:** run a missed scheduled backup after startup ([316c36b](https://github.com/highaltidude/FermentOS/commit/316c36b9aed1c41b7735cfe18e8dd3aea7d2b9d4))
+* **deps:** bump proxy-addr, source-map-js and vite for security advisories ([3db5a53](https://github.com/highaltidude/FermentOS/commit/3db5a53c1ad0665d254640b398299e9143ff685b))
+* **dev:** give the Docker dev stack separate ports, an /api proxy and its packages ([4838cbf](https://github.com/highaltidude/FermentOS/commit/4838cbf35e53c304c04879420917a22e6552f49b))
+* **devices:** clearer label for running a relay on a timer ([8bf1c69](https://github.com/highaltidude/FermentOS/commit/8bf1c69460a7ebd7cfcf3c7f8708b40bdbe1cb7b))
+* **devices:** don't leave a relay on or a probe assigned when a device is removed or disabled ([3be8fae](https://github.com/highaltidude/FermentOS/commit/3be8faec1c235decacecc7d393b2473a5259712e))
+* **fermentation:** auto-advance to conditioning without the page open ([08ef350](https://github.com/highaltidude/FermentOS/commit/08ef35045541f0af784317c7698fa02c040ed9e3))
+* **fermentation:** keep a batch moved back from conditioning and stop alerts flapping with two sensors ([6d3ef00](https://github.com/highaltidude/FermentOS/commit/6d3ef009c2d8b1a96f56e14d5f5df44557776969))
+* **fermentation:** require attenuation before auto-advancing and honour a manual move back ([1408c16](https://github.com/highaltidude/FermentOS/commit/1408c16e10212f4709cfa38ae98af8441a9f3447))
+* **flows:** keep relays off across reloads and recover from standby, refused commands and bad targets ([e78553a](https://github.com/highaltidude/FermentOS/commit/e78553ab3fee8bf5bf683431504e16ab4aebe3b9))
+* **recipes:** compare brews of the same version and tighten kit import, version and supplier link checks ([0197330](https://github.com/highaltidude/FermentOS/commit/01973305dcd47b2e875b203af5a3ac2647b30f90))
+
 ## [1.9.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.8.1...fermentos-v1.9.0) (2026-10-04)
 
 

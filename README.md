@@ -54,23 +54,28 @@ install to a tracked first batch.
 ## Features
 
 - **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color. Ingredients and steps are editable in place, and a recipe starts its own brew session in one click
+- **Kit import** — Upload the recipe PDF from a MoreBeer kit and FermentOS reads the ingredients, hop schedule, stats and suggested yeasts into a recipe for you to check before it is saved. A sheet that covers the LME, DME and All-Grain kits becomes one recipe with three versions; you pick the version each time you brew, and only that version's ingredients are deducted from stock and called on the boil timer
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
 - **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
+- **Dry hop reminders** — Give each dry hop a day of conditioning and the recipe gets a Dry Hop Schedule. When a batch reaches that day, your phone is reminded every 6 hours (adjustable) until you mark the addition as added on the brew page. No sensor needed
 - **Stage history** — Every stage change is timestamped and kept, so you can see exactly when a batch moved and how long each stage took
 - **Fermentation tracker** — Temperature and gravity over time on an interactive chart, filled in automatically if you have an iSpindel. Readings you enter by hand can also carry pH and notes
 - **Alerts to your phone** — FermentOS watches every active batch that has a sensor assigned and messages you when the temperature drifts, fermentation stalls, or a sensor goes quiet — even with the app closed. Temperature is checked against the fermentation range while fermenting and an optional separate conditioning range (for a cold crash or lagering) while conditioning. See [Get alerts on your phone](#get-alerts-on-your-phone)
 - **Install on your phone** — Add FermentOS to your home screen and it opens full-screen like a native app. See [Install it on your phone](#install-it-on-your-phone)
 - **Optional HTTPS** — Turn it on from Settings (or with one command) to put FermentOS behind HTTPS with its own local certificate authority, for the full app install and the screen staying awake during the boil. iSpindel and Home Assistant stay on plain HTTP. See [Serve FermentOS over HTTPS](#serve-fermentos-over-https-optional)
 - **Tasting and rating** — Score a finished batch on appearance and aroma, flavor and balance, and mouthfeel and carbonation (1–5 each) plus an overall 1–10, tag off-flavors, note whether you would brew it again, and attach a photo. Scores roll up to an average on the recipe, so each recipe carries the record of every batch brewed from it
-- **Ingredients** — Malts, hops, yeast, and adjuncts with quantities, suppliers, and expiry dates. Optionally block a brew day when you are short of something, and deduct what the recipe uses from stock when you start one
+- **Recipe version history** — Every batch keeps a copy of its recipe as brewed, so the recipe page shows what changed from one brew to the next and since the last one. **Fork** a recipe to try a variation as its own recipe, keeping its Brew Flow links, with stats across every version. See [Your first brew](#your-first-brew)
+- **Ingredients** — Malts, hops, yeast, and adjuncts with quantities and expiry dates. Compare prices across several suppliers per item, with a preferred supplier shown at a glance. Optionally block a brew day when you are short of something, and deduct what the recipe uses from stock when you start one
 - **Equipment** — A register of your kit: category, condition, brand and model, serial number, purchase date and price
-- **Auto-advance to Conditioning** — Move a sensor-monitored batch on once its gravity has stopped moving. It is applied when you open the batch's page, not in the background, and can be set globally or per batch
+- **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is checked in the background every five minutes, whether or not anyone has the app open, can notify you when it happens, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
+- **Shelly relays and The Pill** — Switch a heat wrap, fridge or pump with a Shelly relay over your local network (Shelly 1 SHSW-1, or any Gen2+ device: Plus, Pro, Gen3, Gen4), by hand or for a set number of minutes that the relay itself counts down. A DS18B20 temperature probe is read too, from a Shelly add-on or from **The Pill by Shelly** in OneWire mode, and can be logged to a brew like an iSpindel or drive a Brew Flow. A Pill in SSR mode works as a two-channel relay. See [Connect a Shelly relay](#connect-a-shelly-relay)
+- **Brew Flows** *(Experimental)* — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule, and cold crash automatically a set number of days into conditioning. Flows can follow each brew's own temperatures and be linked to recipes, so they only run while a batch of that recipe is on their sensor. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
-- **Calculators** — ABV and attenuation from OG and FG today; water chemistry, recipe scaling, and batch cost are planned
+- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). Recipe scaling and batch cost are planned
 - **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
 - **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
 - **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
@@ -180,6 +185,26 @@ are still entered in °F.
 size. Add the grain bill, hops, and yeast, and optionally the mash and boil
 steps.
 
+Brewing a MoreBeer kit? **Recipes → Import** reads the kit's recipe PDF
+instead. Download the PDF from the kit's product page (a scan of the printed
+sheet will not work — it has no text to read), upload it, and check what was
+read before saving:
+
+- **Style** is not printed on the sheet, so pick one.
+- Anything the sheet leaves out is flagged at the top — usually an amount, such
+  as the clarifier's — and has to be filled in or removed before you can save.
+- The sheet suggests several yeasts. Pick the one you will use and it is added
+  as an ingredient; the full list stays in the notes.
+- Kit names rarely match what you call things. If you track stock, change each
+  name to the matching item from **Ingredients** — start typing and pick it from
+  the list.
+
+When the sheet covers the LME, DME and All-Grain kits, all three are saved as
+**one recipe with three versions**. Shared ingredients appear once; the ones
+that differ are marked with the versions they belong to. The recipe page shows
+one version at a time, and each ingredient's **Used in** setting can be changed
+when you edit it. MoreBeer kits are 5 gallons, which is what the import assumes.
+
 Set the **fermentation temperature range** while you are here. It is optional,
 but it is what lets FermentOS tell you later that a batch is running hot — see
 step 7.
@@ -201,10 +226,20 @@ gets no alert; set its time there or on the recipe to schedule it. A boil step w
 duration sets the boil length; without one, FermentOS uses your longest boil
 addition, or 60 minutes.
 
+For dry hops, set the **Use** to **Dry hop** and fill in the **day of
+conditioning** it goes in: 0 is the day the batch moves to Conditioning, 3 is
+three days after. The recipe page lists them in a **Dry Hop Schedule** card
+(its **Add dry hop** button fills in the hop type and use for you). Days are
+counted from when the batch last entered Conditioning, so a batch you move
+there late gets its dry hops late too. A dry hop with no day is listed but gets
+no reminder.
+
 **3. Stock your ingredients** *(optional)*
 
-**Ingredients** is where malts, hops, yeast, and adjuncts live, with quantities,
-suppliers, and expiry dates. You can skip this entirely and come back to it.
+**Ingredients** is where malts, hops, yeast, and adjuncts live, with quantities
+and expiry dates. Each item can list several suppliers with their price per
+unit. Star the one you usually buy from and it shows on the item's row;
+otherwise the cheapest is shown. You can skip this entirely and come back to it.
 
 It becomes required only if you turn on **Settings → Brewing → Ingredient
 Enforcement**, which stops you starting a brew day when you are short of
@@ -212,12 +247,22 @@ something and tells you exactly what is missing. When the brew does start, the
 recipe's ingredients are deducted from stock, oldest purchase first. It applies
 only to sessions started from a recipe, and an ingredient matches stock only
 when the name, type and unit are all the same — there is no unit conversion.
+An ingredient listed more than once — a hop at 45 minutes, at flameout and as a
+dry hop — is added up first, so the check is against the total. For a recipe
+with several versions, only the version you are brewing is checked and
+deducted.
 
 **4. Start a brew session**
 
 Open the recipe and click **Start Brew Session**, or go to **Brew Log → New
 Session** and choose the recipe from the dropdown. Either way FermentOS fills in
 the name, batch size, and fermentation and conditioning temperature ranges for you.
+
+If the recipe has several versions (an imported kit), you are asked **which
+version you are brewing**. That choice decides what is taken from stock and
+what the boil timer lists, and it is shown beside the session's name. If you are
+short on ingredients for one version, the dialog says what is missing and lets
+you switch to another.
 
 You do not need a recipe to log a batch — a **name and a brew date are the only
 required fields**, so a spur-of-the-moment brew can be recorded now and tidied
@@ -271,9 +316,13 @@ opening anything — see [Get alerts on your phone](#get-alerts-on-your-phone).
 When fermentation finishes, advance to **Conditioning**, then **Packaged**.
 (FermentOS can make the Conditioning step for you — see **Settings → Brewing →
 Fermentation Temperature → Auto-advance to Conditioning**. It needs an assigned
-sensor, and it acts when the batch's page is open and the sensor's gravity has
-stopped moving, so it will not move a batch nobody is looking at. A single batch
-can override the global setting from **Edit → Auto-advance to Conditioning**.)
+sensor. FermentOS checks every five minutes in the background, so a batch moves
+on once the sensor's gravity has stopped moving even if nobody opens its page,
+and you can be notified when it does. Flat gravity only counts as finished once
+the beer has attenuated at least 50%, so a slow start or a stall is left in
+Fermenting. A single batch can override the global setting from **Edit →
+Auto-advance to Conditioning**, and moving a batch back to Fermenting by hand,
+from the app, Home Assistant or the API, turns auto-advance off for that batch.)
 
 Marking a batch Packaged asks whether it went into a keg or into bottles, and
 the answer is shown on the batch afterwards. You can change it any time from
@@ -287,14 +336,30 @@ off-flavors, and whether you would brew it again. Those scores roll up to an
 average on the recipe, so over time each recipe carries the record of every
 batch you have made from it.
 
+**Tweaking a recipe between batches.** Each batch keeps a copy of its recipe as
+brewed, taken when the session is created and again when it leaves Brew Day. So
+you can edit a recipe freely after a brew: the recipe page's **Version History**
+card lists every batch with what changed since the one before it (hops added or
+dropped, amounts, timings, OG and so on), and what you've changed since the last
+brew. A batch's own page has a **Recipe as brewed** card showing exactly what it
+was made with. Batches still in progress follow the live recipe for their boil
+timer, dry hop reminders and temperature targets, so an edit mid-ferment still
+counts. Batches logged before this feature show as "not recorded".
+
+To try a bigger change without touching the original, click **Fork** on the
+recipe. You get a copy (named "… v2" by default) with the same ingredients,
+steps and Brew Flow links to change as you like. The recipe page links a fork to
+the recipe it came from and lists its own forks, and the Batch History card adds
+the batch count and average score across every version.
+
 ---
 
 ### Get alerts on your phone
 
 FermentOS checks every active batch that has a sensor assigned every five
 minutes and can message you when something needs attention. A batch with only
-hand-entered readings is not monitored; the boil alerts are the one kind that
-needs no sensor.
+hand-entered readings is not monitored; boil alerts and dry hop reminders are
+the kinds that need no sensor.
 
 | Alert | Fires when |
 |-------|-----------|
@@ -303,10 +368,25 @@ needs no sensor.
 | Sensor offline | Your iSpindel has stopped reporting |
 | Sensor battery low | The iSpindel battery drops below 20% |
 | Boil additions | A boil timer is running and a hop addition, or flameout, is due |
+| Dry hop reminders | A batch in Conditioning has reached a dry hop's day — repeats until you mark it added |
+| Moved to Conditioning | Auto-advance has moved a finished batch on to Conditioning — sent once |
 
 Boil additions are the exception to the five-minute check: each one is sent at
 the moment it is due, and anything you have already ticked off on the checklist
 is skipped. They have their own **Boil additions** checkbox, on by default.
+
+Dry hop reminders don't stop by themselves. Once a dry hop's day arrives, a
+**Dry Hops** card on the brew page shows it as due. You get a reminder straight
+away, then again every 6 hours, until you click **Mark added** there; the
+reminders stop within five minutes. Two dry hops on the same day share one
+message. Moving the batch out of Conditioning also stops them. They have their
+own **Dry hop reminders** checkbox (on by default), and a **Remind again every**
+setting of their own, separate from the general one.
+
+Moved to Conditioning is sent once, at the moment auto-advance moves a batch, and
+has its own **Moved to Conditioning** checkbox (on by default). The batch still
+moves with the checkbox off or with no delivery method set up; you just aren't
+told.
 
 Both delivery methods are **outbound** — FermentOS makes the request, nothing
 connects in to it. That is what makes this work on an ordinary home network with
@@ -550,6 +630,129 @@ Set a **Security Token** in the Integrations panel. Then open the iSpindel web U
 
 Expand the **Developer: Simulate iSpindel Reading** section in the Integrations panel and click **Send Reading** — useful for testing before your device arrives or while debugging.
 
+### Connect a Shelly relay
+
+A [Shelly 1](https://www.shelly.com/) (model SHSW-1) is a small Wi-Fi relay that can switch a heat wrap, a fermentation fridge or a pump. FermentOS talks to it directly over your home network using its local HTTP API — no Shelly cloud account needed. If you fit the Shelly temperature add-on with a DS18B20 probe, FermentOS reads that too.
+
+Newer Shelly relays (Plus, Pro, Gen3 and Gen4) work the same way; FermentOS detects which kind you have when you add it. So does [The Pill by Shelly](https://www.shelly.com/products/the-pill-by-shelly) — see [Using The Pill](#using-the-pill) below.
+
+> **Safety first.** A Shelly 1 switches mains voltage. Have it wired by someone qualified, inside a proper enclosure, and keep the device's own fuse or breaker in place. FermentOS adds software safeguards; it is not a substitute for a thermal cut-out on a heater.
+
+#### 1. Put the Shelly on your network
+
+Set the Shelly up with the Shelly app or its own hotspot (`http://192.168.33.1`) so it joins your Wi-Fi, then find its IP address in the app or your router's device list. Giving it a fixed (reserved) IP address in your router saves you updating FermentOS if it changes.
+
+#### 2. Add it to FermentOS
+
+Go to **Settings → System → Integrations → Shelly Devices** and click **Add device**. Enter its IP address and click **Check device** — FermentOS confirms it found a Shelly, whether the relay is on, and whether a probe is fitted. If the device has more than one relay channel, pick the channel (add each channel as its own device). Give it a name and click **Add device**.
+
+If you turned on *Restricted Login* in the Shelly's settings, enter the same username and password. On Plus, Pro, Gen3, Gen4 and The Pill the username is always `admin`, so only the password is needed. Credentials are stored on your FermentOS server and never sent back to the browser.
+
+#### 3. Make it fail safe
+
+Click the shield icon next to the relay. This sets the Shelly to come back **off** after a power cut, instead of restoring whatever state it was in.
+
+#### 4. Switch it
+
+Use **Turn on / Turn off**, or set **or run for … min** and click **Start timer** to turn it on for a fixed time. Timed runs are counted down by the Shelly itself, so the relay still switches off on time even if FermentOS restarts or the network drops.
+
+The list refreshes every ten seconds. A red dot means FermentOS couldn't reach the relay on its last three tries — check it is powered and on Wi-Fi, and that its IP address hasn't changed.
+
+#### 5. Log the probe to a brew *(optional)*
+
+Once FermentOS sees a probe reading, a **Log probe to brew…** dropdown appears under the relay. Pick an active brew and the probe's temperature is added to that brew's fermentation chart every five minutes, labelled *Shelly probe*, and counts towards its temperature alerts — the same as an iSpindel would.
+
+#### Using The Pill
+
+The Pill by Shelly is a tiny USB-powered Shelly that does one job at a time, chosen by its **mode**. Set the mode in the Shelly app; FermentOS shows the mode it finds but never changes it.
+
+- **OneWire mode — a temperature probe.** Plug a Shelly DS18B20 probe into its 3.5 mm jack, tape the probe to the fermenter (or drop it in a thermowell), and add The Pill as above. It has no relay, so it shows as *Temperature probe only*: log it to a brew like any probe, or pick it under **Temperature from** in a Brew Flow to drive a separate relay. A probe that updates every ten seconds gives much tighter control than an iSpindel.
+- **SSR mode — two relays.** With the solid-state relay add-on, The Pill has two relay channels. Add it once per channel you use, choosing **Channel 0** or **Channel 1**. Each channel then works exactly like any other Shelly relay, including timed runs, fail-safe defaults and Brew Flows.
+
+If you switch a Pill to a different mode later, FermentOS notices on its next poll. A Pill that was a flow's relay and is now a probe makes that flow fail off until you pick another relay.
+
+Only the first probe on a Pill is read, so the five-probe splitter isn't supported yet. The DHT22, analog and digital I/O modes are detected but give FermentOS nothing to use.
+
+#### Try it without hardware (development)
+
+`scripts/shelly-sim.ts` is a stand-in Shelly 1 for testing. Run it with `node scripts/shelly-sim.ts` (Node 24 or later), add `localhost:8081` as the relay address, and set the fake probe's temperature with `curl 'localhost:8081/sim?temp=21.5'`.
+
+With `GEN=2` it stands in for The Pill instead: `GEN=2 PILL_MODE=onewire node scripts/shelly-sim.ts` for a probe, or `GEN=2 PILL_MODE=ssr SHELLY_PASS=secret node scripts/shelly-sim.ts` for two relay channels behind a password (username `admin`).
+
+### Automate with Brew Flows
+
+> **Experimental.** Brew Flows are new and are marked Experimental in the app. They switch real equipment, so watch your first batches closely and check that each relay does what you expect.
+
+A Brew Flow switches your [Shelly relays](#connect-a-shelly-relay) for you, either to hold a fermenter at a temperature or on a schedule. Open **Flows** in the sidebar (on a phone, tap the **Brew Flows** card on the Dashboard) and click **New flow**.
+
+#### Hold a fermenter at temperature
+
+Choose **Fermentation temperature**, then:
+
+- **Relay**: the Shelly switching your heat wrap or fridge.
+- **Temperature from**: an iSpindel, or a Shelly's own probe. A probe updates every few seconds, while an iSpindel reports every 15 minutes or so, so a probe gives much tighter control.
+- **Mode, Target and Swing**:
+  - In **Heat** mode, the relay turns on once the temperature drops *Swing* below the target, and turns off again when it reaches the target.
+  - **Cool** mirrors that above the target. It also keeps the relay off for at least 5 minutes between runs, to protect a fridge compressor.
+- **Only while the sensor's brew is fermenting or conditioning**: lets the flow stand down by itself once you mark the batch Packaged.
+
+Leave **Turn on now** ticked and click **Create flow**. The flow checks the temperature every 30 seconds. The card on the Flows page shows the current reading and whether the relay is on. Expand it to see each step and a log of every switch.
+
+#### Cold crash after conditioning
+
+In **Fermentation temperature**, tick **Cold crash after conditioning starts** and set how many days into conditioning to start, and the crash temperature. The relay must switch a fridge, so the flow runs in **Cool** mode. The flow then:
+
+- holds your target while the brew is **Fermenting**;
+- keeps holding it for the first days of **Conditioning**;
+- cools to the crash temperature once the brew has been conditioning that long, and (if ticked) notifies you as the crash starts.
+
+Days count from when the brew that the temperature sensor is assigned to was moved to Conditioning, by you or by auto-advance. Moving a batch back to Fermenting stops the crash. When the brew isn't at one of those stages, or no brew is assigned to the sensor, the fridge stays off.
+
+On the canvas, the same thing is built from **Days in stage** steps: "Conditioning for less than 3 days" leads to the holding thermostat, and "Conditioning for at least 3 days" leads to the crash thermostat. Thermostats on different branches may share one relay, so they can take turns. If two of them are ever reached at the same time, the flow switches the relay off and alerts you rather than guessing.
+
+#### Follow each brew's temperatures, and link flows to recipes
+
+Tick **Use the brew's own temperatures** in **Fermentation temperature** and the flow aims for the ideal **fermentation** temperature while the brew on the sensor is fermenting, and its ideal **conditioning** temperature while it's conditioning: the brew's own values if you set them on the brew, otherwise its recipe's. On the canvas this is a thermostat's **Target** setting. If no brew is assigned to the sensor, or the temperature it should follow isn't set, the flow switches its relays off and alerts you.
+
+To tie a flow to a recipe, open the recipe and use the **Brew Flows** card: **New** creates a fermentation flow that follows the brew's temperatures and is linked to the recipe; **Link an existing flow** links one you already have. In the editor, the flow's **Recipes** setting does the same. A linked flow runs only while a brew of one of its recipes is assigned to its temperature sensor. The rest of the time it **stands by**: its relays stay off and the Flows page says why, but it doesn't alert you, so a fermenter between batches is quiet. Link the same flow to every recipe you brew in that fermenter and it picks up each batch as you assign the sensor. Only temperature flows can be linked.
+
+#### Run a relay on a timer
+
+Choose **Timed relay**, pick a relay, choose a time of day (and optionally which days) or every few hours, and set how many minutes it should run. **Run now** on the flow's card tests it straight away.
+
+#### Build or change a flow on the canvas
+
+Click **Open** on a flow's card to see it as a diagram, or choose **Blank flow** under **New flow** to start from nothing. Steps run top to bottom:
+
+- **Start with** a trigger. **Temperature** re-checks a sensor every 30 seconds; **Schedule** runs at set times. A flow has exactly one.
+- **Only if** steps let the flow continue only while something is true: the temperature is above, below or between values, the time is inside a window (which may cross midnight), the sensor's brew is at a given stage, or it has been at a stage for a number of days.
+- **Control** holds a temperature with a thermostat. It must be the last step on its branch.
+- **Then** steps act: switch a relay, send a notification, or (in schedule flows) wait.
+
+Click a step in the left-hand list to add it under the selected step, or drag it onto the canvas. To join two steps, drag from the dot at the bottom of one to the dot at the top of the next. A step can branch into several steps, but each step follows only one. Select a step to change its settings on the right; press **Delete** to remove a step or a line.
+
+Save with **Save** or Ctrl+S. A flow that's turned off saves even when it's unfinished, and any problems are shown in red on the steps they concern. A flow that's on only saves once every step is valid. Steps that don't suit the trigger are greyed out: a schedule can't hold a temperature, and a temperature flow can't wait.
+
+While the flow is on, a green dot marks each step that was reached on the last check, and the lines leading to them move. The temperature step shows the current reading and the thermostat shows whether its relay is on.
+
+On a phone the diagram is read-only. You can still turn the flow on or off and see its activity there.
+
+#### What keeps it safe
+
+FermentOS fails **off**. While a flow holds a relay on, it renews a short countdown on the Shelly every 30 seconds. If the countdown isn't renewed for 90 seconds, the Shelly switches itself off, whatever has happened to FermentOS, the Pi or the Wi-Fi. A timed run is counted down by the Shelly in the same way.
+
+A flow also switches its relays off and sends you a notification when it can no longer tell what to do:
+- the temperature reading goes stale (a probe unplugged, an iSpindel that has stopped reporting);
+- a relay can't be reached;
+- the flow hits an error;
+- two branches that share a relay are reached at the same time.
+
+It picks up again by itself once the problem clears. These alerts go to the channel you set up in [Get alerts on your phone](#get-alerts-on-your-phone); set one up if you rely on flows.
+
+After FermentOS restarts, every relay a flow controls is switched off first, then the flows take over again.
+
+A relay can belong to only one flow that's turned on, so two flows can never fight over it. While a flow controls a relay, the relay's manual buttons in Settings are replaced by a link to that flow. Turn the flow off to switch the relay by hand.
+
 ---
 
 ### Everyday use
@@ -573,6 +776,25 @@ Day to day, that means:
 - **Recipes** carries the average score of every batch brewed from it, so your best recipes surface themselves over time
 - **Ingredients** tracks what you have and flags what is about to expire
 - **Equipment** is a register of your kit, searchable and filtered by category
+- **Calculators** has ABV and attenuation, and water chemistry (below)
+
+**Water chemistry.** Under **Calculators → Water Chemistry**, enter the six
+values from your water report (calcium, magnesium, sodium, sulfate, chloride,
+bicarbonate, in ppm) and press **Save as my water** so they are filled in next
+time, on any device. Leave them at zero, or press **Use RO water**, for RO or
+distilled water. Pick a target, either a style profile such as **Light colored
+and hoppy** or a historic city such as **Burton on Trent**, or enter your own,
+then the total water volume, and press **Suggest additions**. FermentOS works
+out grams of gypsum, calcium chloride, Epsom salt, table salt, and baking soda
+that get closest to the target. Change any amount and the resulting profile,
+sulfate-to-chloride ratio, and residual alkalinity update as you type. Salts
+can only add minerals, so if your water already has more of something than the
+target, it tells you to mix in RO or distilled water instead. Chalk is never
+suggested, because it barely dissolves without acid or CO₂; for high-alkalinity
+targets such as Dublin or Munich the calculator says so rather than making the
+water salty with baking soda. Target values
+come from Brewer's Friend's published table; treat the historic city ones as a
+starting point, not a specification.
 
 Only Brew Day, Fermenting, and Conditioning batches with a sensor assigned are
 monitored for alerts. Once a batch is **Packaged** it is finished, and a stale
@@ -646,7 +868,9 @@ Managed from **Settings → System → Backups**.
 FermentOS takes a `pg_dump` of the whole database. You can run one on demand,
 download it, or schedule a run every day at 2 AM or every Sunday at 2 AM. A
 scheduled run pushes to your SFTP server if one is configured, and writes to the
-local disk if it is not, or if the SFTP push fails. Local backups can be deleted
+local disk if it is not, or if the SFTP push fails. If FermentOS was off or
+asleep when a scheduled run was due, it takes the missed backup two minutes
+after it next starts. Local backups can be deleted
 automatically after 5 to 60 days. Restores work from an uploaded file or from
 any backup still in local history.
 
@@ -740,7 +964,10 @@ Response is an array, one entry per device:
   "types": ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"],
   "repeatHours": 6,
   "tempRepeatHours": null,
-  "boilAlerts": true
+  "boilAlerts": true,
+  "dryHopAlerts": true,
+  "dryHopRepeatHours": 6,
+  "autoAdvanceAlerts": true
 }
 ```
 
@@ -750,6 +977,15 @@ Response is an array, one entry per device:
 `boilAlerts` turns boil-addition and flameout messages on or off. It is separate
 from `types` because it is a one-off schedule rather than a monitored condition.
 It defaults to `true`, and leaving it out of a `PUT` keeps the current value.
+
+`dryHopAlerts` turns dry hop reminders on or off, and `dryHopRepeatHours` (1–168,
+default 6) is how often a due dry hop is repeated until it is marked added.
+Both are separate from `types` for the same reason as `boilAlerts`, and leaving
+either out of a `PUT` keeps the current value.
+
+`autoAdvanceAlerts` sends one message when auto-advance moves a batch to
+Conditioning. It defaults to `true`, is separate from `types` for the same
+reason, and leaving it out of a `PUT` keeps the current value.
 
 `tempRepeatHours` overrides `repeatHours` for `temp_out_of_range` only, and is
 also 1–168. `null` — the default — inherits `repeatHours`, so upgrading never
@@ -795,6 +1031,41 @@ additions that are due:
     { "id": 12, "name": "Cascade", "amount": 1, "unit": "oz" },
     { "id": 13, "name": "Citra", "amount": 0.5, "unit": "oz" }
   ]
+}
+```
+
+Dry hop reminders carry `alertType` `dry_hop_day_<N>` (one per day of
+conditioning), plus `event: "dry_hop_due"` and `day`:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Pacific Haze IPA: Time to dry hop",
+  "message": "Day 3 of conditioning — add 2 oz Citra, 1 oz Mosaic. Mark it added in FermentOS to stop these reminders.",
+  "priority": "high",
+  "triggeredAt": "2026-10-13T18:05:00.000Z",
+  "brewSessionId": 7,
+  "recipeName": "Pacific Haze IPA",
+  "alertType": "dry_hop_day_3",
+  "event": "dry_hop_due",
+  "day": 3
+}
+```
+
+Brew Flows use the same envelope with `event` `flow_action` (a Notify step) or
+`flow_failsafe` (a flow switched its relays off because a reading went stale, a
+relay was unreachable or the flow failed), plus `flowId` and `flowName`:
+
+```json
+{
+  "source": "fermentos",
+  "title": "Fermenter 1 heat: relays switched off",
+  "message": "Heat wrap probe reading is out of date. Its relays have been switched off until this is fixed.",
+  "priority": "high",
+  "triggeredAt": "2026-10-26T20:13:00.000Z",
+  "event": "flow_failsafe",
+  "flowId": 1,
+  "flowName": "Fermenter 1 heat"
 }
 ```
 ---
@@ -951,9 +1222,9 @@ pnpm --filter @workspace/db run push            # apply schema changes (no migra
 pnpm --filter @workspace/api-spec run codegen   # regenerate the API client after editing openapi.yaml
 ```
 
-The API server needs both `PORT` and `DATABASE_URL` and does not read `.env` itself.
+The API server needs both `PORT` and `DATABASE_URL` and does not read `.env` itself. The Vite dev server forwards `/api` requests to the API at `API_PROXY_TARGET` (default `http://localhost:8080`), so open the frontend on its own port.
 
-Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack (Postgres + both dev servers, live-reloading against a bind-mounted repo) in one command.
+Alternatively, `docker compose -f docker-compose.dev.yml up` starts a full dev stack in one command: Postgres, the schema push, the API on http://localhost:8080 and the frontend with hot reload on http://localhost:23975, against a bind-mounted repo. The API builds once at start, so after an API change run `docker compose -f docker-compose.dev.yml restart app`; after a dependency change, run `up --build -V`.
 
 ---
 
@@ -982,9 +1253,13 @@ response shape, is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
 |--------|----------|-------------|
 | GET | `/api/recipes` | List all recipes — optional query params `style`, `search` |
 | POST | `/api/recipes` | Create a recipe |
-| GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, and batch rating summary |
+| POST | `/api/recipes/import` | Create a recipe with its ingredients and steps in one call |
+| POST | `/api/recipes/import/morebeer/parse` | Read a MoreBeer kit-sheet PDF into a draft (saves nothing) |
+| GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, batch rating summary, and fork lineage |
 | PUT | `/api/recipes/:id` | Update a recipe |
-| DELETE | `/api/recipes/:id` | Delete a recipe |
+| DELETE | `/api/recipes/:id` | Delete a recipe (its forks move up to its own parent) |
+| POST | `/api/recipes/:id/fork` | Copy a recipe, its ingredients, steps and Brew Flow links into a new recipe forked from it |
+| GET | `/api/recipes/:id/history` | The recipe's brews, newest first, with what changed between each and since the last one |
 | GET | `/api/recipes/styles` | Recipe counts grouped by style |
 | GET | `/api/recipes/:id/ingredients` | List ingredients for a recipe |
 | POST | `/api/recipes/:id/ingredients` | Add an ingredient |
@@ -1035,10 +1310,76 @@ the recipe's estimated time in each stage.
 }
 ```
 `type`: `malt` | `hop` | `yeast` | `adjunct` | `water_agent` | `other`
-`use`: `mash` | `boil` | `dry_hop` | `whirlpool` | `primary` | `secondary` | `packaging` | `other`
+`use`: `mash` | `steep` | `boil` | `dry_hop` | `whirlpool` | `primary` | `secondary` | `packaging` | `other`
+
+On a recipe with several versions, an ingredient may also carry
+`"variants": ["lme", "dme"]` to limit it to those versions; omit it or send
+`null` for an ingredient every version uses. Naming a version the recipe does
+not have returns `400`.
+
+A `dry_hop` ingredient takes `"dryHopDay": 3` instead of `timingMinutes`: the day
+of conditioning it goes in, where 0 is the day the batch enters Conditioning. It
+drives the dry hop reminders.
 
 `PUT /api/ingredients/:id` accepts the same fields, all optional; send `null` to
-clear `use`, `timingMinutes` or `notes`.
+clear `use`, `timingMinutes`, `dryHopDay`, `notes` or `variants`.
+
+Ingredients are returned in the order they were added.
+
+**Forks and version history.** `POST /api/recipes/:id/fork` takes an optional
+`{ "name": "Pacific IPA v2" }` (the default is the parent's name with the next
+version number) and returns `201` with the new recipe. Every recipe carries
+`parentRecipeId`; `GET /api/recipes/:id` adds `parent` and `forks` (each
+`{ id, name }`) and `familyStats` (`recipeCount`, `batchCount`,
+`ratedBatchCount`, `avgScore` across the recipe and every recipe related to it
+by forking, or `null` when it has none).
+
+Each brew session records its recipe as brewed when it is created and again when
+it leaves Brew Day. `GET /api/recipes/:id/history` returns `brews` (each with
+`recorded: false` for sessions from before this, and `changes` against the
+previous recorded brew, `null` for the first) and `sinceLastBrew`.
+`GET /api/brew-sessions/:id/recipe-snapshot` returns that session's `snapshot`
+and `changesSinceBrew`. A change has a `kind` (`field`, `ingredient_added`,
+`ingredient_removed`, `ingredient_changed`, `step_added`, `step_removed`,
+`step_changed`) with `field`/`from`/`to` or the `ingredient`/`step` involved and
+its `previousIngredient`/`previousStep`.
+
+**Recipe versions.** A recipe's `variants` is `null` for an ordinary recipe, or
+a list drawn from `lme` | `dme` | `all_grain` when it can be brewed more than
+one way. It is set only by `POST /api/recipes/import`; `POST` and `PUT
+/api/recipes` ignore it.
+
+**POST /api/recipes/import** body:
+```json
+{
+  "recipe": { "name": "Pliny the Elder", "style": "Double IPA", "batchSizeGallons": 5 },
+  "variants": ["lme", "dme", "all_grain"],
+  "ingredients": [
+    { "name": "Light Dry Extract", "type": "malt", "amount": 7.5, "unit": "lbs", "use": "boil", "variants": ["dme"] },
+    { "name": "2-Row", "type": "malt", "amount": 13, "unit": "lbs", "use": "mash", "variants": ["all_grain"] },
+    { "name": "Magnum", "type": "hop", "amount": 2, "unit": "oz", "use": "boil", "timingMinutes": 90 }
+  ],
+  "steps": [{ "body": "Boil for 90 minutes", "phase": "boil", "durationMinutes": 90 }]
+}
+```
+`recipe` takes the same fields as `POST /api/recipes`, `ingredients` the same as
+`POST /api/recipes/:id/ingredients`, and `steps` the same as `POST
+/api/recipes/:id/steps`. `variants` and `steps` are optional. Everything is
+saved in one transaction: if any part is rejected, nothing is created.
+
+**POST /api/recipes/import/morebeer/parse** takes the PDF itself as the request
+body, not a form upload, up to 10 MB:
+```bash
+curl -X POST http://localhost:8080/api/recipes/import/morebeer/parse \
+  -H "Content-Type: application/pdf" --data-binary @kit-sheet.pdf
+```
+It returns a draft — `name`, `variants`, `batchSizeGallons`, `stats`, `hints`,
+`suggestedYeasts`, `ingredients`, `tips` and `warnings` — and saves nothing.
+Draft ingredients may have a `null` `amount`, `unit` or `use` where the sheet
+does not state one; fill those in before posting to `/api/recipes/import`.
+`400` means the body is not a PDF or is too large. `422` means it is a PDF that
+could not be read as a kit sheet, with a `code` of `no_text` (a scan),
+`unrecognized_sheet` or `unreadable_pdf`.
 
 ---
 
@@ -1077,6 +1418,7 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 | GET | `/api/brew-sessions` | List all brew sessions — optional query params `status`, `recipeId` |
 | POST | `/api/brew-sessions` | Create a brew session |
 | GET | `/api/brew-sessions/:id` | Get a brew session with status log |
+| GET | `/api/brew-sessions/:id/recipe-snapshot` | The recipe as this batch was brewed, and what has changed in it since |
 | PUT | `/api/brew-sessions/:id` | Update a brew session |
 | DELETE | `/api/brew-sessions/:id` | Delete a brew session |
 | GET | `/api/brew-sessions/:id/readings` | List fermentation readings |
@@ -1088,12 +1430,16 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 | PUT | `/api/brew-sessions/:id/rating` | Save the tasting scorecard |
 | DELETE | `/api/brew-sessions/:id/rating` | Clear the tasting scorecard |
 | POST | `/api/brew-sessions/:id/boil` | Start, pause, resume, finish, or reset the boil timer, or save its checklist |
+| GET | `/api/brew-sessions/:id/dry-hops` | The recipe's dry hop schedule for this batch, with due times and status |
+| POST | `/api/brew-sessions/:id/dry-hops/:ingredientId/added` | Mark a dry hop added, which stops its reminders |
+| DELETE | `/api/brew-sessions/:id/dry-hops/:ingredientId/added` | Undo marking a dry hop added |
 
 **POST /api/brew-sessions** body:
 ```json
 {
   "recipeId": 1,
   "recipeName": "Pacific IPA",
+  "recipeVariant": null,
   "status": "brew_day",
   "brewDate": "2024-03-15",
   "plannedDate": null,
@@ -1117,13 +1463,22 @@ Must contain every step ID belonging to the recipe, or the request is rejected.
 optional on create. `recipeName`, `status`, `brewDate` and `batchSizeGallons`
 are required.
 
+`recipeVariant`: `lme` | `dme` | `all_grain`. Required when the recipe has
+several versions, and must be one of them, or the request returns `400`; for
+any other recipe it is ignored and stored as `null`.
+
 With Ingredient Enforcement on, creating a session from a recipe you are short
 on returns `409` with `{ "error": "Insufficient inventory", "shortages": [...] }`.
+Each shortage is the total needed of one ingredient, and only the chosen
+version's ingredients are counted.
 
 `PUT /api/brew-sessions/:id` accepts the same fields, plus
 `autoAdvanceToConditioning` (`true` | `false` | `null` to follow the global
-setting) and `tastingNotes`. Setting `status` to `packaged` unassigns any sensor
-on the session.
+setting) and `tastingNotes`. Changing `recipeVariant` afterwards changes what
+the boil timer lists but does not return or re-deduct stock. Setting `status` to `packaged` unassigns any sensor
+on the session. Setting `status` from `conditioning` back to `fermenting` while
+auto-advance is on for the batch also sets `autoAdvanceToConditioning` to
+`false`, unless the same request sets it.
 
 **POST /api/brew-sessions/:id/readings** body:
 ```json
@@ -1180,6 +1535,22 @@ time since `boilStartedAt`, less `boilPausedMs` and any pause in progress. Every
 change reschedules the boil-addition alerts, and they are rebuilt from these
 fields when the server restarts.
 
+**GET /api/brew-sessions/:id/dry-hops** returns the recipe's dry hops that have
+a `dryHopDay`, for the version being brewed, sorted by day:
+```json
+[
+  { "ingredientId": 21, "name": "Citra", "amount": 2, "unit": "oz", "day": 0,
+    "dueAt": "2026-10-10T18:00:00.000Z", "status": "added" },
+  { "ingredientId": 22, "name": "Mosaic", "amount": 1, "unit": "oz", "day": 3,
+    "dueAt": "2026-10-13T18:00:00.000Z", "status": "due" }
+]
+```
+`dueAt` is the time the batch last entered Conditioning (from its stage history)
+plus `day` days, and is `null` until it has. `status` is `scheduled`, `due` or
+`added`. Nothing is `due` unless the batch is in Conditioning now. The two
+`/added` endpoints return the updated schedule. Added ids are stored on the
+session as `dryHopAddedIds`.
+
 ---
 
 ### Inventory
@@ -1198,16 +1569,19 @@ fields when the server restarts.
   "type": "hop",
   "amount": 8,
   "unit": "oz",
-  "supplier": "MoreBeer",
   "purchasedDate": "2024-03-01",
   "expiryDate": "2025-03-01",
   "maltType": null,
-  "cost": 12.5,
+  "suppliers": [
+    { "name": "MoreBeer", "price": 1.56, "url": "https://www.morebeer.com", "preferred": true },
+    { "name": "Northern Brewer", "price": 1.75, "url": null, "preferred": false }
+  ],
   "notes": "Optional"
 }
 ```
 `type`: `malt` | `hop` | `yeast` | `adjunct` | `water_agent` | `other`
 `maltType`: `lme` | `dme` | `all_grain` | `null`
+`suppliers`: optional list of places to buy the item. `name` is required, `price` is per unit of the item's `unit` (nullable), `url` is optional, and at most one supplier can be `preferred` (if several are flagged, the first one wins). On `PUT`, sending `suppliers` replaces the whole list. Items carry `suppliers` in place of the single `supplier` and `cost` fields used before 1.10.
 
 ---
 
@@ -1292,7 +1666,8 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | `/api/settings/default-readings-shown` | `{ "count": 5 \| 10 \| 25 \| 50 \| 100 }` | Default number of readings shown on a fresh fermentation chart |
 | `/api/settings/ferment-temp-unit` | `{ "unit": "F" \| "C" }` | Unit used for fermentation temperature thresholds/readings |
 | `/api/settings/temp-alert-readings` | `{ "count": 2..10 }` | Consecutive out-of-range readings required before a temperature alert fires |
-| `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Global default for auto-advancing a session to Conditioning. The server only stores it; the brew session page applies it |
+| `/api/settings/source-water` | `{ "profile": { "calcium": 30, "magnesium": 8, "sodium": 12, "sulfate": 25, "chloride": 20, "bicarbonate": 90, "name": "Tap" } \| null }` | Your tap water in ppm, used to prefill the water calculator. Each ion is 0–2000; `name` is optional. `null` clears it, and `GET` returns `null` until one is saved |
+| `/api/settings/auto-conditioning` | `{ "enabled": boolean }` | Global default for auto-advancing a session to Conditioning. A batch's own `autoAdvanceToConditioning` overrides it. The server checks every five minutes and moves a finished batch on |
 
 `GET`/`PUT /api/settings/notifications` and `POST /api/settings/notifications/test`
 are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
@@ -1335,6 +1710,74 @@ are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 | POST | `/api/integrations/ispindel/simulate` | Send a synthetic reading for development/testing — body needs `gravity` and `temperature`; optional `deviceId`, `brewSessionId`, `deviceName`, `temperatureUnit`, `battery`, `angle`, `rssi` |
 | GET | `/api/integrations/ispindel/status` | Status endpoint — `{ "devices": [...] }` with the latest reading from each enabled device |
 | GET | `/api/integrations/ispindel/devices/:deviceId/readings` | Paginated raw readings for a device — query params `limit`, `offset`, `sort` (`asc`/`desc`), `start`, `end`, `brewId` |
+
+---
+
+### Relay Devices (Shelly)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/devices` | List Shelly devices with their live state (`reachable`, `ison`, `hasRelay`, probe `tempC`, `rssi`, `lastError`) |
+| POST | `/api/devices/probe` | Check an address before adding it — body `{ "host": string, "username"?: string, "password"?: string }`. Always `200`; `ok` is `false` with an `error` when the device can't be reached, isn't a Shelly, or rejects the credentials. Also reports `model`, `generation`, `isPill`, `pillMode`, `hasRelay` and `relayChannels` |
+| POST | `/api/devices` | Add a device — body `{ "name": string, "host": string, "channel"?: number, "username"?: string, "password"?: string }`. `deviceType` and `model` are detected from the device; `400` when it can't be reached |
+| GET | `/api/devices/:id` | Get one device |
+| PATCH | `/api/devices/:id` | Update any of `name`, `host`, `channel`, `username`, `password`, `enabled`. Omit `password` to keep it; send `null` to clear it. A new `host` is probed again to detect its type. Disabling the device, or changing its `host` or `channel`, switches the old relay off first; disabling also unassigns its probe from its brew |
+| DELETE | `/api/devices/:id` | Switch the relay off (if it has one) and remove the device. If the relay can't be switched off the device is kept and `502` is returned; add `?force=true` to remove it anyway. The probe is unassigned from its brew, and its sensor device and readings are kept |
+| POST | `/api/devices/:id/relay` | Switch by hand — body `{ "on": boolean, "durationSec"?: number }`. With `durationSec` the Shelly switches itself back off after that many seconds. Returns `409` when the device has no relay, `502` when it can't be reached |
+| POST | `/api/devices/:id/safe-defaults` | Set the relay to come back off after a power cut. Returns `409` when the device has no relay, `502` when it can't be reached |
+
+`deviceType` is `shelly_gen1` (Shelly 1, Gen1 REST API) or `shelly_gen2` (Plus, Pro, Gen3, Gen4 and The Pill, Gen2+ RPC API with digest auth as user `admin`). `state.hasRelay` is `false` for a probe-only device such as The Pill in OneWire mode, and is kept current by polling.
+
+Passwords are never returned; responses carry `hasPassword` instead. Once a device's probe reports a temperature, FermentOS registers it as a sensor device (`deviceType: "shelly_probe"`, linked by `probeSensorDeviceId`), so it can be assigned to a brew with the [Sensors](#sensors) endpoints.
+
+---
+
+### Brew Flows
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/flows` | List flows. Each includes `kind` (`temperature` \| `schedule`, or `null` while invalid), `problems` (`[{ nodeId, message }]`), the relays it switches (`relayDeviceIds`), the recipes it's linked to (`recipeIds`), `lastError` and `lastRun` |
+| POST | `/api/flows` | Create a flow — body `{ "name": string, "description"?: string, "graph": FlowGraph, "recipeIds"?: number[] }`. New flows start turned off, so a half-built graph can be saved. Unknown recipe ids → `400` |
+| GET | `/api/flows/:id` | Get one flow |
+| PUT | `/api/flows/:id` | Update any of `name`, `description`, `graph`, `recipeIds` (replaces the links). A flow that is on only accepts changes that leave it with no problems (`400` with `problems`). Only temperature flows can be linked to recipes |
+| DELETE | `/api/flows/:id` | Delete a flow; relays it controlled are switched off |
+| POST | `/api/flows/:id/enable` | Turn a flow on. `400` with `problems` if the graph is invalid or a relay it switches belongs to another flow that's on |
+| POST | `/api/flows/:id/disable` | Turn a flow off; relays it controlled are switched off |
+| POST | `/api/flows/:id/run` | Run a schedule flow now (`202`); the outcome lands in its runs |
+| GET | `/api/flows/:id/runs` | What the flow has done, newest first — query param `limit` (default 50, max 200). Kept for 14 days |
+| GET | `/api/flows/:id/status` | Live state: `running`, `tempC`, `failsafe` (why relays are being held off, or `null`), `waiting`, `standby` (why a recipe-linked flow is idle, or `null`), `nextRunAt`, and per-node `{ active, relayOn?, reason?, targetC? }` |
+
+While a flow controls a relay, `POST /api/devices/:id/relay` and `DELETE /api/devices/:id` return `409`, and the device's `controlledBy` names the flow.
+
+**FlowGraph** is a tree: one trigger node, and every other node fed by exactly one edge.
+
+```json
+{
+  "version": 1,
+  "nodes": [
+    { "id": "t", "type": "trigger.temperature", "position": { "x": 0, "y": 0 },
+      "data": { "config": { "source": { "kind": "shelly", "outputDeviceId": 3 } } } },
+    { "id": "th", "type": "control.thermostat", "position": { "x": 0, "y": 120 },
+      "data": { "config": { "outputDeviceId": 3, "mode": "heat", "setpointC": 20, "hysteresisC": 0.5 } } }
+  ],
+  "edges": [{ "id": "e1", "source": "t", "target": "th" }]
+}
+```
+
+Node types and their `config` (temperatures are always °C):
+
+| Type | Config | Notes |
+|------|--------|-------|
+| `trigger.temperature` | `source`: `{ "kind": "sensor", "sensorDeviceId" }` or `{ "kind": "shelly", "outputDeviceId" }` | Re-evaluated every 30 s. Relays downstream are on while the path to them passes, off otherwise |
+| `trigger.schedule` | `cron` (five fields, server local time) | Runs top to bottom once per firing |
+| `condition.compare` | `op` (`lt`, `gt`, `between`), `valueC`, `value2C` (for `between`) | Temperature flows only |
+| `condition.timeWindow` | `from`, `to` (`HH:MM`), `days` (0 = Sunday; empty = every day) | Windows may cross midnight |
+| `condition.brewStatus` | `statuses` (any of `brew_day`, `fermenting`, `conditioning`, `packaged`) | The brew the temperature sensor is assigned to; temperature flows only |
+| `condition.stageAge` | `status` (one stage, as above), `op` (`atLeast`, `lessThan`), `days` (0–365, tenths allowed) | Passes while that brew is in `status` and has been for at least / less than `days`, counted from when it last entered the stage; temperature flows only |
+| `control.thermostat` | `outputDeviceId`, `mode` (`heat`/`cool`), `setpointFrom` (`fixed` — the default — `fermentIdeal` or `conditionIdeal`), `setpointC` (used when `fixed`), `hysteresisC` (default 0.5), `minOnSec`, `minOffSec` (default 300 when cooling) | `fermentIdeal` / `conditionIdeal` follow the ideal temperature of the brew on the sensor (its own, else its recipe's); with no brew or no value set the flow fails off. Temperature flows only; must end its branch. One relay may be used by thermostats on different branches, never twice down one branch; if two are reached at once the flow fails off |
+| `action.relay` | `outputDeviceId`, `action` (`on`, `off`, `onFor`), `minutes` (for `onFor`) | Temperature flows use `on`; schedule flows use `onFor` or `off`, never an open-ended `on` |
+| `action.notify` | `message` — `{flow}` and `{temp}` are filled in | Sent each time the step is newly reached |
+| `action.delay` | `minutes` | Schedule flows only |
 
 ---
 

@@ -1,9 +1,18 @@
-import { pgTable, serial, text, real, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
+
+// The versions a kit recipe can be brewed as. Same values as inventory's
+// maltTypeEnum, declared here because inventory.ts already imports this file.
+export const recipeVariantEnum = ["lme", "dme", "all_grain"] as const;
 
 export const recipesTable = pgTable("recipes", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   style: text("style").notNull(),
+  // Null for an ordinary single-version recipe. Set only by import.
+  variants: text("variants", { enum: recipeVariantEnum }).array(),
+  // The recipe this one was forked from. Null for an original. Deleting a
+  // parent re-points its forks at the grandparent (see routes/recipes.ts).
+  parentRecipeId: integer("parent_recipe_id").references((): AnyPgColumn => recipesTable.id, { onDelete: "set null" }),
   batchSizeGallons: real("batch_size_gallons").notNull(),
   originalGravity: real("original_gravity"),
   finalGravity: real("final_gravity"),
@@ -32,7 +41,7 @@ export const recipesTable = pgTable("recipes", {
 export type Recipe = typeof recipesTable.$inferSelect;
 
 export const ingredientTypeEnum = ["malt", "hop", "yeast", "adjunct", "water_agent", "other"] as const;
-export const ingredientUseEnum = ["mash", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"] as const;
+export const ingredientUseEnum = ["mash", "steep", "boil", "dry_hop", "whirlpool", "primary", "secondary", "packaging", "other"] as const;
 
 export const recipeIngredientsTable = pgTable("recipe_ingredients", {
   id: serial("id").primaryKey(),
@@ -43,7 +52,12 @@ export const recipeIngredientsTable = pgTable("recipe_ingredients", {
   unit: text("unit").notNull(),
   use: text("use", { enum: ingredientUseEnum }),
   timingMinutes: integer("timing_minutes"),
+  // Dry hops only: days after the batch enters conditioning (0 = that day).
+  // Drives the repeating "time to dry hop" alert.
+  dryHopDay: integer("dry_hop_day"),
   notes: text("notes"),
+  // Which of the recipe's versions this ingredient belongs to. Null = all.
+  variants: text("variants", { enum: recipeVariantEnum }).array(),
 });
 
 export type RecipeIngredient = typeof recipeIngredientsTable.$inferSelect;

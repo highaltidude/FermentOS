@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation, Link } from "wouter";
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Beer, Loader2, GitBranch } from "lucide-react";
 import {
   useGetRecipe,
   useUpdateRecipe,
@@ -14,10 +14,16 @@ import {
   useReorderRecipeSteps,
   useListInventory,
   useCreateBrewSession,
+  useForkRecipe,
+  useGetRecipeHistory,
+  getGetRecipeHistoryQueryKey,
+  getListRecipesQueryKey,
+  getListFlowsQueryKey,
   getGetRecipeQueryKey,
   type IngredientType,
   type IngredientUse,
   type RecipeIngredient,
+  type RecipeVariant,
   type StepPhase,
 } from "@workspace/api-client-react";
 import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
@@ -31,11 +37,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
-import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlaceholder, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
+import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, DRY_HOP, hasTimingField, timingFields, timingValue, timingPlaceholder, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { ScoreBadge } from "@/components/ui/score-picker";
 import { StyleSelect } from "@/components/StyleSelect";
 import { TempRangeFields } from "@/components/TempRangeFields";
+import { StartBrewDialog } from "@/components/StartBrewDialog";
+import { VariantChips, VariantSwitcher } from "@/components/VariantChips";
+import { apiErrorMessage, shortageLines } from "@/lib/inventoryShortage";
+import { ingredientsForVariant, isMultiVariant, VARIANT_LABELS, variantListLabel } from "@/lib/recipeVariants";
+import { RecipeFlowsCard } from "@/components/flows/RecipeFlowsCard";
+import { RecipeChangeList } from "@/components/RecipeChangeList";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const STEP_PHASE_COLORS: Record<string, string> = {
   mash: "bg-amber-100 text-amber-800 border-amber-200",
@@ -346,15 +359,26 @@ function StepList({ recipeId, steps }: { recipeId: number; steps: StepLike[] }) 
   );
 }
 
-/** Adds an ingredient, or edits `ingredient` when one is passed. */
-function IngredientForm({ recipeId, ingredient, onDone }: { recipeId: number; ingredient?: RecipeIngredient; onDone: () => void }) {
+/**
+ * Adds an ingredient, or edits `ingredient` when one is passed. For a recipe
+ * with several versions, `recipeVariants` lists them so the ingredient can be
+ * limited to some. `preset` fills in a new ingredient's type, unit and use.
+ */
+function IngredientForm({ recipeId, ingredient, recipeVariants, preset, onDone }: {
+  recipeId: number;
+  ingredient?: RecipeIngredient;
+  recipeVariants: readonly RecipeVariant[] | null;
+  preset?: { type: string; unit: string; use: string };
+  onDone: () => void;
+}) {
   const [name, setName] = useState(ingredient?.name ?? "");
-  const [type, setType] = useState<string>(ingredient?.type ?? "malt");
+  const [type, setType] = useState<string>(ingredient?.type ?? preset?.type ?? "malt");
   const [amount, setAmount] = useState(ingredient ? String(ingredient.amount) : "");
-  const [unit, setUnit] = useState(ingredient?.unit ?? "lbs");
-  const [use, setUse] = useState<string>(ingredient?.use ?? "");
-  const [timingMinutes, setTimingMinutes] = useState(ingredient?.timingMinutes != null ? String(ingredient.timingMinutes) : "");
+  const [unit, setUnit] = useState(ingredient?.unit ?? preset?.unit ?? "lbs");
+  const [use, setUse] = useState<string>(ingredient?.use ?? preset?.use ?? "");
+  const [timingMinutes, setTimingMinutes] = useState(ingredient ? timingValue(ingredient) : "");
   const [notes, setNotes] = useState(ingredient?.notes ?? "");
+  const [variants, setVariants] = useState<RecipeVariant[] | null>(ingredient?.variants ?? null);
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: inventoryItems = [] } = useListInventory({});
@@ -394,8 +418,9 @@ function IngredientForm({ recipeId, ingredient, onDone }: { recipeId: number; in
         id: ingredient.id,
         data: {
           name, type: type as IngredientType, amount: Number(amount), unit, use: (use || null) as IngredientUse | null,
-          timingMinutes: TIMED_USES.includes(use) && timingMinutes !== "" ? Number(timingMinutes) : null,
+          ...timingFields(use, timingMinutes),
           notes: notes || null,
+          variants,
         },
       });
       return;
@@ -404,8 +429,9 @@ function IngredientForm({ recipeId, ingredient, onDone }: { recipeId: number; in
       id: recipeId,
       data: {
         name, type: type as IngredientType, amount: Number(amount), unit, use: (use || undefined) as IngredientUse | undefined,
-        timingMinutes: TIMED_USES.includes(use) && timingMinutes !== "" ? Number(timingMinutes) : undefined,
+        ...timingFields(use, timingMinutes),
         notes: notes || undefined,
+        variants,
       },
     });
   };
@@ -438,7 +464,7 @@ function IngredientForm({ recipeId, ingredient, onDone }: { recipeId: number; in
           </SelectContent>
         </Select>
       </div>
-      {TIMED_USES.includes(use) && (
+      {hasTimingField(use) && (
         <Input
           type="number" min="0" step="1" inputMode="numeric" className="text-sm"
           placeholder={timingPlaceholder(use)}
@@ -446,6 +472,7 @@ function IngredientForm({ recipeId, ingredient, onDone }: { recipeId: number; in
         />
       )}
       <Input placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="text-sm" />
+      {recipeVariants && <VariantChips available={recipeVariants} value={variants} onChange={setVariants} />}
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="ghost" size="sm" onClick={onDone}><X className="w-3.5 h-3.5" /></Button>
         <Button type="submit" size="sm" disabled={isPending}>
@@ -456,11 +483,16 @@ function IngredientForm({ recipeId, ingredient, onDone }: { recipeId: number; in
   );
 }
 
-function IngredientRow({ recipeId, ing, onDelete }: { recipeId: number; ing: RecipeIngredient; onDelete: () => void }) {
+function IngredientRow({ recipeId, ing, recipeVariants, onDelete }: {
+  recipeId: number;
+  ing: RecipeIngredient;
+  recipeVariants: readonly RecipeVariant[] | null;
+  onDelete: () => void;
+}) {
   const [editing, setEditing] = useState(false);
 
   if (editing) {
-    return <IngredientForm recipeId={recipeId} ingredient={ing} onDone={() => setEditing(false)} />;
+    return <IngredientForm recipeId={recipeId} ingredient={ing} recipeVariants={recipeVariants} onDone={() => setEditing(false)} />;
   }
 
   return (
@@ -471,8 +503,17 @@ function IngredientRow({ recipeId, ing, onDelete }: { recipeId: number; ing: Rec
         {ing.use && <span className="text-muted-foreground ml-1">• {ing.use.replace("_", " ")}</span>}
         {ing.use && TIMED_USES.includes(ing.use) ? (
           <IngredientTiming recipeId={recipeId} ingredientId={ing.id} use={ing.use} timingMinutes={ing.timingMinutes} />
+        ) : ing.use === DRY_HOP ? (
+          ing.dryHopDay != null
+            ? <span className="text-muted-foreground ml-1">@ day {ing.dryHopDay} of conditioning</span>
+            : <span className="text-amber-600 dark:text-amber-400 ml-1">• no day set, no reminder</span>
         ) : (
           ing.timingMinutes != null && <span className="text-muted-foreground ml-1">@ {ing.timingMinutes} min</span>
+        )}
+        {recipeVariants && ing.variants && ing.variants.length > 0 && (
+          <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded border border-border text-muted-foreground whitespace-nowrap">
+            {variantListLabel(ing.variants)} only
+          </span>
         )}
         {ing.notes && <p className="text-xs text-muted-foreground break-words">{ing.notes}</p>}
       </div>
@@ -497,11 +538,15 @@ export default function RecipeDetail() {
 
   const [editing, setEditing] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
+  const [showAddDryHop, setShowAddDryHop] = useState(false);
   const [showAddStep, setShowAddStep] = useState(false);
   const [startingBrew, setStartingBrew] = useState(false);
+  const [startDialogOpen, setStartDialogOpen] = useState(false);
+  // undefined until the brewer picks: the page then opens on the first version.
+  const [pickedVariant, setPickedVariant] = useState<RecipeVariant | null | undefined>(undefined);
   const tempUnit = useFermentTempUnit();
 
-  const { data: recipe, isLoading } = useGetRecipe(id, { query: { enabled: !!id, queryKey: getGetRecipeQueryKey(id) } });
+  const { data: recipe, isLoading, dataUpdatedAt: recipeUpdatedAt } = useGetRecipe(id, { query: { enabled: !!id, queryKey: getGetRecipeQueryKey(id) } });
 
   const updateMutation = useUpdateRecipe({
     mutation: {
@@ -513,12 +558,23 @@ export default function RecipeDetail() {
   const createSessionMutation = useCreateBrewSession({
     mutation: {
       onSuccess: (session) => { navigate(`/brew-sessions/${session.id}`); toast({ title: "Brew session started!" }); },
-      onError: (err: unknown) => { toast({ title: "Failed to start session", description: getErrorMessage(err), variant: "destructive" }); setStartingBrew(false); },
+      onError: (err: unknown) => {
+        const shortages = shortageLines(err);
+        toast(shortages
+          ? { title: "Insufficient inventory", description: shortages.join("\n"), variant: "destructive" }
+          : { title: "Failed to start session", description: apiErrorMessage(err) ?? getErrorMessage(err), variant: "destructive" });
+        setStartingBrew(false);
+      },
     },
   });
 
   const handleStartBrewSession = () => {
     if (!recipe) return;
+    // A recipe with versions has to ask which one before anything is deducted.
+    if (isMultiVariant(recipe.variants)) {
+      setStartDialogOpen(true);
+      return;
+    }
     setStartingBrew(true);
     const today = new Date().toLocaleDateString("en-CA");
     createSessionMutation.mutate({
@@ -539,6 +595,28 @@ export default function RecipeDetail() {
       onError: (err: unknown) => { toast({ title: "Failed to delete recipe", description: getErrorMessage(err), variant: "destructive" }); },
     },
   });
+
+  const [forkName, setForkName] = useState<string | null>(null);
+  const forkMutation = useForkRecipe({
+    mutation: {
+      onSuccess: (fork) => {
+        qc.invalidateQueries({ queryKey: getListRecipesQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetRecipeQueryKey(id) });
+        // The fork inherits the parent's flow links.
+        qc.invalidateQueries({ queryKey: getListFlowsQueryKey() });
+        setForkName(null);
+        navigate(`/recipes/${fork.id}`);
+        toast({ title: `Forked from ${recipe?.name ?? "recipe"}` });
+      },
+      onError: (err: unknown) => { toast({ title: "Failed to fork recipe", description: getErrorMessage(err), variant: "destructive" }); },
+    },
+  });
+
+  const { data: history } = useGetRecipeHistory(id, { query: { enabled: !!id, queryKey: getGetRecipeHistoryQueryKey(id) } });
+  // Every edit on this page refetches the recipe; "changed since last brew" follows it.
+  useEffect(() => {
+    if (recipeUpdatedAt) qc.invalidateQueries({ queryKey: getGetRecipeHistoryQueryKey(id) });
+  }, [recipeUpdatedAt, id, qc]);
 
   const deleteIngredientMutation = useDeleteRecipeIngredient({
     mutation: {
@@ -632,11 +710,18 @@ export default function RecipeDetail() {
     ? (recipe.ibu / ((recipe.originalGravity - 1) * 1000)).toFixed(2)
     : null;
 
+  const recipeVariants = isMultiVariant(recipe.variants) ? recipe.variants : null;
+  const viewVariant = recipeVariants ? (pickedVariant === undefined ? recipeVariants[0]! : pickedVariant) : null;
+
   const grouped: Record<string, typeof recipe.ingredients> = {};
-  (recipe.ingredients ?? []).forEach((ing) => {
+  ingredientsForVariant(recipe.ingredients ?? [], viewVariant).forEach((ing) => {
     if (!grouped[ing.type]) grouped[ing.type] = [];
     grouped[ing.type].push(ing);
   });
+
+  const dryHops = ingredientsForVariant(recipe.ingredients ?? [], viewVariant)
+    .filter((ing) => ing.use === DRY_HOP)
+    .sort((a, b) => (a.dryHopDay ?? Infinity) - (b.dryHopDay ?? Infinity));
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
@@ -652,6 +737,9 @@ export default function RecipeDetail() {
               Start Brew Session
             </Button>
             <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="w-3.5 h-3.5 mr-1.5" />Edit</Button>
+            <Button variant="outline" size="sm" onClick={() => setForkName(nextVersionName(recipe.name))} title="Fork: copy this recipe as a new version">
+              <GitBranch className="w-3.5 h-3.5 mr-1.5" />Fork
+            </Button>
             <Button variant="destructive" size="sm" onClick={() => { if (confirm("Delete this recipe?")) deleteMutation.mutate({ id }); }}>
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
@@ -672,7 +760,29 @@ export default function RecipeDetail() {
           <>
             <div className="flex items-start justify-between mb-3">
               <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">{recipe.style}</span>
+              {recipeVariants && (
+                <span className="text-xs text-muted-foreground">Versions: {variantListLabel(recipeVariants)}</span>
+              )}
             </div>
+            {(recipe.parent || recipe.forks.length > 0) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mb-3">
+                <GitBranch className="w-3.5 h-3.5" />
+                {recipe.parent && (
+                  <span>Forked from <Link href={`/recipes/${recipe.parent.id}`} className="text-primary hover:underline">{recipe.parent.name}</Link></span>
+                )}
+                {recipe.forks.length > 0 && (
+                  <span>
+                    Forks:{" "}
+                    {recipe.forks.map((f, i) => (
+                      <span key={f.id}>
+                        {i > 0 && ", "}
+                        <Link href={`/recipes/${f.id}`} className="text-primary hover:underline">{f.name}</Link>
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-3">
               {([
                 { label: "Batch Size", value: `${recipe.batchSizeGallons} gal` },
@@ -692,7 +802,7 @@ export default function RecipeDetail() {
                 </div>
               ))}
             </div>
-            {recipe.notes && <p className="text-sm text-muted-foreground border-t border-border pt-3">{recipe.notes}</p>}
+            {recipe.notes && <p className="text-sm text-muted-foreground border-t border-border pt-3 whitespace-pre-line">{recipe.notes}</p>}
             {/* Stage estimates view */}
             {[recipe.daysPlanned, recipe.daysBrewing, recipe.daysFermenting, recipe.daysConditioning, recipe.daysPackaged].some((d) => d != null) && (
               <div className="border-t border-border pt-3 mt-3">
@@ -782,6 +892,8 @@ export default function RecipeDetail() {
         )}
       </div>
 
+      <RecipeFlowsCard recipeId={id} recipeName={recipe.name} hasFermentTemp={recipe.fermentTempIdeal != null} />
+
       {/* Brewing Steps */}
       {(() => {
         const recipeSteps = recipe.steps ?? [];
@@ -822,9 +934,17 @@ export default function RecipeDetail() {
           </Button>
         </div>
         <div className="p-4 space-y-4">
-          {showAddIngredient && <IngredientForm recipeId={id} onDone={() => setShowAddIngredient(false)} />}
+          {recipeVariants && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground">Showing</span>
+              <VariantSwitcher available={recipeVariants} value={viewVariant} onChange={setPickedVariant} allowAll />
+            </div>
+          )}
+          {showAddIngredient && <IngredientForm recipeId={id} recipeVariants={recipeVariants} onDone={() => setShowAddIngredient(false)} />}
           {Object.entries(grouped).length === 0 && !showAddIngredient ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No ingredients yet</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {viewVariant && (recipe.ingredients ?? []).length > 0 ? `Nothing in the ${VARIANT_LABELS[viewVariant]} version` : "No ingredients yet"}
+            </p>
           ) : (
             Object.entries(grouped).map(([type, ings]) => (
               <div key={type}>
@@ -833,7 +953,7 @@ export default function RecipeDetail() {
                 </div>
                 <div className="space-y-1">
                   {ings.map((ing) => (
-                    <IngredientRow key={ing.id} recipeId={id} ing={ing} onDelete={() => deleteIngredientMutation.mutate({ id: ing.id })} />
+                    <IngredientRow key={ing.id} recipeId={id} ing={ing} recipeVariants={recipeVariants} onDelete={() => deleteIngredientMutation.mutate({ id: ing.id })} />
                   ))}
                 </div>
               </div>
@@ -841,6 +961,48 @@ export default function RecipeDetail() {
           )}
         </div>
       </div>
+
+      {/* Dry Hop Schedule — the day of conditioning each dry hop goes in */}
+      <div className="bg-card border border-card-border rounded-lg">
+        <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Dry Hop Schedule</h2>
+          <Button size="sm" variant="outline" onClick={() => setShowAddDryHop(!showAddDryHop)}>
+            <Plus className="w-3.5 h-3.5 mr-1" />Add dry hop
+          </Button>
+        </div>
+        <div className="p-4 space-y-2">
+          {showAddDryHop && (
+            <IngredientForm
+              recipeId={id}
+              recipeVariants={recipeVariants}
+              preset={{ type: "hop", unit: "oz", use: DRY_HOP }}
+              onDone={() => setShowAddDryHop(false)}
+            />
+          )}
+          {dryHops.length === 0 && !showAddDryHop ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No dry hops. Each one you add gets a day of conditioning, and a brew of this recipe
+              reminds you on that day until you mark it added.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {dryHops.map((ing) => (
+                <IngredientRow key={ing.id} recipeId={id} ing={ing} recipeVariants={recipeVariants} onDelete={() => deleteIngredientMutation.mutate({ id: ing.id })} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {recipeVariants && (
+        <StartBrewDialog
+          recipe={recipe}
+          variants={recipeVariants}
+          initialVariant={viewVariant}
+          open={startDialogOpen}
+          onOpenChange={setStartDialogOpen}
+        />
+      )}
 
       {/* Batch History — the recipe's track record across every scored brew */}
       <div className="bg-card border border-card-border rounded-lg">
@@ -876,7 +1038,90 @@ export default function RecipeDetail() {
             ))
           )}
         </div>
+        {recipe.familyStats && (
+          <div className="px-4 py-2.5 border-t border-card-border flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>
+              All {recipe.familyStats.recipeCount} versions: {recipe.familyStats.batchCount} batch{recipe.familyStats.batchCount === 1 ? "" : "es"}
+            </span>
+            <ScoreBadge value={recipe.familyStats.avgScore} suffix={`avg of ${recipe.familyStats.ratedBatchCount}`} />
+          </div>
+        )}
       </div>
+
+      {/* Version History — what changed in the recipe from one brew to the next */}
+      {history && history.brews.length > 0 && (
+        <div className="bg-card border border-card-border rounded-lg">
+          <div className="px-4 py-3 border-b border-card-border">
+            <h2 className="text-sm font-semibold text-foreground">Version History</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {history.sinceLastBrew && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-medium text-foreground mb-1.5">Changed since last brew</div>
+                {history.sinceLastBrew.length > 0
+                  ? <RecipeChangeList changes={history.sinceLastBrew} />
+                  : <p className="text-xs text-muted-foreground">No changes since the last brew.</p>}
+              </div>
+            )}
+            {history.brews.map((brew) => (
+              <div key={brew.id} className="px-4 py-3">
+                <div className="flex items-center gap-3 mb-1.5">
+                  <Link href={`/brew-sessions/${brew.id}`} className="text-sm font-medium text-foreground hover:text-primary">
+                    {formatDate(brew.brewDate)}
+                  </Link>
+                  {brew.recipeVariant && <span className="text-xs text-muted-foreground">{VARIANT_LABELS[brew.recipeVariant]}</span>}
+                  <span className="ml-auto"><ScoreBadge value={brew.overallScore} /></span>
+                </div>
+                {!brew.recorded ? (
+                  <p className="text-xs text-muted-foreground">Not recorded (brewed before version history).</p>
+                ) : brew.changes == null ? (
+                  <p className="text-xs text-muted-foreground">
+                    {brew.recipeVariant ? `First recorded ${VARIANT_LABELS[brew.recipeVariant]} brew.` : "First recorded brew."}
+                  </p>
+                ) : brew.changes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {brew.recipeVariant ? `Same recipe as the ${VARIANT_LABELS[brew.recipeVariant]} brew before.` : "Same recipe as the brew before."}
+                  </p>
+                ) : (
+                  <RecipeChangeList changes={brew.changes} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Dialog open={forkName != null} onOpenChange={(open) => { if (!open) setForkName(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Fork this recipe</DialogTitle>
+            <DialogDescription>
+              Makes a copy with the same ingredients, steps and Brew Flow links to change freely. This recipe and its brews stay as they are.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Name</label>
+            <Input value={forkName ?? ""} onChange={(e) => setForkName(e.target.value)} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setForkName(null)}>Cancel</Button>
+            <Button
+              onClick={() => forkMutation.mutate({ id, data: { name: forkName?.trim() || undefined } })}
+              disabled={forkMutation.isPending}
+            >
+              {forkMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1.5" />}
+              Fork
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+/** "Pale Ale" → "Pale Ale v2", "Pale Ale v2" → "Pale Ale v3". Mirrors the server's default fork name. */
+function nextVersionName(name: string): string {
+  const trimmed = name.trim();
+  const match = /^(.*\S)\s+v(\d+)$/i.exec(trimmed);
+  return match ? `${match[1]} v${Number(match[2]) + 1}` : `${trimmed} v2`;
 }

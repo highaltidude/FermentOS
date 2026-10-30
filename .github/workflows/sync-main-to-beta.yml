@@ -18,6 +18,8 @@ on:
 
 permissions:
   contents: write
+  # Closing the superseded beta release PR after an anchor.
+  pull-requests: write
 
 jobs:
   sync:
@@ -150,3 +152,28 @@ jobs:
                 "https://api.github.com/repos/$REPO/releases" \
                 -d @- > /dev/null
           echo "Published $TAG at $SHA as the beta commit-range boundary"
+
+      - name: Close the superseded beta release PR
+        # A beta cycle promoted without merging its release-please PR leaves
+        # that PR open, proposing a prerelease of what main just shipped.
+        # release-please won't tidy it up: its next run on beta finds no commits
+        # past the anchor and skips. Deleting the branch lets it start the next
+        # cycle's PR from scratch.
+        if: steps.anchor.outputs.anchored == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT || github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: release-please--branches--beta--components--fermentos
+          VERSION: ${{ steps.anchor.outputs.version }}
+        run: |
+          set -euo pipefail
+          PRS=$(gh pr list --repo "$REPO" --state open --base beta --head "$HEAD_BRANCH" --json number --jq '.[].number')
+          if [ -z "$PRS" ]; then
+            echo "No open beta release PR — nothing to close"
+            exit 0
+          fi
+          for PR in $PRS; do
+            gh pr close "$PR" --repo "$REPO" --delete-branch \
+              --comment "Superseded: this beta cycle was released from main, and beta is re-anchored at ${VERSION}."
+            echo "Closed stale beta release PR #$PR"
+          done

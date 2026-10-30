@@ -123,7 +123,7 @@ export function FermentTempPanel() {
         <div className="space-y-0.5">
           <div className="text-sm font-medium text-foreground">Auto-advance to Conditioning</div>
           <div className="text-xs text-muted-foreground">
-            Global default — automatically move fermenting sessions to conditioning when gravity has been stable for 24+ hours. Can be overridden per-brew.
+            Global default — automatically move fermenting sessions to conditioning once they have attenuated and gravity has been stable for 24+ hours. Checked in the background every 5 minutes; needs an assigned sensor. Can be overridden per-brew.
           </div>
         </div>
         <button

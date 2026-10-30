@@ -24,6 +24,9 @@ const NOTIFY_KEYS = {
   repeatHours: "notify_repeat_hours",
   tempRepeatHours: "notify_temp_repeat_hours",
   boilAlerts: "notify_boil",
+  dryHopAlerts: "notify_dry_hop",
+  dryHopRepeatHours: "notify_dry_hop_repeat_hours",
+  autoAdvanceAlerts: "notify_auto_advance",
 } as const;
 
 export const ALERT_TYPES = ["temp_out_of_range", "gravity_stalled", "device_offline", "battery_low"] as const;
@@ -54,6 +57,19 @@ export type NotifyConfig = {
    * before boil alerts existed does not leave them switched off.
    */
   boilAlerts: boolean;
+  /**
+   * Dry hop reminders during conditioning. Also not an AlertType, for the same
+   * upgrade reason as boilAlerts, and with its own interval: a due addition
+   * nags every dryHopRepeatHours until it is marked added.
+   */
+  dryHopAlerts: boolean;
+  dryHopRepeatHours: number;
+  /**
+   * A one-off message when a batch is moved to Conditioning automatically.
+   * Not an AlertType either: it is an event, not a condition, and a types list
+   * saved before it existed must not leave it switched off.
+   */
+  autoAdvanceAlerts: boolean;
 };
 
 export async function getNotifyConfig(): Promise<NotifyConfig> {
@@ -78,6 +94,9 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
   const rawTempRepeat = parseInt(map.get(NOTIFY_KEYS.tempRepeatHours) ?? "", 10);
   const tempRepeatHours = inRange(rawTempRepeat) ? rawTempRepeat : null;
 
+  const rawDryHopRepeat = parseInt(map.get(NOTIFY_KEYS.dryHopRepeatHours) ?? "", 10);
+  const dryHopRepeatHours = inRange(rawDryHopRepeat) ? rawDryHopRepeat : DEFAULT_REPEAT_HOURS;
+
   return {
     channel,
     ntfyServer: map.get(NOTIFY_KEYS.ntfyServer) || DEFAULT_NTFY_SERVER,
@@ -88,6 +107,9 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
     tempRepeatHours,
     // On unless explicitly switched off, so an existing install gets them.
     boilAlerts: map.get(NOTIFY_KEYS.boilAlerts) !== "false",
+    dryHopAlerts: map.get(NOTIFY_KEYS.dryHopAlerts) !== "false",
+    dryHopRepeatHours,
+    autoAdvanceAlerts: map.get(NOTIFY_KEYS.autoAdvanceAlerts) !== "false",
   };
 }
 
@@ -102,6 +124,9 @@ export async function setNotifyConfig(cfg: NotifyConfig): Promise<void> {
     // Empty string for null so clearing the override round-trips.
     [NOTIFY_KEYS.tempRepeatHours, cfg.tempRepeatHours == null ? "" : String(cfg.tempRepeatHours)],
     [NOTIFY_KEYS.boilAlerts, String(cfg.boilAlerts)],
+    [NOTIFY_KEYS.dryHopAlerts, String(cfg.dryHopAlerts)],
+    [NOTIFY_KEYS.dryHopRepeatHours, String(cfg.dryHopRepeatHours)],
+    [NOTIFY_KEYS.autoAdvanceAlerts, String(cfg.autoAdvanceAlerts)],
   ];
   for (const [key, value] of pairs) {
     await setConfigValue(key, value);

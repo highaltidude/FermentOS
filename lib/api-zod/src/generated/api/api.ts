@@ -36,6 +36,17 @@ export const GetDashboardSummaryResponse = zod.object({
       id: zod.number().int(),
       recipeId: zod.number().int().nullish(),
       recipeName: zod.string(),
+      recipeVariant: zod
+        .union([
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "Which version of a multi-version recipe this batch was brewed as.",
+        ),
       status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
       brewDate: zod.string().date(),
       plannedDate: zod
@@ -178,6 +189,12 @@ export const GetDashboardSummaryResponse = zod.object({
         .array(zod.number().int())
         .nullish()
         .describe("Recipe ingredient ids ticked off during the boil."),
+      dryHopAddedIds: zod
+        .array(zod.number().int())
+        .nullish()
+        .describe(
+          "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+        ),
       createdAt: zod.string().datetime({ offset: true }),
       updatedAt: zod.string().datetime({ offset: true }),
     }),
@@ -250,6 +267,21 @@ export const ListRecipesResponseItem = zod.object({
   id: zod.number().int(),
   name: zod.string(),
   style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -360,6 +392,21 @@ export const CreateRecipeResponse = zod.object({
   id: zod.number().int(),
   name: zod.string(),
   style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -426,17 +473,363 @@ export const GetRecipeStylesResponseItem = zod.object({
 export const GetRecipeStylesResponse = zod.array(GetRecipeStylesResponseItem);
 
 /**
+ * Everything is inserted in one transaction, so a rejected ingredient leaves no half-built recipe behind. This is also the only way to create a recipe with several versions (LME / DME / all-grain).
+ * @summary Create a recipe together with its ingredients and steps
+ */
+export const importRecipeBodyIngredientsItemDryHopDayMin = 0;
+
+export const ImportRecipeBody = zod.object({
+  recipe: zod.object({
+    name: zod.string(),
+    style: zod.string(),
+    batchSizeGallons: zod.number(),
+    originalGravity: zod.number().nullish(),
+    finalGravity: zod.number().nullish(),
+    abv: zod.number().nullish(),
+    ibu: zod.number().nullish(),
+    colorSrm: zod.number().nullish(),
+    estimatedBrewTimeMinutes: zod.number().int().nullish(),
+    efficiencyPercent: zod.number().nullish(),
+    caloriesPerServing: zod.number().int().nullish(),
+    notes: zod.string().nullish(),
+    fermentTempMin: zod
+      .number()
+      .nullish()
+      .describe("Minimum fermentation temperature threshold"),
+    fermentTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum fermentation temperature threshold"),
+    fermentTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal fermentation temperature target"),
+    conditionTempMin: zod
+      .number()
+      .nullish()
+      .describe(
+        "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+      ),
+    conditionTempMax: zod
+      .number()
+      .nullish()
+      .describe("Maximum conditioning temperature threshold"),
+    conditionTempIdeal: zod
+      .number()
+      .nullish()
+      .describe("Ideal conditioning temperature target"),
+    daysPlanned: zod.number().int().nullish(),
+    daysBrewing: zod.number().int().nullish(),
+    daysFermenting: zod.number().int().nullish(),
+    daysConditioning: zod.number().int().nullish(),
+    daysPackaged: zod.number().int().nullish(),
+  }),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions the recipe can be brewed as. Omit or null for a single-version recipe.",
+    ),
+  ingredients: zod.array(
+    zod.object({
+      name: zod.string(),
+      type: zod.enum([
+        "malt",
+        "hop",
+        "yeast",
+        "adjunct",
+        "water_agent",
+        "other",
+      ]),
+      amount: zod.number(),
+      unit: zod.string(),
+      use: zod
+        .union([
+          zod.enum([
+            "mash",
+            "steep",
+            "boil",
+            "dry_hop",
+            "whirlpool",
+            "primary",
+            "secondary",
+            "packaging",
+            "other",
+          ]),
+          zod.null(),
+        ])
+        .optional(),
+      timingMinutes: zod.number().int().nullish(),
+      dryHopDay: zod
+        .number()
+        .int()
+        .min(importRecipeBodyIngredientsItemDryHopDayMin)
+        .nullish()
+        .describe(
+          "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+        ),
+      notes: zod.string().nullish(),
+      variants: zod
+        .array(
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+        )
+        .nullish()
+        .describe(
+          "Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.",
+        ),
+    }),
+  ),
+  steps: zod
+    .array(
+      zod.object({
+        body: zod.string(),
+        phase: zod
+          .union([
+            zod.enum([
+              "mash",
+              "boil",
+              "fermentation",
+              "conditioning",
+              "packaging",
+              "other",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        durationMinutes: zod.number().int().nullish(),
+        position: zod
+          .number()
+          .int()
+          .nullish()
+          .describe(
+            "Optional explicit position; if omitted, the step is appended.",
+          ),
+      }),
+    )
+    .optional(),
+});
+
+export const ImportRecipeResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
+  batchSizeGallons: zod.number(),
+  originalGravity: zod.number().nullish(),
+  finalGravity: zod.number().nullish(),
+  abv: zod.number().nullish(),
+  ibu: zod.number().nullish(),
+  colorSrm: zod.number().nullish(),
+  estimatedBrewTimeMinutes: zod.number().int().nullish(),
+  efficiencyPercent: zod.number().nullish(),
+  caloriesPerServing: zod.number().int().nullish(),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
+  daysPlanned: zod.number().int().nullish(),
+  daysBrewing: zod.number().int().nullish(),
+  daysFermenting: zod.number().int().nullish(),
+  daysConditioning: zod.number().int().nullish(),
+  daysPackaged: zod.number().int().nullish(),
+  avgScore: zod
+    .number()
+    .nullish()
+    .describe(
+      "Mean overallScore across every rated batch of this recipe, 1-10.",
+    ),
+  ratedBatchCount: zod
+    .number()
+    .int()
+    .describe("Batches carrying a scorecard. Always <= batchCount."),
+  batchCount: zod.number().int(),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * Send the PDF as the raw request body. Nothing is saved: the draft is returned for review and then posted to /recipes/import.
+ * @summary Read a MoreBeer kit-sheet PDF into a recipe draft
+ */
+export const ParseMorebeerKitSheetResponse = zod.object({
+  source: zod.enum(["morebeer"]),
+  name: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullable()
+    .describe("Null when the sheet describes a single version."),
+  batchSizeGallons: zod.number(),
+  batchSizeAssumed: zod
+    .boolean()
+    .describe(
+      "True when the sheet prints no batch size and the kit default was used.",
+    ),
+  stats: zod.object({
+    originalGravityMin: zod.number().nullable(),
+    originalGravityMax: zod.number().nullable(),
+    ibu: zod.number().nullable(),
+    colorSrm: zod.number().nullable(),
+    abv: zod.number().nullable(),
+  }),
+  hints: zod
+    .object({
+      boilMinutes: zod.number().int().nullable(),
+      mashTempF: zod.number().nullable(),
+      fermentTempMinF: zod.number().nullable(),
+      fermentTempMaxF: zod.number().nullable(),
+    })
+    .describe(
+      "Figures picked out of the free-text recipe tips. Fahrenheit, as printed.",
+    ),
+  suggestedYeasts: zod.array(
+    zod.object({
+      lab: zod.string(),
+      name: zod.string(),
+    }),
+  ),
+  ingredients: zod.array(
+    zod
+      .object({
+        name: zod.string(),
+        type: zod.enum([
+          "malt",
+          "hop",
+          "yeast",
+          "adjunct",
+          "water_agent",
+          "other",
+        ]),
+        amount: zod.number().nullable(),
+        unit: zod.string().nullable(),
+        use: zod.union([
+          zod.enum([
+            "mash",
+            "steep",
+            "boil",
+            "dry_hop",
+            "whirlpool",
+            "primary",
+            "secondary",
+            "packaging",
+            "other",
+          ]),
+          zod.null(),
+        ]),
+        timingMinutes: zod.number().int().nullable(),
+        notes: zod.string().nullable(),
+        variants: zod
+          .array(
+            zod
+              .enum(["lme", "dme", "all_grain"])
+              .describe("A version a kit recipe can be brewed as."),
+          )
+          .nullable(),
+        sourceText: zod
+          .string()
+          .describe("The line on the sheet this row was read from."),
+      })
+      .describe(
+        "An ingredient as read from the sheet. Unlike a saved ingredient, amount, unit and use may be null when the sheet does not state them.",
+      ),
+  ),
+  tips: zod.string().nullable(),
+  warnings: zod.array(
+    zod.object({
+      code: zod.enum([
+        "missing_amount",
+        "unparsed_line",
+        "use_from_tips",
+        "assumed_batch_size",
+      ]),
+      message: zod.string(),
+      ingredientIndex: zod
+        .number()
+        .int()
+        .nullish()
+        .describe(
+          "Index into the draft's ingredients, when the warning is about one.",
+        ),
+      sourceText: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary Get a recipe by ID
  */
 export const GetRecipeParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const getRecipeResponseTwoIngredientsItemDryHopDayMin = 0;
+
 export const GetRecipeResponse = zod
   .object({
     id: zod.number().int(),
     name: zod.string(),
     style: zod.string(),
+    variants: zod
+      .array(
+        zod
+          .enum(["lme", "dme", "all_grain"])
+          .describe("A version a kit recipe can be brewed as."),
+      )
+      .nullish()
+      .describe(
+        "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+      ),
+    parentRecipeId: zod
+      .number()
+      .int()
+      .nullish()
+      .describe("The recipe this one was forked from. Null for an original."),
     batchSizeGallons: zod.number(),
     originalGravity: zod.number().nullish(),
     finalGravity: zod.number().nullish(),
@@ -513,6 +906,7 @@ export const GetRecipeResponse = zod
             .union([
               zod.enum([
                 "mash",
+                "steep",
                 "boil",
                 "dry_hop",
                 "whirlpool",
@@ -525,7 +919,25 @@ export const GetRecipeResponse = zod
             ])
             .optional(),
           timingMinutes: zod.number().int().nullish(),
+          dryHopDay: zod
+            .number()
+            .int()
+            .min(getRecipeResponseTwoIngredientsItemDryHopDayMin)
+            .nullish()
+            .describe(
+              "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+            ),
           notes: zod.string().nullish(),
+          variants: zod
+            .array(
+              zod
+                .enum(["lme", "dme", "all_grain"])
+                .describe("A version a kit recipe can be brewed as."),
+            )
+            .nullish()
+            .describe(
+              "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+            ),
         }),
       ),
       steps: zod.array(
@@ -566,6 +978,36 @@ export const GetRecipeResponse = zod
         )
         .describe(
           "Every rated batch brewed from this recipe, oldest first — the recipe's track record.",
+        ),
+      parent: zod
+        .union([
+          zod.object({
+            id: zod.number().int(),
+            name: zod.string(),
+          }),
+          zod.null(),
+        ])
+        .describe("The recipe this one was forked from."),
+      forks: zod
+        .array(
+          zod.object({
+            id: zod.number().int(),
+            name: zod.string(),
+          }),
+        )
+        .describe("Recipes forked from this one."),
+      familyStats: zod
+        .union([
+          zod.object({
+            recipeCount: zod.number().int(),
+            batchCount: zod.number().int(),
+            ratedBatchCount: zod.number().int(),
+            avgScore: zod.number().nullable(),
+          }),
+          zod.null(),
+        ])
+        .describe(
+          "Batch stats across this recipe and every recipe related to it by forking. Null when it has no relatives.",
         ),
     }),
   );
@@ -627,6 +1069,21 @@ export const UpdateRecipeResponse = zod.object({
   id: zod.number().int(),
   name: zod.string(),
   style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
   batchSizeGallons: zod.number(),
   originalGravity: zod.number().nullish(),
   finalGravity: zod.number().nullish(),
@@ -684,6 +1141,7 @@ export const UpdateRecipeResponse = zod.object({
 });
 
 /**
+ * Its forks are re-pointed at its own parent. Its brew sessions keep their recipe snapshots.
  * @summary Delete a recipe
  */
 export const DeleteRecipeParams = zod.object({
@@ -693,11 +1151,399 @@ export const DeleteRecipeParams = zod.object({
 export const DeleteRecipeResponse = zod.void();
 
 /**
+ * Copies the recipe, its ingredients, its steps and its Brew Flow links into a new recipe whose parent is this one.
+ * @summary Fork a recipe
+ */
+export const ForkRecipeParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const ForkRecipeBody = zod.object({
+  name: zod
+    .string()
+    .optional()
+    .describe(
+      'Name for the fork. Defaults to the parent\'s name with the next version number, e.g. "Pale Ale v2".',
+    ),
+});
+
+export const ForkRecipeResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  style: zod.string(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.",
+    ),
+  parentRecipeId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe("The recipe this one was forked from. Null for an original."),
+  batchSizeGallons: zod.number(),
+  originalGravity: zod.number().nullish(),
+  finalGravity: zod.number().nullish(),
+  abv: zod.number().nullish(),
+  ibu: zod.number().nullish(),
+  colorSrm: zod.number().nullish(),
+  estimatedBrewTimeMinutes: zod.number().int().nullish(),
+  efficiencyPercent: zod.number().nullish(),
+  caloriesPerServing: zod.number().int().nullish(),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
+  daysPlanned: zod.number().int().nullish(),
+  daysBrewing: zod.number().int().nullish(),
+  daysFermenting: zod.number().int().nullish(),
+  daysConditioning: zod.number().int().nullish(),
+  daysPackaged: zod.number().int().nullish(),
+  avgScore: zod
+    .number()
+    .nullish()
+    .describe(
+      "Mean overallScore across every rated batch of this recipe, 1-10.",
+    ),
+  ratedBatchCount: zod
+    .number()
+    .int()
+    .describe("Batches carrying a scorecard. Always <= batchCount."),
+  batchCount: zod.number().int(),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary What changed in a recipe brew-to-brew
+ */
+export const GetRecipeHistoryParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetRecipeHistoryResponse = zod.object({
+  brews: zod
+    .array(
+      zod.object({
+        id: zod.number().int(),
+        brewDate: zod.string().date(),
+        recipeVariant: zod.union([
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+          zod.null(),
+        ]),
+        overallScore: zod.number().int().nullable(),
+        recorded: zod
+          .boolean()
+          .describe(
+            "False for brews from before version history, which have no snapshot.",
+          ),
+        changes: zod
+          .array(
+            zod
+              .object({
+                kind: zod.enum([
+                  "field",
+                  "ingredient_added",
+                  "ingredient_removed",
+                  "ingredient_changed",
+                  "step_added",
+                  "step_removed",
+                  "step_changed",
+                ]),
+                field: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe.",
+                  ),
+                from: zod
+                  .union([zod.number(), zod.string(), zod.null()])
+                  .optional(),
+                to: zod
+                  .union([zod.number(), zod.string(), zod.null()])
+                  .optional(),
+                ingredient: zod
+                  .object({
+                    name: zod.string(),
+                    type: zod.enum([
+                      "malt",
+                      "hop",
+                      "yeast",
+                      "adjunct",
+                      "water_agent",
+                      "other",
+                    ]),
+                    amount: zod.number(),
+                    unit: zod.string(),
+                    use: zod.union([
+                      zod.enum([
+                        "mash",
+                        "steep",
+                        "boil",
+                        "dry_hop",
+                        "whirlpool",
+                        "primary",
+                        "secondary",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    timingMinutes: zod.number().int().nullable(),
+                    dryHopDay: zod.number().int().nullable(),
+                    notes: zod.string().nullable(),
+                  })
+                  .optional(),
+                previousIngredient: zod
+                  .object({
+                    name: zod.string(),
+                    type: zod.enum([
+                      "malt",
+                      "hop",
+                      "yeast",
+                      "adjunct",
+                      "water_agent",
+                      "other",
+                    ]),
+                    amount: zod.number(),
+                    unit: zod.string(),
+                    use: zod.union([
+                      zod.enum([
+                        "mash",
+                        "steep",
+                        "boil",
+                        "dry_hop",
+                        "whirlpool",
+                        "primary",
+                        "secondary",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    timingMinutes: zod.number().int().nullable(),
+                    dryHopDay: zod.number().int().nullable(),
+                    notes: zod.string().nullable(),
+                  })
+                  .optional(),
+                step: zod
+                  .object({
+                    position: zod.number().int(),
+                    phase: zod.union([
+                      zod.enum([
+                        "mash",
+                        "boil",
+                        "fermentation",
+                        "conditioning",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    body: zod.string(),
+                    durationMinutes: zod.number().int().nullable(),
+                  })
+                  .optional(),
+                previousStep: zod
+                  .object({
+                    position: zod.number().int(),
+                    phase: zod.union([
+                      zod.enum([
+                        "mash",
+                        "boil",
+                        "fermentation",
+                        "conditioning",
+                        "packaging",
+                        "other",
+                      ]),
+                      zod.null(),
+                    ]),
+                    body: zod.string(),
+                    durationMinutes: zod.number().int().nullable(),
+                  })
+                  .optional(),
+              })
+              .describe(
+                "One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.",
+              ),
+          )
+          .nullable()
+          .describe(
+            "What changed since the previous recorded brew. Null when there is nothing to compare with.",
+          ),
+      }),
+    )
+    .describe("Brews of this recipe, newest first."),
+  sinceLastBrew: zod
+    .array(
+      zod
+        .object({
+          kind: zod.enum([
+            "field",
+            "ingredient_added",
+            "ingredient_removed",
+            "ingredient_changed",
+            "step_added",
+            "step_removed",
+            "step_changed",
+          ]),
+          field: zod
+            .string()
+            .optional()
+            .describe(
+              "The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe.",
+            ),
+          from: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          to: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          ingredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          previousIngredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          step: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+          previousStep: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+        })
+        .describe(
+          "One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.",
+        ),
+    )
+    .nullable()
+    .describe(
+      "What has changed in the recipe since its latest recorded brew. Null when no brew has been recorded.",
+    ),
+});
+
+/**
  * @summary List ingredients for a recipe
  */
 export const ListRecipeIngredientsParams = zod.object({
   id: zod.coerce.number().int(),
 });
+
+export const listRecipeIngredientsResponseDryHopDayMin = 0;
 
 export const ListRecipeIngredientsResponseItem = zod.object({
   id: zod.number().int(),
@@ -710,6 +1556,7 @@ export const ListRecipeIngredientsResponseItem = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -722,7 +1569,25 @@ export const ListRecipeIngredientsResponseItem = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(listRecipeIngredientsResponseDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
 export const ListRecipeIngredientsResponse = zod.array(
   ListRecipeIngredientsResponseItem,
@@ -735,6 +1600,8 @@ export const AddRecipeIngredientParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const addRecipeIngredientBodyDryHopDayMin = 0;
+
 export const AddRecipeIngredientBody = zod.object({
   name: zod.string(),
   type: zod.enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"]),
@@ -744,6 +1611,7 @@ export const AddRecipeIngredientBody = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -756,8 +1624,28 @@ export const AddRecipeIngredientBody = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(addRecipeIngredientBodyDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.",
+    ),
 });
+
+export const addRecipeIngredientResponseDryHopDayMin = 0;
 
 export const AddRecipeIngredientResponse = zod.object({
   id: zod.number().int(),
@@ -770,6 +1658,7 @@ export const AddRecipeIngredientResponse = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -782,7 +1671,25 @@ export const AddRecipeIngredientResponse = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(addRecipeIngredientResponseDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
 
 /**
@@ -791,6 +1698,8 @@ export const AddRecipeIngredientResponse = zod.object({
 export const UpdateRecipeIngredientParams = zod.object({
   id: zod.coerce.number().int(),
 });
+
+export const updateRecipeIngredientBodyDryHopDayMin = 0;
 
 export const UpdateRecipeIngredientBody = zod.object({
   name: zod.string().optional(),
@@ -803,6 +1712,7 @@ export const UpdateRecipeIngredientBody = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -815,8 +1725,28 @@ export const UpdateRecipeIngredientBody = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(updateRecipeIngredientBodyDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
+
+export const updateRecipeIngredientResponseDryHopDayMin = 0;
 
 export const UpdateRecipeIngredientResponse = zod.object({
   id: zod.number().int(),
@@ -829,6 +1759,7 @@ export const UpdateRecipeIngredientResponse = zod.object({
     .union([
       zod.enum([
         "mash",
+        "steep",
         "boil",
         "dry_hop",
         "whirlpool",
@@ -841,7 +1772,25 @@ export const UpdateRecipeIngredientResponse = zod.object({
     ])
     .optional(),
   timingMinutes: zod.number().int().nullish(),
+  dryHopDay: zod
+    .number()
+    .int()
+    .min(updateRecipeIngredientResponseDryHopDayMin)
+    .nullish()
+    .describe(
+      "Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.",
+    ),
   notes: zod.string().nullish(),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullish()
+    .describe(
+      "Which of the recipe's versions this ingredient belongs to. Null means every version.",
+    ),
 });
 
 /**
@@ -1050,6 +1999,17 @@ export const ListBrewSessionsResponseItem = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -1188,6 +2148,12 @@ export const ListBrewSessionsResponseItem = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -1199,6 +2165,17 @@ export const ListBrewSessionsResponse = zod.array(ListBrewSessionsResponseItem);
 export const CreateBrewSessionBody = zod.object({
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Required when the recipe has several versions; ignored otherwise.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod.string().date().nullish(),
@@ -1254,6 +2231,17 @@ export const CreateBrewSessionResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -1392,6 +2380,12 @@ export const CreateBrewSessionResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -1416,6 +2410,17 @@ export const GetBrewSessionResponse = zod
     id: zod.number().int(),
     recipeId: zod.number().int().nullish(),
     recipeName: zod.string(),
+    recipeVariant: zod
+      .union([
+        zod
+          .enum(["lme", "dme", "all_grain"])
+          .describe("A version a kit recipe can be brewed as."),
+        zod.null(),
+      ])
+      .optional()
+      .describe(
+        "Which version of a multi-version recipe this batch was brewed as.",
+      ),
     status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
     brewDate: zod.string().date(),
     plannedDate: zod
@@ -1554,6 +2559,12 @@ export const GetBrewSessionResponse = zod
       .array(zod.number().int())
       .nullish()
       .describe("Recipe ingredient ids ticked off during the boil."),
+    dryHopAddedIds: zod
+      .array(zod.number().int())
+      .nullish()
+      .describe(
+        "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+      ),
     createdAt: zod.string().datetime({ offset: true }),
     updatedAt: zod.string().datetime({ offset: true }),
   })
@@ -1568,7 +2579,7 @@ export const GetBrewSessionResponse = zod
           gravity: zod.number().nullish(),
           ph: zod.number().nullish(),
           notes: zod.string().nullish(),
-          source: zod.enum(["manual", "ispindel"]),
+          source: zod.enum(["manual", "ispindel", "shelly"]),
         }),
       ),
       statusLog: zod.array(
@@ -1598,6 +2609,15 @@ export const UpdateBrewSessionParams = zod.object({
 export const UpdateBrewSessionBody = zod.object({
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string().optional(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe("Changing this does not re-deduct inventory."),
   status: zod
     .enum(["brew_day", "fermenting", "conditioning", "packaged"])
     .optional(),
@@ -1662,6 +2682,17 @@ export const UpdateBrewSessionResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -1800,6 +2831,12 @@ export const UpdateBrewSessionResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -1812,6 +2849,232 @@ export const DeleteBrewSessionParams = zod.object({
 });
 
 export const DeleteBrewSessionResponse = zod.void();
+
+/**
+ * @summary The recipe as this batch was brewed
+ */
+export const GetBrewSessionRecipeSnapshotParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetBrewSessionRecipeSnapshotResponse = zod.object({
+  snapshot: zod.union([
+    zod
+      .object({
+        capturedAt: zod.string().datetime({ offset: true }),
+        variant: zod.union([
+          zod
+            .enum(["lme", "dme", "all_grain"])
+            .describe("A version a kit recipe can be brewed as."),
+          zod.null(),
+        ]),
+        recipe: zod.object({
+          name: zod.string(),
+          style: zod.string(),
+          batchSizeGallons: zod.number(),
+          originalGravity: zod.number().nullish(),
+          finalGravity: zod.number().nullish(),
+          abv: zod.number().nullish(),
+          ibu: zod.number().nullish(),
+          colorSrm: zod.number().nullish(),
+          efficiencyPercent: zod.number().nullish(),
+          fermentTempMin: zod.number().nullish(),
+          fermentTempMax: zod.number().nullish(),
+          fermentTempIdeal: zod.number().nullish(),
+          conditionTempMin: zod.number().nullish(),
+          conditionTempMax: zod.number().nullish(),
+          conditionTempIdeal: zod.number().nullish(),
+          notes: zod.string().nullish(),
+        }),
+        ingredients: zod
+          .array(
+            zod.object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            }),
+          )
+          .describe("Only the ingredients of the version that was brewed."),
+        steps: zod.array(
+          zod.object({
+            position: zod.number().int(),
+            phase: zod.union([
+              zod.enum([
+                "mash",
+                "boil",
+                "fermentation",
+                "conditioning",
+                "packaging",
+                "other",
+              ]),
+              zod.null(),
+            ]),
+            body: zod.string(),
+            durationMinutes: zod.number().int().nullable(),
+          }),
+        ),
+      })
+      .describe(
+        "A recipe as a batch was brewed. A record only; running batches follow the live recipe.",
+      ),
+    zod.null(),
+  ]),
+  changesSinceBrew: zod
+    .array(
+      zod
+        .object({
+          kind: zod.enum([
+            "field",
+            "ingredient_added",
+            "ingredient_removed",
+            "ingredient_changed",
+            "step_added",
+            "step_removed",
+            "step_changed",
+          ]),
+          field: zod
+            .string()
+            .optional()
+            .describe(
+              "The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe.",
+            ),
+          from: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          to: zod.union([zod.number(), zod.string(), zod.null()]).optional(),
+          ingredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          previousIngredient: zod
+            .object({
+              name: zod.string(),
+              type: zod.enum([
+                "malt",
+                "hop",
+                "yeast",
+                "adjunct",
+                "water_agent",
+                "other",
+              ]),
+              amount: zod.number(),
+              unit: zod.string(),
+              use: zod.union([
+                zod.enum([
+                  "mash",
+                  "steep",
+                  "boil",
+                  "dry_hop",
+                  "whirlpool",
+                  "primary",
+                  "secondary",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              timingMinutes: zod.number().int().nullable(),
+              dryHopDay: zod.number().int().nullable(),
+              notes: zod.string().nullable(),
+            })
+            .optional(),
+          step: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+          previousStep: zod
+            .object({
+              position: zod.number().int(),
+              phase: zod.union([
+                zod.enum([
+                  "mash",
+                  "boil",
+                  "fermentation",
+                  "conditioning",
+                  "packaging",
+                  "other",
+                ]),
+                zod.null(),
+              ]),
+              body: zod.string(),
+              durationMinutes: zod.number().int().nullable(),
+            })
+            .optional(),
+        })
+        .describe(
+          "One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.",
+        ),
+    )
+    .nullable()
+    .describe(
+      "What has changed in the recipe since this batch was brewed. Null without a snapshot or a linked recipe.",
+    ),
+});
 
 /**
  * @summary Save the tasting scorecard for a brew session
@@ -1900,6 +3163,17 @@ export const UpsertBrewRatingResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -2038,6 +3312,12 @@ export const UpsertBrewRatingResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
@@ -2092,6 +3372,17 @@ export const ControlBoilResponse = zod.object({
   id: zod.number().int(),
   recipeId: zod.number().int().nullish(),
   recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
   status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
   brewDate: zod.string().date(),
   plannedDate: zod
@@ -2230,9 +3521,109 @@ export const ControlBoilResponse = zod.object({
     .array(zod.number().int())
     .nullish()
     .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.number().int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
 });
+
+/**
+ * Days are counted from when the batch last entered conditioning. Only dry hops with a day set are listed.
+ * @summary The recipe's dry hop schedule for this brew, with due dates and status
+ */
+export const GetBrewSessionDryHopsParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetBrewSessionDryHopsResponseItem = zod.object({
+  ingredientId: zod.number().int(),
+  name: zod.string(),
+  amount: zod.number(),
+  unit: zod.string(),
+  day: zod
+    .number()
+    .int()
+    .describe("Days after the batch entered conditioning."),
+  dueAt: zod
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .describe("Null until the batch has entered conditioning."),
+  status: zod
+    .enum(["scheduled", "due", "added"])
+    .describe(
+      "scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.",
+    ),
+});
+export const GetBrewSessionDryHopsResponse = zod.array(
+  GetBrewSessionDryHopsResponseItem,
+);
+
+/**
+ * @summary Mark a dry hop as added, which clears its reminder
+ */
+export const MarkDryHopAddedParams = zod.object({
+  id: zod.coerce.number().int(),
+  ingredientId: zod.coerce.number().int(),
+});
+
+export const MarkDryHopAddedResponseItem = zod.object({
+  ingredientId: zod.number().int(),
+  name: zod.string(),
+  amount: zod.number(),
+  unit: zod.string(),
+  day: zod
+    .number()
+    .int()
+    .describe("Days after the batch entered conditioning."),
+  dueAt: zod
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .describe("Null until the batch has entered conditioning."),
+  status: zod
+    .enum(["scheduled", "due", "added"])
+    .describe(
+      "scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.",
+    ),
+});
+export const MarkDryHopAddedResponse = zod.array(MarkDryHopAddedResponseItem);
+
+/**
+ * @summary Undo marking a dry hop as added
+ */
+export const UnmarkDryHopAddedParams = zod.object({
+  id: zod.coerce.number().int(),
+  ingredientId: zod.coerce.number().int(),
+});
+
+export const UnmarkDryHopAddedResponseItem = zod.object({
+  ingredientId: zod.number().int(),
+  name: zod.string(),
+  amount: zod.number(),
+  unit: zod.string(),
+  day: zod
+    .number()
+    .int()
+    .describe("Days after the batch entered conditioning."),
+  dueAt: zod
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .describe("Null until the batch has entered conditioning."),
+  status: zod
+    .enum(["scheduled", "due", "added"])
+    .describe(
+      "scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.",
+    ),
+});
+export const UnmarkDryHopAddedResponse = zod.array(
+  UnmarkDryHopAddedResponseItem,
+);
 
 /**
  * @summary List fermentation readings for a brew session
@@ -2249,7 +3640,7 @@ export const ListFermentationReadingsResponseItem = zod.object({
   gravity: zod.number().nullish(),
   ph: zod.number().nullish(),
   notes: zod.string().nullish(),
-  source: zod.enum(["manual", "ispindel"]),
+  source: zod.enum(["manual", "ispindel", "shelly"]),
 });
 export const ListFermentationReadingsResponse = zod.array(
   ListFermentationReadingsResponseItem,
@@ -2278,7 +3669,7 @@ export const AddFermentationReadingResponse = zod.object({
   gravity: zod.number().nullish(),
   ph: zod.number().nullish(),
   notes: zod.string().nullish(),
-  source: zod.enum(["manual", "ispindel"]),
+  source: zod.enum(["manual", "ispindel", "shelly"]),
 });
 
 /**
@@ -2350,6 +3741,183 @@ export const SetUnitSystemBody = zod.object({
 
 export const SetUnitSystemResponse = zod.object({
   system: zod.enum(["imperial", "metric", "both"]),
+});
+
+/**
+ * @summary Get the saved source (tap) water profile
+ */
+export const getSourceWaterResponseProfileOneNameMax = 80;
+
+export const getSourceWaterResponseProfileOneCalciumMin = 0;
+export const getSourceWaterResponseProfileOneCalciumMax = 2000;
+
+export const getSourceWaterResponseProfileOneMagnesiumMin = 0;
+export const getSourceWaterResponseProfileOneMagnesiumMax = 2000;
+
+export const getSourceWaterResponseProfileOneSodiumMin = 0;
+export const getSourceWaterResponseProfileOneSodiumMax = 2000;
+
+export const getSourceWaterResponseProfileOneSulfateMin = 0;
+export const getSourceWaterResponseProfileOneSulfateMax = 2000;
+
+export const getSourceWaterResponseProfileOneChlorideMin = 0;
+export const getSourceWaterResponseProfileOneChlorideMax = 2000;
+
+export const getSourceWaterResponseProfileOneBicarbonateMin = 0;
+export const getSourceWaterResponseProfileOneBicarbonateMax = 2000;
+
+export const GetSourceWaterResponse = zod.object({
+  profile: zod.union([
+    zod
+      .object({
+        name: zod
+          .string()
+          .max(getSourceWaterResponseProfileOneNameMax)
+          .nullish(),
+        calcium: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneCalciumMin)
+          .max(getSourceWaterResponseProfileOneCalciumMax),
+        magnesium: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneMagnesiumMin)
+          .max(getSourceWaterResponseProfileOneMagnesiumMax),
+        sodium: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneSodiumMin)
+          .max(getSourceWaterResponseProfileOneSodiumMax),
+        sulfate: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneSulfateMin)
+          .max(getSourceWaterResponseProfileOneSulfateMax),
+        chloride: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneChlorideMin)
+          .max(getSourceWaterResponseProfileOneChlorideMax),
+        bicarbonate: zod
+          .number()
+          .min(getSourceWaterResponseProfileOneBicarbonateMin)
+          .max(getSourceWaterResponseProfileOneBicarbonateMax),
+      })
+      .describe("Ion concentrations in ppm (mg/L)."),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Save or clear the source (tap) water profile
+ */
+export const setSourceWaterBodyProfileOneNameMax = 80;
+
+export const setSourceWaterBodyProfileOneCalciumMin = 0;
+export const setSourceWaterBodyProfileOneCalciumMax = 2000;
+
+export const setSourceWaterBodyProfileOneMagnesiumMin = 0;
+export const setSourceWaterBodyProfileOneMagnesiumMax = 2000;
+
+export const setSourceWaterBodyProfileOneSodiumMin = 0;
+export const setSourceWaterBodyProfileOneSodiumMax = 2000;
+
+export const setSourceWaterBodyProfileOneSulfateMin = 0;
+export const setSourceWaterBodyProfileOneSulfateMax = 2000;
+
+export const setSourceWaterBodyProfileOneChlorideMin = 0;
+export const setSourceWaterBodyProfileOneChlorideMax = 2000;
+
+export const setSourceWaterBodyProfileOneBicarbonateMin = 0;
+export const setSourceWaterBodyProfileOneBicarbonateMax = 2000;
+
+export const SetSourceWaterBody = zod.object({
+  profile: zod.union([
+    zod
+      .object({
+        name: zod.string().max(setSourceWaterBodyProfileOneNameMax).nullish(),
+        calcium: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneCalciumMin)
+          .max(setSourceWaterBodyProfileOneCalciumMax),
+        magnesium: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneMagnesiumMin)
+          .max(setSourceWaterBodyProfileOneMagnesiumMax),
+        sodium: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneSodiumMin)
+          .max(setSourceWaterBodyProfileOneSodiumMax),
+        sulfate: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneSulfateMin)
+          .max(setSourceWaterBodyProfileOneSulfateMax),
+        chloride: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneChlorideMin)
+          .max(setSourceWaterBodyProfileOneChlorideMax),
+        bicarbonate: zod
+          .number()
+          .min(setSourceWaterBodyProfileOneBicarbonateMin)
+          .max(setSourceWaterBodyProfileOneBicarbonateMax),
+      })
+      .describe("Ion concentrations in ppm (mg/L)."),
+    zod.null(),
+  ]),
+});
+
+export const setSourceWaterResponseProfileOneNameMax = 80;
+
+export const setSourceWaterResponseProfileOneCalciumMin = 0;
+export const setSourceWaterResponseProfileOneCalciumMax = 2000;
+
+export const setSourceWaterResponseProfileOneMagnesiumMin = 0;
+export const setSourceWaterResponseProfileOneMagnesiumMax = 2000;
+
+export const setSourceWaterResponseProfileOneSodiumMin = 0;
+export const setSourceWaterResponseProfileOneSodiumMax = 2000;
+
+export const setSourceWaterResponseProfileOneSulfateMin = 0;
+export const setSourceWaterResponseProfileOneSulfateMax = 2000;
+
+export const setSourceWaterResponseProfileOneChlorideMin = 0;
+export const setSourceWaterResponseProfileOneChlorideMax = 2000;
+
+export const setSourceWaterResponseProfileOneBicarbonateMin = 0;
+export const setSourceWaterResponseProfileOneBicarbonateMax = 2000;
+
+export const SetSourceWaterResponse = zod.object({
+  profile: zod.union([
+    zod
+      .object({
+        name: zod
+          .string()
+          .max(setSourceWaterResponseProfileOneNameMax)
+          .nullish(),
+        calcium: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneCalciumMin)
+          .max(setSourceWaterResponseProfileOneCalciumMax),
+        magnesium: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneMagnesiumMin)
+          .max(setSourceWaterResponseProfileOneMagnesiumMax),
+        sodium: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneSodiumMin)
+          .max(setSourceWaterResponseProfileOneSodiumMax),
+        sulfate: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneSulfateMin)
+          .max(setSourceWaterResponseProfileOneSulfateMax),
+        chloride: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneChlorideMin)
+          .max(setSourceWaterResponseProfileOneChlorideMax),
+        bicarbonate: zod
+          .number()
+          .min(setSourceWaterResponseProfileOneBicarbonateMin)
+          .max(setSourceWaterResponseProfileOneBicarbonateMax),
+      })
+      .describe("Ion concentrations in ppm (mg/L)."),
+    zod.null(),
+  ]),
 });
 
 /**
@@ -2449,6 +4017,8 @@ export const getNotificationSettingsResponseRepeatHoursMax = 168;
 
 export const getNotificationSettingsResponseTempRepeatHoursMax = 168;
 
+export const getNotificationSettingsResponseDryHopRepeatHoursMax = 168;
+
 export const GetNotificationSettingsResponse = zod
   .object({
     channel: zod
@@ -2500,6 +4070,27 @@ export const GetNotificationSettingsResponse = zod
       .describe(
         "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
       ),
+    dryHopAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
+    dryHopRepeatHours: zod
+      .number()
+      .int()
+      .min(1)
+      .max(getNotificationSettingsResponseDryHopRepeatHoursMax)
+      .optional()
+      .describe(
+        "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
+      ),
+    autoAdvanceAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -2511,6 +4102,8 @@ export const GetNotificationSettingsResponse = zod
 export const setNotificationSettingsBodyRepeatHoursMax = 168;
 
 export const setNotificationSettingsBodyTempRepeatHoursMax = 168;
+
+export const setNotificationSettingsBodyDryHopRepeatHoursMax = 168;
 
 export const SetNotificationSettingsBody = zod
   .object({
@@ -2563,6 +4156,27 @@ export const SetNotificationSettingsBody = zod
       .describe(
         "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
       ),
+    dryHopAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
+    dryHopRepeatHours: zod
+      .number()
+      .int()
+      .min(1)
+      .max(setNotificationSettingsBodyDryHopRepeatHoursMax)
+      .optional()
+      .describe(
+        "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
+      ),
+    autoAdvanceAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -2571,6 +4185,8 @@ export const SetNotificationSettingsBody = zod
 export const setNotificationSettingsResponseRepeatHoursMax = 168;
 
 export const setNotificationSettingsResponseTempRepeatHoursMax = 168;
+
+export const setNotificationSettingsResponseDryHopRepeatHoursMax = 168;
 
 export const SetNotificationSettingsResponse = zod
   .object({
@@ -2623,6 +4239,27 @@ export const SetNotificationSettingsResponse = zod
       .describe(
         "Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true.",
       ),
+    dryHopAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
+    dryHopRepeatHours: zod
+      .number()
+      .int()
+      .min(1)
+      .max(setNotificationSettingsResponseDryHopRepeatHoursMax)
+      .optional()
+      .describe(
+        "Hours between dry hop reminders while an addition is still due. Defaults to 6.",
+      ),
+    autoAdvanceAlerts: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true.",
+      ),
   })
   .describe(
     "Outbound notification config. Both channels are plain outbound POSTs, so they work on a plain-HTTP LAN deployment with no certificates.",
@@ -2669,6 +4306,10 @@ export const ListInventoryQueryParams = zod.object({
   search: zod.coerce.string().optional(),
 });
 
+export const listInventoryResponseSuppliersItemPriceMin = 0;
+
+export const listInventoryResponseSuppliersItemPreferredDefault = false;
+
 export const ListInventoryResponseItem = zod.object({
   id: zod.number().int(),
   name: zod.string(),
@@ -2678,10 +4319,25 @@ export const ListInventoryResponseItem = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod.array(
+    zod
+      .object({
+        name: zod.string().min(1),
+        price: zod
+          .number()
+          .min(listInventoryResponseSuppliersItemPriceMin)
+          .nullish(),
+        url: zod.string().nullish(),
+        preferred: zod
+          .boolean()
+          .default(listInventoryResponseSuppliersItemPreferredDefault),
+      })
+      .describe(
+        "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+      ),
+  ),
   notes: zod.string().nullish(),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
@@ -2691,6 +4347,11 @@ export const ListInventoryResponse = zod.array(ListInventoryResponseItem);
 /**
  * @summary Add an inventory item
  */
+
+export const createInventoryItemBodySuppliersItemPriceMin = 0;
+
+export const createInventoryItemBodySuppliersItemPreferredDefault = false;
+
 export const CreateInventoryItemBody = zod.object({
   name: zod.string(),
   type: zod.enum(["malt", "hop", "yeast", "adjunct", "water_agent", "other"]),
@@ -2699,12 +4360,33 @@ export const CreateInventoryItemBody = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod
+    .array(
+      zod
+        .object({
+          name: zod.string().min(1),
+          price: zod
+            .number()
+            .min(createInventoryItemBodySuppliersItemPriceMin)
+            .nullish(),
+          url: zod.string().nullish(),
+          preferred: zod
+            .boolean()
+            .default(createInventoryItemBodySuppliersItemPreferredDefault),
+        })
+        .describe(
+          "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+        ),
+    )
+    .optional(),
   notes: zod.string().nullish(),
 });
+
+export const createInventoryItemResponseSuppliersItemPriceMin = 0;
+
+export const createInventoryItemResponseSuppliersItemPreferredDefault = false;
 
 export const CreateInventoryItemResponse = zod.object({
   id: zod.number().int(),
@@ -2715,10 +4397,25 @@ export const CreateInventoryItemResponse = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod.array(
+    zod
+      .object({
+        name: zod.string().min(1),
+        price: zod
+          .number()
+          .min(createInventoryItemResponseSuppliersItemPriceMin)
+          .nullish(),
+        url: zod.string().nullish(),
+        preferred: zod
+          .boolean()
+          .default(createInventoryItemResponseSuppliersItemPreferredDefault),
+      })
+      .describe(
+        "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+      ),
+  ),
   notes: zod.string().nullish(),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
@@ -2731,6 +4428,10 @@ export const UpdateInventoryItemParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const updateInventoryItemBodySuppliersItemPriceMin = 0;
+
+export const updateInventoryItemBodySuppliersItemPreferredDefault = false;
+
 export const UpdateInventoryItemBody = zod.object({
   name: zod.string().optional(),
   type: zod
@@ -2741,12 +4442,34 @@ export const UpdateInventoryItemBody = zod.object({
     .optional(),
   amount: zod.number().optional(),
   unit: zod.string().optional(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod
+    .array(
+      zod
+        .object({
+          name: zod.string().min(1),
+          price: zod
+            .number()
+            .min(updateInventoryItemBodySuppliersItemPriceMin)
+            .nullish(),
+          url: zod.string().nullish(),
+          preferred: zod
+            .boolean()
+            .default(updateInventoryItemBodySuppliersItemPreferredDefault),
+        })
+        .describe(
+          "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+        ),
+    )
+    .optional()
+    .describe("Replaces the item's whole supplier list when present."),
   notes: zod.string().nullish(),
 });
+
+export const updateInventoryItemResponseSuppliersItemPriceMin = 0;
+
+export const updateInventoryItemResponseSuppliersItemPreferredDefault = false;
 
 export const UpdateInventoryItemResponse = zod.object({
   id: zod.number().int(),
@@ -2757,10 +4480,25 @@ export const UpdateInventoryItemResponse = zod.object({
     .optional(),
   amount: zod.number(),
   unit: zod.string(),
-  cost: zod.number().nullish(),
   purchasedDate: zod.string().date().nullish(),
   expiryDate: zod.string().date().nullish(),
-  supplier: zod.string().nullish(),
+  suppliers: zod.array(
+    zod
+      .object({
+        name: zod.string().min(1),
+        price: zod
+          .number()
+          .min(updateInventoryItemResponseSuppliersItemPriceMin)
+          .nullish(),
+        url: zod.string().nullish(),
+        preferred: zod
+          .boolean()
+          .default(updateInventoryItemResponseSuppliersItemPreferredDefault),
+      })
+      .describe(
+        "A place this ingredient can be bought, with its price per unit of the item's `unit`.",
+      ),
+  ),
   notes: zod.string().nullish(),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
@@ -3735,4 +5473,1232 @@ export const EnableHttpsResponse = zod.object({
  */
 export const DisableHttpsResponse = zod.object({
   started: zod.boolean(),
+});
+
+/**
+ * @summary List relay devices with their live state
+ */
+export const ListOutputDevicesResponseItem = zod.object({
+  id: zod.number().int(),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+export const ListOutputDevicesResponse = zod.array(
+  ListOutputDevicesResponseItem,
+);
+
+/**
+ * @summary Add a Shelly device. Its generation and model are detected from the device.
+ */
+
+export const createOutputDeviceBodyChannelMin = 0;
+
+export const CreateOutputDeviceBody = zod.object({
+  name: zod.string().min(1),
+  host: zod.string().min(1),
+  channel: zod.number().int().min(createOutputDeviceBodyChannelMin).optional(),
+  username: zod.string().nullish(),
+  password: zod.string().nullish(),
+});
+
+export const CreateOutputDeviceResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Check that an address answers as a Shelly device (any generation), before adding it
+ */
+
+export const ProbeOutputDeviceBody = zod.object({
+  host: zod.string().min(1),
+  username: zod.string().nullish(),
+  password: zod.string().nullish(),
+});
+
+export const ProbeOutputDeviceResponse = zod.object({
+  ok: zod.boolean(),
+  error: zod.string().nullable(),
+  host: zod.string().describe("The address as it will be stored"),
+  model: zod.string().nullable().describe("Shelly model code, e.g. SHSW-1"),
+  generation: zod
+    .number()
+    .int()
+    .nullable()
+    .describe("Shelly API generation; 1 for Gen1, 2 or more for the RPC API"),
+  isPill: zod.boolean().describe("True when the device is The Pill by Shelly"),
+  pillMode: zod
+    .string()
+    .nullable()
+    .describe(
+      "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, …); null for other devices",
+    ),
+  authRequired: zod.boolean(),
+  ison: zod.boolean().nullable(),
+  hasRelay: zod
+    .boolean()
+    .describe("Whether the device has a relay on channel 0"),
+  relayChannels: zod
+    .number()
+    .int()
+    .describe("How many relay channels the device has"),
+  tempC: zod.number().nullable(),
+});
+
+/**
+ * @summary Get one relay device with its live state
+ */
+export const GetOutputDeviceParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetOutputDeviceResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Update a relay device. Omit password to keep it, send null to clear it.
+ */
+export const UpdateOutputDeviceParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const updateOutputDeviceBodyChannelMin = 0;
+
+export const UpdateOutputDeviceBody = zod.object({
+  name: zod.string().min(1).optional(),
+  host: zod.string().min(1).optional(),
+  channel: zod.number().int().min(updateOutputDeviceBodyChannelMin).optional(),
+  username: zod.string().nullish(),
+  password: zod.string().nullish(),
+  enabled: zod.boolean().optional(),
+});
+
+export const UpdateOutputDeviceResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Remove a relay device. Its probe's sensor history is kept.
+ */
+export const DeleteOutputDeviceParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const DeleteOutputDeviceQueryParams = zod.object({
+  force: zod.coerce
+    .boolean()
+    .optional()
+    .describe("Remove it even if the relay can't be switched off first"),
+});
+
+export const DeleteOutputDeviceResponse = zod.void();
+
+/**
+ * @summary Switch the relay on or off by hand, optionally for a fixed time
+ */
+export const SetOutputDeviceRelayParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const setOutputDeviceRelayBodyDurationSecMax = 86400;
+
+export const SetOutputDeviceRelayBody = zod.object({
+  on: zod.boolean(),
+  durationSec: zod
+    .number()
+    .int()
+    .min(1)
+    .max(setOutputDeviceRelayBodyDurationSecMax)
+    .optional()
+    .describe(
+      "Turn back after this many seconds, enforced by the device itself",
+    ),
+});
+
+export const SetOutputDeviceRelayResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Set the relay to come back off after a power cut
+ */
+export const ApplyOutputDeviceSafeDefaultsParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
+  id: zod.number().int(),
+  deviceType: zod
+    .enum(["shelly_gen1", "shelly_gen2"])
+    .describe(
+      "Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.",
+    ),
+  model: zod
+    .string()
+    .nullable()
+    .describe(
+      "Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.",
+    ),
+  name: zod.string(),
+  host: zod.string(),
+  channel: zod.number().int(),
+  username: zod.string().nullable(),
+  hasPassword: zod.boolean().describe("The password itself is never returned"),
+  enabled: zod.boolean(),
+  probeSensorDeviceId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "Sensor device that records the add-on probe's temperature, once one has been seen",
+    ),
+  lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
+  state: zod.object({
+    reachable: zod.boolean(),
+    ison: zod.boolean().nullable(),
+    hasRelay: zod
+      .boolean()
+      .describe(
+        "False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling.",
+      ),
+    tempC: zod
+      .number()
+      .nullable()
+      .describe(
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+      ),
+    rssi: zod.number().int().nullable(),
+    lastError: zod.string().nullable(),
+  }),
+  controlledBy: zod
+    .union([
+      zod.object({
+        flowId: zod.number().int(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "The enabled flow switching this relay, if any. Manual control is refused while set.",
+    ),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary List Brew Flows with any problems and their latest run
+ */
+export const ListFlowsResponseItem = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+export const ListFlowsResponse = zod.array(ListFlowsResponseItem);
+
+/**
+ * @summary Create a flow. It starts disabled; enable it once it has no problems.
+ */
+export const createFlowBodyNameMax = 100;
+
+export const CreateFlowBody = zod.object({
+  name: zod.string().min(1).max(createFlowBodyNameMax),
+  description: zod.string().nullish(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  recipeIds: zod.array(zod.number().int()).optional(),
+});
+
+export const CreateFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Get one flow
+ */
+export const GetFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Update a flow's name, description or graph. An enabled flow only accepts a graph with no problems.
+ */
+export const UpdateFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const updateFlowBodyNameMax = 100;
+
+export const UpdateFlowBody = zod.object({
+  name: zod.string().min(1).max(updateFlowBodyNameMax).optional(),
+  description: zod.string().nullish(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  recipeIds: zod
+    .array(zod.number().int())
+    .optional()
+    .describe("Replaces the flow's recipe links"),
+});
+
+export const UpdateFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Delete a flow. Relays it controlled are switched off.
+ */
+export const DeleteFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const DeleteFlowResponse = zod.void();
+
+/**
+ * @summary Turn a flow on
+ */
+export const EnableFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const EnableFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Turn a flow off. Relays it controlled are switched off.
+ */
+export const DisableFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const DisableFlowResponse = zod.object({
+  id: zod.number().int(),
+  name: zod.string(),
+  description: zod.string().nullable(),
+  enabled: zod.boolean(),
+  graph: zod
+    .object({
+      version: zod.literal(1),
+      nodes: zod.array(
+        zod.object({
+          id: zod.string(),
+          type: zod.enum([
+            "trigger.schedule",
+            "trigger.temperature",
+            "condition.compare",
+            "condition.timeWindow",
+            "condition.brewStatus",
+            "condition.stageAge",
+            "control.thermostat",
+            "action.relay",
+            "action.notify",
+            "action.delay",
+          ]),
+          position: zod.object({
+            x: zod.number(),
+            y: zod.number(),
+          }),
+          data: zod.object({
+            config: zod.record(zod.string(), zod.unknown()),
+          }),
+        }),
+      ),
+      edges: zod.array(
+        zod.object({
+          id: zod.string(),
+          source: zod.string(),
+          target: zod.string(),
+        }),
+      ),
+    })
+    .describe(
+      "A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.",
+    ),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe("Decided by the trigger; null while the graph has problems"),
+  problems: zod.array(
+    zod.object({
+      nodeId: zod
+        .string()
+        .nullable()
+        .describe(
+          "The node the problem is about, or null for the flow as a whole",
+        ),
+      message: zod.string(),
+    }),
+  ),
+  relayDeviceIds: zod.array(zod.number().int()),
+  recipeIds: zod
+    .array(zod.number().int())
+    .describe(
+      "Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew",
+    ),
+  lastError: zod.string().nullable(),
+  lastRun: zod.union([
+    zod.object({
+      id: zod.number().int(),
+      flowId: zod.number().int(),
+      startedAt: zod.string().datetime({ offset: true }),
+      trigger: zod.string().describe("tick, schedule, manual or system"),
+      status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+      message: zod.string(),
+      detail: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary Run an enabled schedule flow now, without waiting for its schedule
+ */
+export const RunFlowParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const RunFlowResponse = zod.object({
+  ok: zod.boolean(),
+  message: zod.string(),
+});
+
+/**
+ * @summary What a flow has done, newest first (kept for 14 days)
+ */
+export const ListFlowRunsParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const listFlowRunsQueryLimitMax = 200;
+
+export const ListFlowRunsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listFlowRunsQueryLimitMax)
+    .optional(),
+});
+
+export const ListFlowRunsResponseItem = zod.object({
+  id: zod.number().int(),
+  flowId: zod.number().int(),
+  startedAt: zod.string().datetime({ offset: true }),
+  trigger: zod.string().describe("tick, schedule, manual or system"),
+  status: zod.enum(["ok", "skipped", "error", "failsafe"]),
+  message: zod.string(),
+  detail: zod.record(zod.string(), zod.unknown()).nullable(),
+});
+export const ListFlowRunsResponse = zod.array(ListFlowRunsResponseItem);
+
+/**
+ * @summary Live state of a flow — current temperature, which steps are active, fail-safe reason
+ */
+export const GetFlowStatusParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetFlowStatusResponse = zod.object({
+  flowId: zod.number().int(),
+  running: zod
+    .boolean()
+    .describe("The flow is enabled and loaded by the engine"),
+  kind: zod
+    .union([
+      zod.literal("temperature"),
+      zod.literal("schedule"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  lastTickAt: zod.string().datetime({ offset: true }).nullable(),
+  tempC: zod.number().nullable(),
+  failsafe: zod
+    .string()
+    .nullable()
+    .describe("Why the flow is holding its relays off, if it is"),
+  waiting: zod
+    .boolean()
+    .describe("Waiting for the first readings after a restart"),
+  standby: zod
+    .string()
+    .nullable()
+    .describe(
+      "Why a recipe-linked flow is idle (relays off, no alert), if it is",
+    ),
+  nextRunAt: zod.string().datetime({ offset: true }).nullable(),
+  nodes: zod.record(
+    zod.string(),
+    zod.object({
+      active: zod.boolean().describe("Reached on the last evaluation"),
+      relayOn: zod.boolean().optional(),
+      reason: zod
+        .string()
+        .optional()
+        .describe("Thermostat state, e.g. heating, idle, holding_min_off"),
+      targetC: zod
+        .number()
+        .optional()
+        .describe(
+          "The target a thermostat used on the last evaluation (its own, or the brew's)",
+        ),
+    }),
+  ),
 });

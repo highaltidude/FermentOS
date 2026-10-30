@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, brewSessionsTable, recipesTable, inventoryTable, fermentationReadingsTable, brewSessionStatusLogTable, ACTIVE_BREW_STATUSES } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { getBreweryName } from "../services/breweryName";
+import { withoutSnapshot } from "../services/recipeSnapshot";
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get("/dashboard/summary", async (req, res) => {
 
   // brew_day, fermenting, and conditioning are all active. packaged is terminal.
   const activeSessions = sessions.filter((s) => ACTIVE_BREW_STATUSES.includes(s.status));
-  const recentSessions = sessions.slice().reverse().slice(0, 5);
+  const recentSessions = sessions.slice().reverse().slice(0, 5).map(withoutSnapshot);
 
   const topRatedBrews = sessions
     .filter((s) => s.overallScore != null)

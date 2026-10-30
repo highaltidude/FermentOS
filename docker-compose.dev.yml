@@ -14,6 +14,8 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # API on 8080; Vite dev server with hot reload on 23975, proxying /api to the
+  # API. The API builds once at start: restart this service after API changes.
   app:
     build:
       context: .
@@ -27,16 +29,29 @@ services:
       NODE_ENV: development
       PORT: 8080
       BASE_PATH: /
+      API_PROXY_TARGET: http://localhost:8080
+      WATCH_POLLING: "1"
     ports:
       - "8080:8080"
       - "23975:23975"
+    # The bind mount hides the packages installed in the image, so each
+    # package's node_modules is kept as an anonymous volume, filled from the
+    # image. After a dependency change, run `up --build -V` to refill them.
     volumes:
       - .:/app
       - /app/node_modules
+      - /app/lib/db/node_modules
+      - /app/lib/api-spec/node_modules
+      - /app/lib/api-zod/node_modules
+      - /app/lib/api-client-react/node_modules
+      - /app/artifacts/api-server/node_modules
+      - /app/artifacts/fermentos/node_modules
+      - /app/scripts/node_modules
     command: >
-      sh -c "pnpm --filter @workspace/api-server run dev &
-             pnpm --filter @workspace/fermentos run dev &
-             wait"
+      sh -c "pnpm --filter @workspace/db run push &&
+             { pnpm --filter @workspace/api-server run dev &
+               PORT=23975 pnpm --filter @workspace/fermentos run dev &
+               wait; }"
 
 volumes:
   postgres_data_dev:

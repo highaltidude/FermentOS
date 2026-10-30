@@ -6,3 +6,4 @@ export * from "./settings";
 export * from "./auth";
 export * from "./sensors";
 export * from "./system_health";
+export * from "./automation";

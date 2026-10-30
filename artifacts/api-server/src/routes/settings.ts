@@ -7,6 +7,7 @@ import {
   SetUnitSystemBody,
   SetFermentTempUnitBody,
   SetBreweryNameBody,
+  SetSourceWaterBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
 import {
@@ -17,6 +18,8 @@ import { getUnitSystem, setUnitSystem } from "../services/unitSystem";
 import { getRetentionDays, setRetentionDays } from "../services/readingRetention.js";
 import { getConfigValue, setConfigValue } from "../services/appConfig";
 import { getBreweryName, setBreweryName } from "../services/breweryName";
+import { getAutoConditioning, setAutoConditioning } from "../services/autoConditioning";
+import { getSourceWater, setSourceWater } from "../services/sourceWater";
 import {
   getTempAlertReadings,
   setTempAlertReadings,
@@ -61,6 +64,17 @@ router.put("/settings/unit-system", async (req, res) => {
   }
   await setUnitSystem(parsed.data);
   return res.json({ system: parsed.data });
+});
+
+router.get("/settings/source-water", async (_req, res) => {
+  return res.json({ profile: await getSourceWater() });
+});
+
+router.put("/settings/source-water", async (req, res) => {
+  const body = SetSourceWaterBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "Invalid request body" });
+  await setSourceWater(body.data.profile ?? null);
+  return res.json({ profile: await getSourceWater() });
 });
 
 router.get("/settings/styles", async (_req, res) => {
@@ -176,16 +190,14 @@ router.put("/settings/temp-alert-readings", async (req, res) => {
   return res.json({ count });
 });
 
-const AUTO_CONDITIONING_KEY = "auto_advance_to_conditioning";
-
 router.get("/settings/auto-conditioning", async (_req, res) => {
-  return res.json({ enabled: (await getConfigValue(AUTO_CONDITIONING_KEY)) === "true" });
+  return res.json({ enabled: await getAutoConditioning() });
 });
 
 router.put("/settings/auto-conditioning", async (req, res) => {
   const { enabled } = req.body as { enabled: unknown };
   if (typeof enabled !== "boolean") return res.status(400).json({ error: "Body must be { enabled: boolean }" });
-  await setConfigValue(AUTO_CONDITIONING_KEY, String(enabled));
+  await setAutoConditioning(enabled);
   return res.json({ enabled });
 });
 
@@ -204,6 +216,7 @@ router.put("/settings/notifications", async (req, res) => {
   // the service receives exactly the union types it declares.
   const types = (d.types ?? []).filter((t): t is AlertType =>
     (ALERT_TYPES as readonly string[]).includes(t));
+  const current = await getNotifyConfig();
 
   await setNotifyConfig({
     channel: d.channel as NotifyChannel,
@@ -214,8 +227,11 @@ router.put("/settings/notifications", async (req, res) => {
     repeatHours: d.repeatHours,
     // undefined (field omitted) and null both mean "inherit repeatHours".
     tempRepeatHours: d.tempRepeatHours ?? null,
-    // Optional in the body; an older client that omits it leaves it as is.
-    boilAlerts: d.boilAlerts ?? (await getNotifyConfig()).boilAlerts,
+    // Optional in the body; an older client that omits them leaves them as is.
+    boilAlerts: d.boilAlerts ?? current.boilAlerts,
+    dryHopAlerts: d.dryHopAlerts ?? current.dryHopAlerts,
+    dryHopRepeatHours: d.dryHopRepeatHours ?? current.dryHopRepeatHours,
+    autoAdvanceAlerts: d.autoAdvanceAlerts ?? current.autoAdvanceAlerts,
   });
   return res.json(await getNotifyConfig());
 });

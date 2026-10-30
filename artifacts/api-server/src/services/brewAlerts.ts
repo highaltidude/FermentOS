@@ -1,10 +1,13 @@
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable, type brewStatusEnum } from "@workspace/db";
-import { eq, isNotNull, and, gte, lte } from "drizzle-orm";
+import { eq, isNotNull, and, gte, lte, inArray } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
 import { batteryWarningLevel } from "../lib/batteryUtil";
 import { getConfigValue } from "./appConfig";
 import { activeTempPhase } from "../lib/alertPolicy";
 import { isGravityStalled } from "../lib/gravityStall";
+import { tempExcursion, type TempRange } from "../lib/tempExcursion";
+
+export { tempExcursion, type TempRange, type TempReadingLike, type TempExcursion } from "../lib/tempExcursion";
 
 /**
  * Brew telemetry and alert computation.
@@ -18,15 +21,6 @@ import { isGravityStalled } from "../lib/gravityStall";
 
 export type BrewAlert = { type: string; message: string; triggeredAt: string };
 
-export type TempRange = {
-  min: number | null;
-  max: number | null;
-  ideal: number | null;
-  unit: "F" | "C";
-  /** Which stage's range this is, so the chart can label it. */
-  phase: "fermenting" | "conditioning";
-} | null;
-
 export function calcConnectionStatus(
   lastSeenAt: Date | null,
   reportedIntervalSeconds: number | null,
@@ -39,36 +33,26 @@ export function calcConnectionStatus(
   return "offline";
 }
 
-export type TempReadingLike = { temperature?: number | null; temperatureUnit?: string | null };
-
-export type TempExcursion = { direction: "below" | "above"; value: number; limit: number; unit: string };
+type ConnectionStatus = ReturnType<typeof calcConnectionStatus>;
+const CONNECTION_RANK: Record<ConnectionStatus, number> = { connected: 3, warning: 2, offline: 1, unknown: 0 };
 
 /**
- * Whether one reading sits outside the configured range, expressed in the
- * range's own unit. Exported so the alert monitor can count *consecutive
- * out-of-range readings* using exactly the comparison that raises the alert,
- * rather than a second, drifting copy of the threshold logic.
+ * With several devices logging to one brew (a Shelly probe next to an
+ * iSpindel), each is judged against its own report interval and the brew is
+ * as connected as its best device; mixing one device's last-seen time with
+ * another's interval made the offline alert come and go.
  */
-export function tempExcursion(
-  reading: TempReadingLike | null | undefined,
-  tempRange: TempRange,
-): TempExcursion | null {
-  if (!tempRange || reading?.temperature == null) return null;
-
-  const readingUnit = (reading.temperatureUnit ?? "C").toUpperCase();
-  const rangeUnit = tempRange.unit;
-  let value = reading.temperature;
-  if (readingUnit === "C" && rangeUnit === "F") {
-    value = value * 9 / 5 + 32;
-  } else if (readingUnit === "F" && rangeUnit === "C") {
-    value = (value - 32) * 5 / 9;
+export function bestConnectionStatus(
+  devices: { id: number; lastSeenAt: Date | null }[],
+  readings: { deviceId: number; reportedInterval?: number | null }[],
+): ConnectionStatus {
+  let best: ConnectionStatus = "unknown";
+  for (const d of devices) {
+    const interval = [...readings].reverse().find((r) => r.deviceId === d.id)?.reportedInterval ?? null;
+    const s = calcConnectionStatus(d.lastSeenAt, interval);
+    if (CONNECTION_RANK[s] > CONNECTION_RANK[best]) best = s;
   }
-
-  const unit = rangeUnit === "F" ? "°F" : "°C";
-  const { min, max } = tempRange;
-  if (min != null && value < min) return { direction: "below", value, limit: min, unit };
-  if (max != null && value > max) return { direction: "above", value, limit: max, unit };
-  return null;
+  return best;
 }
 
 export function buildAlerts(
@@ -121,9 +105,10 @@ const RANGE_COLUMNS = {
  * which switches temperature alerts off — so a batch in conditioning with no
  * conditioning range is simply not checked.
  */
-async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | null; range: TempRange }> {
+async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | null; range: TempRange; originalGravity: number | null }> {
   const [session] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, brewId));
-  if (!session) return { status: null, range: null };
+  if (!session) return { status: null, range: null, originalGravity: null };
+  const originalGravity = session.originalGravityActual ?? null;
 
   const phase = activeTempPhase(session.status);
   const cols = RANGE_COLUMNS[phase];
@@ -140,9 +125,9 @@ async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | 
     }
   }
 
-  if (min == null && max == null && ideal == null) return { status: session.status, range: null };
+  if (min == null && max == null && ideal == null) return { status: session.status, range: null, originalGravity };
   const unit = (await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F";
-  return { status: session.status, range: { min, max, ideal, unit, phase } };
+  return { status: session.status, range: { min, max, ideal, unit, phase }, originalGravity };
 }
 
 export type BrewTelemetry = {
@@ -215,13 +200,24 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
     .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
 
   const latestReading = readings[readings.length - 1] ?? null;
-  const insights = calcInsights(readings);
+  const { status, range: tempRange, originalGravity } = await resolveTempRange(brewId);
+  const insights = calcInsights(readings, originalGravity);
 
-  const connectionStatus = calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
+  const activeIds = [...new Set(assignments.filter((a) => a.unassignedAt == null).map((a) => a.deviceId))];
+  const connectionStatus = activeIds.length > 1
+    ? bestConnectionStatus(await db.select().from(sensorDevicesTable).where(inArray(sensorDevicesTable.id, activeIds)), readings)
+    : calcConnectionStatus(device?.lastSeenAt ?? null, latestReading?.reportedInterval ?? null);
 
-  const { status, range: tempRange } = await resolveTempRange(brewId);
+  // Battery comes from the last reading that has one, so a probe without a
+  // battery logging in between doesn't clear and re-raise the alert.
+  const batteryReading = [...readings].reverse().find((r) => r.batteryPercentEstimate != null && (activeIds.length === 0 || activeIds.includes(r.deviceId)));
+  const alertReading = latestReading && {
+    ...latestReading,
+    battery: batteryReading?.battery ?? null,
+    batteryPercentEstimate: batteryReading?.batteryPercentEstimate ?? null,
+  };
 
-  const alerts = buildAlerts(device ?? { lastSeenAt: null }, latestReading, connectionStatus, tempRange);
+  const alerts = buildAlerts(device ?? { lastSeenAt: null }, alertReading, connectionStatus, tempRange);
 
   if (isGravityStalled(readings)) {
     alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });

@@ -66,11 +66,9 @@ if [ -f "$ENV_FILE" ]; then
   success "HOST_PORT set to ${APP_PORT}"
 else
   DB_PASSWORD="$(openssl rand -hex 16)"
-  SESSION_SECRET="$(openssl rand -hex 32)"
   cat > "$ENV_FILE" <<EOF
 HOST_PORT=${APP_PORT}
 DB_PASSWORD=${DB_PASSWORD}
-SESSION_SECRET=${SESSION_SECRET}
 EOF
   success ".env created with secure random credentials"
 fi

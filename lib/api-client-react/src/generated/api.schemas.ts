@@ -5,6 +5,360 @@
  * FermentOS API
  * OpenAPI spec version: 0.1.0
  */
+export type FlowGraphVersion =
+  (typeof FlowGraphVersion)[keyof typeof FlowGraphVersion];
+
+export const FlowGraphVersion = {
+  NUMBER_1: 1,
+} as const;
+
+export type FlowGraphNodeType =
+  (typeof FlowGraphNodeType)[keyof typeof FlowGraphNodeType];
+
+export const FlowGraphNodeType = {
+  triggerschedule: "trigger.schedule",
+  triggertemperature: "trigger.temperature",
+  conditioncompare: "condition.compare",
+  conditiontimeWindow: "condition.timeWindow",
+  conditionbrewStatus: "condition.brewStatus",
+  conditionstageAge: "condition.stageAge",
+  controlthermostat: "control.thermostat",
+  actionrelay: "action.relay",
+  actionnotify: "action.notify",
+  actiondelay: "action.delay",
+} as const;
+
+export type FlowGraphNodePosition = {
+  x: number;
+  y: number;
+};
+
+export type FlowGraphNodeDataConfig = { [key: string]: unknown };
+
+export type FlowGraphNodeData = {
+  config: FlowGraphNodeDataConfig;
+};
+
+export interface FlowGraphNode {
+  id: string;
+  type: FlowGraphNodeType;
+  position: FlowGraphNodePosition;
+  data: FlowGraphNodeData;
+}
+
+export interface FlowGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+/**
+ * A trigger → condition → action tree in the node/edge shape the editor's canvas uses. Node types and their config are listed in the README (Brew Flows); the server validates them and reports problems per node.
+ */
+export interface FlowGraph {
+  version: FlowGraphVersion;
+  nodes: FlowGraphNode[];
+  edges: FlowGraphEdge[];
+}
+
+export interface FlowProblem {
+  /**
+   * The node the problem is about, or null for the flow as a whole
+   * @nullable
+   */
+  nodeId: string | null;
+  message: string;
+}
+
+export interface FlowValidationError {
+  error: string;
+  problems: FlowProblem[];
+}
+
+/**
+ * Decided by the trigger; null while the graph has problems
+ * @nullable
+ */
+export type FlowKind = (typeof FlowKind)[keyof typeof FlowKind] | null;
+
+export const FlowKind = {
+  temperature: "temperature",
+  schedule: "schedule",
+} as const;
+
+export type FlowRunStatus = (typeof FlowRunStatus)[keyof typeof FlowRunStatus];
+
+export const FlowRunStatus = {
+  ok: "ok",
+  skipped: "skipped",
+  error: "error",
+  failsafe: "failsafe",
+} as const;
+
+/**
+ * @nullable
+ */
+export type FlowRunDetail = { [key: string]: unknown } | null;
+
+export interface FlowRun {
+  id: number;
+  flowId: number;
+  startedAt: string;
+  /** tick, schedule, manual or system */
+  trigger: string;
+  status: FlowRunStatus;
+  message: string;
+  /** @nullable */
+  detail: FlowRunDetail;
+}
+
+export interface Flow {
+  id: number;
+  name: string;
+  /** @nullable */
+  description: string | null;
+  enabled: boolean;
+  graph: FlowGraph;
+  /**
+   * Decided by the trigger; null while the graph has problems
+   * @nullable
+   */
+  kind: FlowKind;
+  problems: FlowProblem[];
+  relayDeviceIds: number[];
+  /** Recipes the flow is linked to. A linked flow only acts while the brew on its sensor was brewed from one of them; empty = any brew */
+  recipeIds: number[];
+  /** @nullable */
+  lastError: string | null;
+  lastRun: FlowRun | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFlowBody {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  graph: FlowGraph;
+  recipeIds?: number[];
+}
+
+export interface UpdateFlowBody {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+  graph?: FlowGraph;
+  /** Replaces the flow's recipe links */
+  recipeIds?: number[];
+}
+
+export interface FlowNodeState {
+  /** Reached on the last evaluation */
+  active: boolean;
+  relayOn?: boolean;
+  /** Thermostat state, e.g. heating, idle, holding_min_off */
+  reason?: string;
+  /** The target a thermostat used on the last evaluation (its own, or the brew's) */
+  targetC?: number;
+}
+
+/**
+ * @nullable
+ */
+export type FlowStatusKind =
+  (typeof FlowStatusKind)[keyof typeof FlowStatusKind] | null;
+
+export const FlowStatusKind = {
+  temperature: "temperature",
+  schedule: "schedule",
+} as const;
+
+export type FlowStatusNodes = { [key: string]: FlowNodeState };
+
+export interface FlowStatus {
+  flowId: number;
+  /** The flow is enabled and loaded by the engine */
+  running: boolean;
+  /** @nullable */
+  kind: FlowStatusKind;
+  /** @nullable */
+  lastTickAt: string | null;
+  /** @nullable */
+  tempC: number | null;
+  /**
+   * Why the flow is holding its relays off, if it is
+   * @nullable
+   */
+  failsafe: string | null;
+  /** Waiting for the first readings after a restart */
+  waiting: boolean;
+  /**
+   * Why a recipe-linked flow is idle (relays off, no alert), if it is
+   * @nullable
+   */
+  standby: string | null;
+  /** @nullable */
+  nextRunAt: string | null;
+  nodes: FlowStatusNodes;
+}
+
+export interface RunFlowResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface OutputDeviceOwner {
+  flowId: number;
+  name: string;
+}
+
+/**
+ * Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill.
+ */
+export type OutputDeviceDeviceType =
+  (typeof OutputDeviceDeviceType)[keyof typeof OutputDeviceDeviceType];
+
+export const OutputDeviceDeviceType = {
+  shelly_gen1: "shelly_gen1",
+  shelly_gen2: "shelly_gen2",
+} as const;
+
+export interface OutputDeviceLiveState {
+  reachable: boolean;
+  /** @nullable */
+  ison: boolean | null;
+  /** False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling. */
+  hasRelay: boolean;
+  /**
+   * Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted
+   * @nullable
+   */
+  tempC: number | null;
+  /** @nullable */
+  rssi: number | null;
+  /** @nullable */
+  lastError: string | null;
+}
+
+export interface OutputDevice {
+  id: number;
+  /** Which Shelly API the device speaks. shelly_gen2 covers Plus, Pro, Gen3, Gen4 and The Pill. */
+  deviceType: OutputDeviceDeviceType;
+  /**
+   * Model code the device reports, e.g. SHSW-1. Null for devices added before it was recorded.
+   * @nullable
+   */
+  model: string | null;
+  name: string;
+  host: string;
+  channel: number;
+  /** @nullable */
+  username: string | null;
+  /** The password itself is never returned */
+  hasPassword: boolean;
+  enabled: boolean;
+  /**
+   * Sensor device that records the add-on probe's temperature, once one has been seen
+   * @nullable
+   */
+  probeSensorDeviceId: number | null;
+  /** @nullable */
+  lastSeenAt: string | null;
+  state: OutputDeviceLiveState;
+  /** The enabled flow switching this relay, if any. Manual control is refused while set. */
+  controlledBy: OutputDeviceOwner | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOutputDeviceBody {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  host: string;
+  /** @minimum 0 */
+  channel?: number;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+}
+
+export interface UpdateOutputDeviceBody {
+  /** @minLength 1 */
+  name?: string;
+  /** @minLength 1 */
+  host?: string;
+  /** @minimum 0 */
+  channel?: number;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+  enabled?: boolean;
+}
+
+export interface ProbeOutputDeviceBody {
+  /** @minLength 1 */
+  host: string;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+}
+
+export interface ProbeOutputDeviceResult {
+  ok: boolean;
+  /** @nullable */
+  error: string | null;
+  /** The address as it will be stored */
+  host: string;
+  /**
+   * Shelly model code, e.g. SHSW-1
+   * @nullable
+   */
+  model: string | null;
+  /**
+   * Shelly API generation; 1 for Gen1, 2 or more for the RPC API
+   * @nullable
+   */
+  generation: number | null;
+  /** True when the device is The Pill by Shelly */
+  isPill: boolean;
+  /**
+   * The Pill's mode as set in the Shelly app (onewire, ssr, dht22, …); null for other devices
+   * @nullable
+   */
+  pillMode: string | null;
+  authRequired: boolean;
+  /** @nullable */
+  ison: boolean | null;
+  /** Whether the device has a relay on channel 0 */
+  hasRelay: boolean;
+  /** How many relay channels the device has */
+  relayChannels: number;
+  /** @nullable */
+  tempC: number | null;
+}
+
+export interface SetOutputDeviceRelayBody {
+  on: boolean;
+  /**
+   * Turn back after this many seconds, enforced by the device itself
+   * @minimum 1
+   * @maximum 86400
+   */
+  durationSec?: number;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -176,6 +530,7 @@ export type IngredientUse = (typeof IngredientUse)[keyof typeof IngredientUse];
 
 export const IngredientUse = {
   mash: "mash",
+  steep: "steep",
   boil: "boil",
   dry_hop: "dry_hop",
   whirlpool: "whirlpool",
@@ -185,10 +540,31 @@ export const IngredientUse = {
   other: "other",
 } as const;
 
+/**
+ * A version a kit recipe can be brewed as.
+ */
+export type RecipeVariant = (typeof RecipeVariant)[keyof typeof RecipeVariant];
+
+export const RecipeVariant = {
+  lme: "lme",
+  dme: "dme",
+  all_grain: "all_grain",
+} as const;
+
 export interface Recipe {
   id: number;
   name: string;
   style: string;
+  /**
+   * The versions this recipe can be brewed as. Null for an ordinary single-version recipe. Set only by import.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
+  /**
+   * The recipe this one was forked from. Null for an original.
+   * @nullable
+   */
+  parentRecipeId?: number | null;
   batchSizeGallons: number;
   /** @nullable */
   originalGravity?: number | null;
@@ -270,8 +646,19 @@ export interface RecipeIngredient {
   use?: IngredientUse | null;
   /** @nullable */
   timingMinutes?: number | null;
+  /**
+   * Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.
+   * @minimum 0
+   * @nullable
+   */
+  dryHopDay?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+   * Which of the recipe's versions this ingredient belongs to. Null means every version.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
 }
 
 export type StepPhase = (typeof StepPhase)[keyof typeof StepPhase];
@@ -304,12 +691,164 @@ export interface RatedBatch {
   overallScore: number;
 }
 
+export interface RecipeLink {
+  id: number;
+  name: string;
+}
+
+export interface RecipeFamilyStats {
+  recipeCount: number;
+  batchCount: number;
+  ratedBatchCount: number;
+  /** @nullable */
+  avgScore: number | null;
+}
+
 export type RecipeWithIngredients = Recipe & {
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   /** Every rated batch brewed from this recipe, oldest first — the recipe's track record. */
   ratedBatches: RatedBatch[];
+  /** The recipe this one was forked from. */
+  parent: RecipeLink | null;
+  /** Recipes forked from this one. */
+  forks: RecipeLink[];
+  /** Batch stats across this recipe and every recipe related to it by forking. Null when it has no relatives. */
+  familyStats: RecipeFamilyStats | null;
 };
+
+export interface ForkRecipeBody {
+  /** Name for the fork. Defaults to the parent's name with the next version number, e.g. "Pale Ale v2". */
+  name?: string;
+}
+
+export interface RecipeSnapshotIngredient {
+  name: string;
+  type: IngredientType;
+  amount: number;
+  unit: string;
+  use: IngredientUse | null;
+  /** @nullable */
+  timingMinutes: number | null;
+  /** @nullable */
+  dryHopDay: number | null;
+  /** @nullable */
+  notes: string | null;
+}
+
+export interface RecipeSnapshotStep {
+  position: number;
+  phase: StepPhase | null;
+  body: string;
+  /** @nullable */
+  durationMinutes: number | null;
+}
+
+export type RecipeSnapshotRecipe = {
+  name: string;
+  style: string;
+  batchSizeGallons: number;
+  /** @nullable */
+  originalGravity?: number | null;
+  /** @nullable */
+  finalGravity?: number | null;
+  /** @nullable */
+  abv?: number | null;
+  /** @nullable */
+  ibu?: number | null;
+  /** @nullable */
+  colorSrm?: number | null;
+  /** @nullable */
+  efficiencyPercent?: number | null;
+  /** @nullable */
+  fermentTempMin?: number | null;
+  /** @nullable */
+  fermentTempMax?: number | null;
+  /** @nullable */
+  fermentTempIdeal?: number | null;
+  /** @nullable */
+  conditionTempMin?: number | null;
+  /** @nullable */
+  conditionTempMax?: number | null;
+  /** @nullable */
+  conditionTempIdeal?: number | null;
+  /** @nullable */
+  notes?: string | null;
+};
+
+/**
+ * A recipe as a batch was brewed. A record only; running batches follow the live recipe.
+ */
+export interface RecipeSnapshot {
+  capturedAt: string;
+  variant: RecipeVariant | null;
+  recipe: RecipeSnapshotRecipe;
+  /** Only the ingredients of the version that was brewed. */
+  ingredients: RecipeSnapshotIngredient[];
+  steps: RecipeSnapshotStep[];
+}
+
+export type RecipeChangeKind =
+  (typeof RecipeChangeKind)[keyof typeof RecipeChangeKind];
+
+export const RecipeChangeKind = {
+  field: "field",
+  ingredient_added: "ingredient_added",
+  ingredient_removed: "ingredient_removed",
+  ingredient_changed: "ingredient_changed",
+  step_added: "step_added",
+  step_removed: "step_removed",
+  step_changed: "step_changed",
+} as const;
+
+/**
+ * One difference between two versions of a recipe. field changes carry field/from/to; ingredient changes carry ingredient (and previousIngredient when changed); step changes likewise.
+ */
+export interface RecipeChange {
+  kind: RecipeChangeKind;
+  /** The recipe field that changed, e.g. originalGravity. Values are as stored on the recipe. */
+  field?: string;
+  from?: number | string | null;
+  to?: number | string | null;
+  ingredient?: RecipeSnapshotIngredient;
+  previousIngredient?: RecipeSnapshotIngredient;
+  step?: RecipeSnapshotStep;
+  previousStep?: RecipeSnapshotStep;
+}
+
+export interface RecipeHistoryBrew {
+  id: number;
+  brewDate: string;
+  recipeVariant: RecipeVariant | null;
+  /** @nullable */
+  overallScore: number | null;
+  /** False for brews from before version history, which have no snapshot. */
+  recorded: boolean;
+  /**
+   * What changed since the previous recorded brew. Null when there is nothing to compare with.
+   * @nullable
+   */
+  changes: RecipeChange[] | null;
+}
+
+export interface RecipeHistory {
+  /** Brews of this recipe, newest first. */
+  brews: RecipeHistoryBrew[];
+  /**
+   * What has changed in the recipe since its latest recorded brew. Null when no brew has been recorded.
+   * @nullable
+   */
+  sinceLastBrew: RecipeChange[] | null;
+}
+
+export interface BrewSessionRecipeSnapshot {
+  snapshot: RecipeSnapshot | null;
+  /**
+   * What has changed in the recipe since this batch was brewed. Null without a snapshot or a linked recipe.
+   * @nullable
+   */
+  changesSinceBrew: RecipeChange[] | null;
+}
 
 export interface CreateRecipeStepBody {
   body: string;
@@ -472,8 +1011,19 @@ export interface CreateRecipeIngredientBody {
   use?: IngredientUse | null;
   /** @nullable */
   timingMinutes?: number | null;
+  /**
+   * Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.
+   * @minimum 0
+   * @nullable
+   */
+  dryHopDay?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+   * Which of the recipe's versions this ingredient belongs to. Null or omitted means every version.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
 }
 
 export interface UpdateRecipeIngredientBody {
@@ -484,8 +1034,147 @@ export interface UpdateRecipeIngredientBody {
   use?: IngredientUse | null;
   /** @nullable */
   timingMinutes?: number | null;
+  /**
+   * Dry hops only. Days after the batch enters conditioning to add it, 0 being the day conditioning starts. Drives the dry hop reminder.
+   * @minimum 0
+   * @nullable
+   */
+  dryHopDay?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+   * Which of the recipe's versions this ingredient belongs to. Null means every version.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
+}
+
+export interface ImportRecipeBody {
+  recipe: CreateRecipeBody;
+  /**
+   * The versions the recipe can be brewed as. Omit or null for a single-version recipe.
+   * @nullable
+   */
+  variants?: RecipeVariant[] | null;
+  ingredients: CreateRecipeIngredientBody[];
+  steps?: CreateRecipeStepBody[];
+}
+
+export type KitSheetWarningCode =
+  (typeof KitSheetWarningCode)[keyof typeof KitSheetWarningCode];
+
+export const KitSheetWarningCode = {
+  missing_amount: "missing_amount",
+  unparsed_line: "unparsed_line",
+  use_from_tips: "use_from_tips",
+  assumed_batch_size: "assumed_batch_size",
+} as const;
+
+export interface KitSheetWarning {
+  code: KitSheetWarningCode;
+  message: string;
+  /**
+   * Index into the draft's ingredients, when the warning is about one.
+   * @nullable
+   */
+  ingredientIndex?: number | null;
+  /** @nullable */
+  sourceText?: string | null;
+}
+
+export interface KitSheetYeast {
+  lab: string;
+  name: string;
+}
+
+/**
+ * An ingredient as read from the sheet. Unlike a saved ingredient, amount, unit and use may be null when the sheet does not state them.
+ */
+export interface KitSheetDraftIngredient {
+  name: string;
+  type: IngredientType;
+  /** @nullable */
+  amount: number | null;
+  /** @nullable */
+  unit: string | null;
+  use: IngredientUse | null;
+  /** @nullable */
+  timingMinutes: number | null;
+  /** @nullable */
+  notes: string | null;
+  /** @nullable */
+  variants: RecipeVariant[] | null;
+  /** The line on the sheet this row was read from. */
+  sourceText: string;
+}
+
+export type KitSheetDraftSource =
+  (typeof KitSheetDraftSource)[keyof typeof KitSheetDraftSource];
+
+export const KitSheetDraftSource = {
+  morebeer: "morebeer",
+} as const;
+
+export type KitSheetDraftStats = {
+  /** @nullable */
+  originalGravityMin: number | null;
+  /** @nullable */
+  originalGravityMax: number | null;
+  /** @nullable */
+  ibu: number | null;
+  /** @nullable */
+  colorSrm: number | null;
+  /** @nullable */
+  abv: number | null;
+};
+
+/**
+ * Figures picked out of the free-text recipe tips. Fahrenheit, as printed.
+ */
+export type KitSheetDraftHints = {
+  /** @nullable */
+  boilMinutes: number | null;
+  /** @nullable */
+  mashTempF: number | null;
+  /** @nullable */
+  fermentTempMinF: number | null;
+  /** @nullable */
+  fermentTempMaxF: number | null;
+};
+
+export interface KitSheetDraft {
+  source: KitSheetDraftSource;
+  name: string;
+  /**
+   * Null when the sheet describes a single version.
+   * @nullable
+   */
+  variants: RecipeVariant[] | null;
+  batchSizeGallons: number;
+  /** True when the sheet prints no batch size and the kit default was used. */
+  batchSizeAssumed: boolean;
+  stats: KitSheetDraftStats;
+  /** Figures picked out of the free-text recipe tips. Fahrenheit, as printed. */
+  hints: KitSheetDraftHints;
+  suggestedYeasts: KitSheetYeast[];
+  ingredients: KitSheetDraftIngredient[];
+  /** @nullable */
+  tips: string | null;
+  warnings: KitSheetWarning[];
+}
+
+export type KitSheetParseErrorCode =
+  (typeof KitSheetParseErrorCode)[keyof typeof KitSheetParseErrorCode];
+
+export const KitSheetParseErrorCode = {
+  no_text: "no_text",
+  unrecognized_sheet: "unrecognized_sheet",
+  unreadable_pdf: "unreadable_pdf",
+} as const;
+
+export interface KitSheetParseError {
+  error: string;
+  code: KitSheetParseErrorCode;
 }
 
 export interface BrewSession {
@@ -493,6 +1182,8 @@ export interface BrewSession {
   /** @nullable */
   recipeId?: number | null;
   recipeName: string;
+  /** Which version of a multi-version recipe this batch was brewed as. */
+  recipeVariant?: RecipeVariant | null;
   status: BrewStatus;
   brewDate: string;
   /**
@@ -608,6 +1299,11 @@ export interface BrewSession {
    * @nullable
    */
   boilDoneAdditionIds?: number[] | null;
+  /**
+   * Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.
+   * @nullable
+   */
+  dryHopAddedIds?: number[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -627,6 +1323,7 @@ export type FermentationReadingSource =
 export const FermentationReadingSource = {
   manual: "manual",
   ispindel: "ispindel",
+  shelly: "shelly",
 } as const;
 
 export interface FermentationReading {
@@ -653,6 +1350,8 @@ export interface CreateBrewSessionBody {
   /** @nullable */
   recipeId?: number | null;
   recipeName: string;
+  /** Required when the recipe has several versions; ignored otherwise. */
+  recipeVariant?: RecipeVariant | null;
   status: BrewStatus;
   brewDate: string;
   /** @nullable */
@@ -705,6 +1404,8 @@ export interface UpdateBrewSessionBody {
   /** @nullable */
   recipeId?: number | null;
   recipeName?: string;
+  /** Changing this does not re-deduct inventory. */
+  recipeVariant?: RecipeVariant | null;
   status?: BrewStatus;
   brewDate?: string;
   /** @nullable */
@@ -848,6 +1549,51 @@ export interface UnitSystemBody {
   system: UnitSystem;
 }
 
+/**
+ * Ion concentrations in ppm (mg/L).
+ */
+export interface WaterProfile {
+  /**
+   * @maxLength 80
+   * @nullable
+   */
+  name?: string | null;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  calcium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  magnesium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  sodium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  sulfate: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  chloride: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  bicarbonate: number;
+}
+
+export interface SourceWater {
+  profile: WaterProfile | null;
+}
+
 export interface ReadingRetentionResponse {
   /** @nullable */
   days: number | null;
@@ -948,6 +1694,42 @@ export interface NotificationSettings {
   tempRepeatHours?: number | null;
   /** Notify at each hop addition and at flameout while a boil timer is running. Kept out of types because it is a one-shot schedule, not a monitored condition, and so an existing saved types list does not leave it switched off on upgrade. Defaults to true. */
   boilAlerts?: boolean;
+  /** Remind when a dry hop addition comes due during conditioning, and keep reminding every dryHopRepeatHours until it is marked added. Kept out of types for the same reason as boilAlerts. Defaults to true. */
+  dryHopAlerts?: boolean;
+  /**
+   * Hours between dry hop reminders while an addition is still due. Defaults to 6.
+   * @minimum 1
+   * @maximum 168
+   */
+  dryHopRepeatHours?: number;
+  /** Notify once when a batch is moved to Conditioning automatically. Kept out of types for the same reason as boilAlerts. Defaults to true. */
+  autoAdvanceAlerts?: boolean;
+}
+
+/**
+ * scheduled = not yet due (or the batch has not reached conditioning), due = reminding until marked added, added = done.
+ */
+export type DryHopStatus = (typeof DryHopStatus)[keyof typeof DryHopStatus];
+
+export const DryHopStatus = {
+  scheduled: "scheduled",
+  due: "due",
+  added: "added",
+} as const;
+
+export interface DryHopScheduleItem {
+  ingredientId: number;
+  name: string;
+  amount: number;
+  unit: string;
+  /** Days after the batch entered conditioning. */
+  day: number;
+  /**
+   * Null until the batch has entered conditioning.
+   * @nullable
+   */
+  dueAt: string | null;
+  status: DryHopStatus;
 }
 
 export interface NotificationTestResult {
@@ -985,6 +1767,22 @@ export const MaltType = {
   all_grain: "all_grain",
 } as const;
 
+/**
+ * A place this ingredient can be bought, with its price per unit of the item's `unit`.
+ */
+export interface InventorySupplier {
+  /** @minLength 1 */
+  name: string;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  price?: number | null;
+  /** @nullable */
+  url?: string | null;
+  preferred?: boolean;
+}
+
 export interface InventoryItem {
   id: number;
   name: string;
@@ -993,13 +1791,10 @@ export interface InventoryItem {
   amount: number;
   unit: string;
   /** @nullable */
-  cost?: number | null;
-  /** @nullable */
   purchasedDate?: string | null;
   /** @nullable */
   expiryDate?: string | null;
-  /** @nullable */
-  supplier?: string | null;
+  suppliers: InventorySupplier[];
   /** @nullable */
   notes?: string | null;
   createdAt: string;
@@ -1013,13 +1808,10 @@ export interface CreateInventoryItemBody {
   amount: number;
   unit: string;
   /** @nullable */
-  cost?: number | null;
-  /** @nullable */
   purchasedDate?: string | null;
   /** @nullable */
   expiryDate?: string | null;
-  /** @nullable */
-  supplier?: string | null;
+  suppliers?: InventorySupplier[];
   /** @nullable */
   notes?: string | null;
 }
@@ -1031,13 +1823,11 @@ export interface UpdateInventoryItemBody {
   amount?: number;
   unit?: string;
   /** @nullable */
-  cost?: number | null;
-  /** @nullable */
   purchasedDate?: string | null;
   /** @nullable */
   expiryDate?: string | null;
-  /** @nullable */
-  supplier?: string | null;
+  /** Replaces the item's whole supplier list when present. */
+  suppliers?: InventorySupplier[];
   /** @nullable */
   notes?: string | null;
 }
@@ -1548,4 +2338,19 @@ export type GetSystemHealthHistoryParams = {
    * @maximum 336
    */
   hours?: number;
+};
+
+export type DeleteOutputDeviceParams = {
+  /**
+   * Remove it even if the relay can't be switched off first
+   */
+  force?: boolean;
+};
+
+export type ListFlowRunsParams = {
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
 };

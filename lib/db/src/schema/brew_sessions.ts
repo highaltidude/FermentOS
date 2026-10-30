@@ -1,5 +1,51 @@
-import { pgTable, serial, text, real, integer, boolean, timestamp, date } from "drizzle-orm/pg-core";
-import { recipesTable } from "./recipes";
+import { pgTable, serial, text, real, integer, boolean, timestamp, date, jsonb } from "drizzle-orm/pg-core";
+import { recipesTable, recipeVariantEnum, type ingredientTypeEnum, type ingredientUseEnum, type stepPhaseEnum } from "./recipes";
+
+/**
+ * The recipe as a batch was brewed: a frozen copy kept for the record, so
+ * later edits to the recipe don't rewrite history. Running batches still read
+ * the live recipe; only version history reads this. No row ids, since
+ * ingredient and step rows can be deleted and re-created.
+ */
+export interface RecipeSnapshot {
+  capturedAt: string;
+  variant: (typeof recipeVariantEnum)[number] | null;
+  recipe: {
+    name: string;
+    style: string;
+    batchSizeGallons: number;
+    originalGravity: number | null;
+    finalGravity: number | null;
+    abv: number | null;
+    ibu: number | null;
+    colorSrm: number | null;
+    efficiencyPercent: number | null;
+    fermentTempMin: number | null;
+    fermentTempMax: number | null;
+    fermentTempIdeal: number | null;
+    conditionTempMin: number | null;
+    conditionTempMax: number | null;
+    conditionTempIdeal: number | null;
+    notes: string | null;
+  };
+  /** Only the ingredients of the version that was brewed. */
+  ingredients: {
+    name: string;
+    type: (typeof ingredientTypeEnum)[number];
+    amount: number;
+    unit: string;
+    use: (typeof ingredientUseEnum)[number] | null;
+    timingMinutes: number | null;
+    dryHopDay: number | null;
+    notes: string | null;
+  }[];
+  steps: {
+    position: number;
+    phase: (typeof stepPhaseEnum)[number] | null;
+    body: string;
+    durationMinutes: number | null;
+  }[];
+}
 
 // Lifecycle stages: brew_day → fermenting → conditioning → packaged.
 // On startup the api-server runs migrateLegacyStatuses() which converts any
@@ -38,6 +84,9 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   id: serial("id").primaryKey(),
   recipeId: integer("recipe_id").references(() => recipesTable.id, { onDelete: "set null" }),
   recipeName: text("recipe_name").notNull(),
+  // Which version of a multi-version recipe this batch was brewed as. A
+  // record, not a constraint: null for single-version recipes.
+  recipeVariant: text("recipe_variant", { enum: recipeVariantEnum }),
   status: text("status", { enum: brewStatusEnum }).notNull().default("brew_day"),
   brewDate: date("brew_date").notNull(),
   plannedDate: date("planned_date"),
@@ -78,13 +127,19 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   // recipe_ingredients ids ticked off during the boil. Not a foreign key: the
   // recipe can be edited after brew day and the checklist is only a record.
   boilDoneAdditionIds: integer("boil_done_addition_ids").array(),
+  // recipe_ingredients ids of dry hops marked as added. Not a foreign key, for
+  // the same reason as above. Marking one clears its dry hop alert.
+  dryHopAddedIds: integer("dry_hop_added_ids").array(),
+  // The recipe as brewed. Taken when the session is created and again when it
+  // leaves brew_day; null for sessions from before version history.
+  recipeSnapshot: jsonb("recipe_snapshot").$type<RecipeSnapshot>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type BrewSession = typeof brewSessionsTable.$inferSelect;
 
-export const fermentationReadingSourceEnum = ["manual", "ispindel"] as const;
+export const fermentationReadingSourceEnum = ["manual", "ispindel", "shelly"] as const;
 
 export const fermentationReadingsTable = pgTable("fermentation_readings", {
   id: serial("id").primaryKey(),

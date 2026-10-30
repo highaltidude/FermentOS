@@ -24,6 +24,9 @@ export const BACKUP_REGISTRY = [
   "sensor_readings",
   "sensor_device_brew_assignments",
   "system_health_samples",
+  "output_devices",
+  "flows",
+  "flow_recipes",
 ] as const;
 
 export type BackedUpTable = (typeof BACKUP_REGISTRY)[number];
@@ -43,4 +46,8 @@ export const EXCLUDED_TABLES: readonly string[] = [
   // state, and is rebuilt within one monitor tick. Losing it costs at most a
   // single duplicate notification after a restore.
   "brew_alert_state",
+  // Brew Flow execution log: relay switches and fail-safe trips, pruned after
+  // 14 days. A history of what already happened, not configuration; the flows
+  // themselves are backed up.
+  "flow_runs",
 ];

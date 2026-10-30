@@ -17,6 +17,8 @@ import {
   useGetDefaultReadingsShown,
   useGetTempAlertReadings,
   getGetTempAlertReadingsQueryKey,
+  getGetBrewSessionDryHopsQueryKey,
+  getGetBrewSessionRecipeSnapshotQueryKey,
   type BrewStatus,
   type PackagingMethod,
 } from "@workspace/api-client-react";
@@ -34,12 +36,15 @@ import { boilPhase } from "@/lib/boil";
 import { BREW_STATUSES, STATUS_LABELS, PACKAGING_METHODS, PACKAGING_LABELS } from "@/lib/brewStatus";
 import { formatDate, formatDateTime, formatDateTimeShort } from "@/lib/format";
 import { estimateAbv, tempRangeToF } from "@/lib/brewMath";
+import { VARIANT_LABELS } from "@/lib/recipeVariants";
 import { connectionDotClass, connectionTextClass, batteryClass, formatSensorTemp } from "@/lib/sensorStatus";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { RateBatchWizard } from "@/components/RateBatchWizard";
 import { BrewStatusBadge } from "@/components/BrewStatusBadge";
 import { TempRangeFields } from "@/components/TempRangeFields";
+import { DryHopCard } from "@/components/DryHopCard";
+import { RecipeAsBrewedCard } from "@/components/RecipeAsBrewedCard";
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: BrewStatus; onStatusChange: (s: BrewStatus) => void; isPending?: boolean }) {
   const idx = BREW_STATUSES.indexOf(status);
@@ -90,8 +95,6 @@ export default function BrewSessionDetail() {
   });
   const tempAlertThreshold = tempAlertReadings?.count ?? 2;
   const tempAlertCount = useRef(0);
-  const [globalAutoConditioning, setGlobalAutoConditioning] = useState(false);
-  const autoAdvancedRef = useRef(false);
   const [showReadingForm, setShowReadingForm] = useState(false);
   const [readingForm, setReadingForm] = useState({ readingAt: toDatetimeLocalValue(new Date()), temperatureFahrenheit: "", gravity: "", ph: "", notes: "" });
   const [editForm, setEditForm] = useState<any>({});
@@ -125,7 +128,9 @@ export default function BrewSessionDetail() {
   const { data: defaultReadingsData } = useGetDefaultReadingsShown();
   const defaultCount = defaultReadingsData?.count ?? 5;
 
-  const { data: session, isLoading } = useGetBrewSession(id, { query: { enabled: !!id, queryKey: getGetBrewSessionQueryKey(id) } });
+  // Polled so a page left open picks up the server moving the batch on to
+  // Conditioning, rather than showing Fermenting until reloaded.
+  const { data: session, isLoading } = useGetBrewSession(id, { query: { enabled: !!id, refetchInterval: 60_000, queryKey: getGetBrewSessionQueryKey(id) } });
 
   const { data: telemetry } = useGetBrewSensorTelemetry(id, {
     query: { enabled: !!id, refetchInterval: 30_000, queryKey: getGetBrewSensorTelemetryQueryKey(id) },
@@ -169,6 +174,10 @@ export default function BrewSessionDetail() {
     mutation: {
       onSuccess: (data) => {
         qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) });
+        // Leaving brew day or changing the recipe re-records the recipe as brewed.
+        qc.invalidateQueries({ queryKey: getGetBrewSessionRecipeSnapshotQueryKey(id) });
+        // A status change moves the dry hop schedule (conditioning start).
+        qc.invalidateQueries({ queryKey: getGetBrewSessionDryHopsQueryKey(id) });
         setEditing(false);
         toast({ title: "Session updated" });
         if ((data as any).devicesUnassigned > 0) {
@@ -183,7 +192,7 @@ export default function BrewSessionDetail() {
 
   const quickStatusMutation = useUpdateBrewSession({
     mutation: {
-      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); setPackagingPrompt(null); toast({ title: `Status → ${STATUS_LABELS[data.status] ?? data.status}` }); },
+      onSuccess: (data) => { qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(id) }); qc.invalidateQueries({ queryKey: getGetBrewSessionRecipeSnapshotQueryKey(id) }); setPackagingPrompt(null); toast({ title: `Status → ${STATUS_LABELS[data.status] ?? data.status}` }); },
     },
   });
 
@@ -192,6 +201,7 @@ export default function BrewSessionDetail() {
   // already-recorded method intact when the stage is corrected afterwards.
   const applyStatus = (newStatus: BrewStatus, packagingMethod?: PackagingMethod) => {
     if (!session) return;
+    const autoAdvanceBefore = session.autoAdvanceToConditioning;
     quickStatusMutation.mutate({
       id,
       data: {
@@ -204,6 +214,14 @@ export default function BrewSessionDetail() {
         abvActual: session.abvActual ?? undefined,
         notes: session.notes ?? undefined,
         packagingMethod: packagingMethod ?? session.packagingMethod ?? undefined,
+      },
+    }, {
+      // Pulling a batch back from Conditioning switches auto-advance off for
+      // it; the server decides that, so say so when it happened.
+      onSuccess: (data) => {
+        if (data.autoAdvanceToConditioning === false && autoAdvanceBefore !== false) {
+          toast({ title: "Auto-advance turned off for this batch", description: "Turn it back on from Edit." });
+        }
       },
     });
   };
@@ -245,14 +263,6 @@ export default function BrewSessionDetail() {
     },
   });
 
-  // auto-conditioning isn't in the OpenAPI spec, so there's no generated hook for it.
-  useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}api/settings/auto-conditioning`)
-      .then((r) => r.json() as Promise<{ enabled: boolean }>)
-      .then((autoData) => setGlobalAutoConditioning(autoData.enabled ?? false))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     const alerts = telemetry?.alerts ?? [];
     const hasOutOfRange = (telemetry as any)?.isDeviceActive && alerts.some((a) => a.type === "temp_out_of_range");
@@ -267,17 +277,6 @@ export default function BrewSessionDetail() {
       tempAlertCount.current = 0;
     }
   }, [telemetry, tempAlertThreshold, toast]);
-
-  useEffect(() => {
-    const perBrew = session?.autoAdvanceToConditioning;
-    const effectiveAutoAdvance = perBrew !== null && perBrew !== undefined ? perBrew : globalAutoConditioning;
-    if (!effectiveAutoAdvance) return;
-    if (session?.status !== "fermenting") { autoAdvancedRef.current = false; return; }
-    if (telemetry?.insights?.fermentationStatus !== "possibly_complete") return;
-    if (autoAdvancedRef.current || quickStatusMutation.isPending) return;
-    autoAdvancedRef.current = true;
-    handleStatusClick("conditioning");
-  }, [telemetry, globalAutoConditioning, session]);
 
   const saveOgMutation = useUpdateBrewSession({
     mutation: {
@@ -442,7 +441,14 @@ export default function BrewSessionDetail() {
         </button>
         {!editing ? (
           <>
-            <h1 className="text-xl font-bold text-foreground flex-1">{session.recipeName}</h1>
+            <h1 className="text-xl font-bold text-foreground flex-1">
+              {session.recipeName}
+              {session.recipeVariant && (
+                <span className="ml-2 align-middle text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                  {VARIANT_LABELS[session.recipeVariant]}
+                </span>
+              )}
+            </h1>
             <Button size="sm" onClick={() => setRatingWizardOpen(true)}>
               <Star className="w-3.5 h-3.5 mr-1.5" />Rate this Batch
             </Button>
@@ -645,6 +651,8 @@ export default function BrewSessionDetail() {
         </div>
       )}
 
+      <DryHopCard brewSessionId={id} />
+
       {/* Tasting & Rating */}
       <div className="bg-card border border-card-border rounded-lg">
         <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
@@ -751,6 +759,8 @@ export default function BrewSessionDetail() {
           </div>
         </div>
       </div>
+
+      <RecipeAsBrewedCard brewSessionId={id} />
 
       {/* Response — Stage History */}
       <div className="bg-card border border-card-border rounded-lg">
@@ -1102,7 +1112,7 @@ export default function BrewSessionDetail() {
 
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
+                <CartesianGrid yAxisId={showTemp ? "temp" : "gravity"} strokeDasharray="3 3" className="opacity-20" />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
@@ -1143,6 +1153,7 @@ export default function BrewSessionDetail() {
                     padding: "8px 12px",
                   }}
                   labelStyle={{ color: "var(--color-muted-foreground)", marginBottom: 4 }}
+                  itemSorter={(item) => (item.dataKey === "temp" ? 0 : 1)}
                   formatter={(value: number, name: string) =>
                     name === "temp"
                       ? [`${value.toFixed(1)}°F`, "Temperature"]
@@ -1151,6 +1162,7 @@ export default function BrewSessionDetail() {
                 />
                 <Legend
                   wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                  itemSorter={(item) => (item.value === "temp" ? 0 : 1)}
                   formatter={(v) => (
                     <span style={{ color: v === "temp" ? "#d97706" : "#2563eb" }}>
                       {v === "temp" ? "Temperature" : "Gravity"}
@@ -1289,7 +1301,7 @@ export default function BrewSessionDetail() {
             const allReadings = session.readings ?? [];
             const filtered = readingFilter === "all"
               ? allReadings
-              : allReadings.filter((r) => r.source === (readingFilter === "sensor" ? "ispindel" : "manual"));
+              : allReadings.filter((r) => (readingFilter === "sensor") === (r.source !== "manual"));
             const reversed = [...filtered].reverse();
 
             if (reversed.length === 0) {
@@ -1313,11 +1325,11 @@ export default function BrewSessionDetail() {
                         <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
                           <span className="text-xs text-muted-foreground">{formatDateTime(reading.readingAt)}</span>
                           <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
-                            src === "ispindel"
+                            src !== "manual"
                               ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
                               : "bg-muted text-muted-foreground"
                           }`}>
-                            {src === "ispindel" ? "📡 iSpindel" : "✍️ Manual"}
+                            {src === "ispindel" ? "📡 iSpindel" : src === "shelly" ? "🌡️ Shelly probe" : "✍️ Manual"}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 flex-1 flex-wrap">
@@ -1351,7 +1363,7 @@ export default function BrewSessionDetail() {
                           )}
                           {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
                           {reading.notes && (
-                            <span className={cn("text-muted-foreground text-xs truncate", src === "ispindel" && "font-mono")}>{reading.notes}</span>
+                            <span className={cn("text-muted-foreground text-xs truncate", src !== "manual" && "font-mono")}>{reading.notes}</span>
                           )}
                         </div>
                         <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">

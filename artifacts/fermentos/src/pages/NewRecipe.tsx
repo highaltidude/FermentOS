@@ -11,7 +11,7 @@ import { IngredientNameCombobox } from "@/components/IngredientNameCombobox";
 import { StyleSelect } from "@/components/StyleSelect";
 import { TempRangeFields } from "@/components/TempRangeFields";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
-import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, TIMED_USES, timingPlaceholder } from "@/lib/ingredients";
+import { INGREDIENT_TYPES, INGREDIENT_USES, STEP_PHASES, hasTimingField, timingFields, timingPlaceholder } from "@/lib/ingredients";
 
 interface PendingIngredient {
   name: string;
@@ -119,7 +119,7 @@ export default function NewRecipe() {
             amount: Number(ing.amount),
             unit: ing.unit,
             use: (ing.use || undefined) as IngredientUse | undefined,
-            timingMinutes: TIMED_USES.includes(ing.use) && ing.timingMinutes !== "" ? Number(ing.timingMinutes) : undefined,
+            ...timingFields(ing.use, ing.timingMinutes),
             notes: ing.notes || undefined,
           },
         });
@@ -264,7 +264,7 @@ export default function NewRecipe() {
                   <SelectContent>{INGREDIENT_USES.map((u) => <SelectItem key={u} value={u}>{u.replace("_", " ")}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {TIMED_USES.includes(ing.use) && (
+              {hasTimingField(ing.use) && (
                 <Input
                   className="text-sm" type="number" min="0" step="1" inputMode="numeric"
                   placeholder={timingPlaceholder(ing.use)}

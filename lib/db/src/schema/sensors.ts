@@ -77,7 +77,7 @@ export const brewAlertStateTable = pgTable("brew_alert_state", {
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   // Consecutive monitor ticks the condition has been observed, reset on
   // resolve. Bookkeeping only — the temperature debounce counts readings, not
-  // ticks (see consecutiveTempExcursions in services/alertMonitor.ts).
+  // ticks (see consecutiveTempExcursions in api-server's lib/tempExcursion.ts).
   seenCount: integer("seen_count").notNull().default(1),
 }, (t) => [unique("brew_alert_state_session_type_uq").on(t.brewSessionId, t.alertType)]);
 

@@ -11,11 +11,14 @@ import NewRecipe from "@/pages/NewRecipe";
 import BrewSessions from "@/pages/BrewSessions";
 import BrewSessionDetail from "@/pages/BrewSessionDetail";
 import NewBrewSession from "@/pages/NewBrewSession";
+import ImportRecipe from "@/pages/ImportRecipe";
 import BoilSession, { BoilPicker } from "@/pages/BoilSession";
 import Inventory from "@/pages/Inventory";
 import Equipment from "@/pages/Equipment";
 import Calculators from "@/pages/Calculators";
 import Settings from "@/pages/Settings";
+import Flows from "@/pages/Flows";
+import FlowEditor from "@/pages/FlowEditor";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -38,6 +41,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/recipes/new" component={NewRecipe} />
+        <Route path="/recipes/import" component={ImportRecipe} />
         <Route path="/recipes/:id" component={RecipeDetail} />
         <Route path="/recipes" component={Recipes} />
         <Route path="/brew-sessions/new" component={NewBrewSession} />
@@ -48,6 +52,9 @@ function Router() {
         <Route path="/ingredients" component={Inventory} />
         <Route path="/equipment" component={Equipment} />
         <Route path="/calculators" component={Calculators} />
+        <Route path="/flows/new" component={FlowEditor} />
+        <Route path="/flows/:id" component={FlowEditor} />
+        <Route path="/flows" component={Flows} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Plus, Search, Package, Pencil, Trash2, Check, X } from "lucide-react";
-import { useListInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem, getListInventoryQueryKey, useGetUnitSystem, getGetUnitSystemQueryKey, type UnitSystem } from "@workspace/api-client-react";
+import { Plus, Search, Package, Pencil, Trash2, Check, X, Star, ExternalLink } from "lucide-react";
+import { useListInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem, getListInventoryQueryKey, useGetUnitSystem, getGetUnitSystemQueryKey, type UnitSystem, type InventorySupplier } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,7 @@ import { FilterChip } from "@/components/ui/filter-chip";
 import { useToast } from "@/hooks/use-toast";
 import { INGREDIENT_TYPES, INGREDIENT_TYPE_COLORS } from "@/lib/ingredients";
 import { parseLocalDate } from "@/lib/format";
-const MALT_TYPES = [
-  { value: "lme", label: "LME" },
-  { value: "dme", label: "DME" },
-  { value: "all_grain", label: "All-Grain" },
-];
+import { VARIANT_OPTIONS as MALT_TYPES } from "@/lib/recipeVariants";
 const UNITS_BY_SYSTEM: Record<UnitSystem, string[]> = {
   imperial: ["lbs", "oz", "gal", "qt", "pt", "fl oz", "tsp", "tbsp", "pkg", "each"],
   metric:   ["kg", "g", "L", "mL", "tsp", "tbsp", "pkg", "each"],
@@ -29,12 +25,48 @@ function useUnitOptions(): { unitOptions: string[]; defaultUnit: string } {
   return { unitOptions, defaultUnit: unitOptions[0] };
 }
 
+type SupplierFormRow = { name: string; price: string; url: string; preferred: boolean };
+
+const emptySupplier = (): SupplierFormRow => ({ name: "", price: "", url: "", preferred: false });
+
 const emptyForm = (defaultUnit = "lbs") => ({
-  name: "", type: "malt", maltType: "", amount: "", unit: defaultUnit, cost: "",
-  purchasedDate: "", expiryDate: "", supplier: "", notes: "",
+  name: "", type: "malt", maltType: "", amount: "", unit: defaultUnit,
+  purchasedDate: "", expiryDate: "", suppliers: [] as SupplierFormRow[], notes: "",
 });
 
 type InventoryFormData = ReturnType<typeof emptyForm>;
+
+const toSupplierForm = (suppliers: InventorySupplier[]): SupplierFormRow[] =>
+  suppliers.map((s) => ({
+    name: s.name,
+    price: s.price != null ? String(s.price) : "",
+    url: s.url ?? "",
+    preferred: !!s.preferred,
+  }));
+
+const fromSupplierForm = (rows: SupplierFormRow[]): InventorySupplier[] =>
+  rows
+    .filter((r) => r.name.trim())
+    .map((r) => ({
+      name: r.name.trim(),
+      price: r.price ? Number(r.price) : null,
+      url: r.url.trim() || null,
+      preferred: r.preferred,
+    }));
+
+// The supplier shown on an item's row: the preferred one, otherwise the
+// cheapest with a price, otherwise the first.
+function displaySupplier(suppliers: InventorySupplier[]): InventorySupplier | undefined {
+  const priced = suppliers.filter((s) => s.price != null);
+  const cheapest = priced.length
+    ? priced.reduce((min, s) => (s.price! < min.price! ? s : min))
+    : undefined;
+  return suppliers.find((s) => s.preferred) ?? cheapest ?? suppliers[0];
+}
+
+function supplierLabel(s: InventorySupplier, unit: string) {
+  return s.price != null ? `${s.name} · $${s.price.toFixed(2)}/${unit}` : s.name;
+}
 
 function isExpiringSoon(expiryDate: string | null | undefined) {
   if (!expiryDate) return false;
@@ -55,6 +87,83 @@ interface InventoryFormProps {
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   unitOptions: string[];
+}
+
+interface SupplierEditorProps {
+  rows: SupplierFormRow[];
+  unit: string;
+  onChange: (rows: SupplierFormRow[]) => void;
+}
+
+function SupplierEditor({ rows, unit, onChange }: SupplierEditorProps) {
+  const update = (i: number, patch: Partial<SupplierFormRow>) =>
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  // Starring one supplier clears the others; starring the current one unstars it.
+  const togglePreferred = (i: number) =>
+    onChange(rows.map((r, j) => ({ ...r, preferred: j === i ? !r.preferred : false })));
+
+  return (
+    <div className="col-span-2 space-y-2">
+      <label className="text-xs text-muted-foreground block">Suppliers</label>
+      {rows.map((r, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => togglePreferred(i)}
+            title={r.preferred ? "Preferred supplier" : "Mark as preferred"}
+            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Star className={`w-3.5 h-3.5 ${r.preferred ? "fill-amber-400 text-amber-500" : ""}`} />
+          </button>
+          <Input placeholder="Supplier" value={r.name} onChange={(e) => update(i, { name: e.target.value })} className="text-sm flex-1 min-w-32" />
+          <Input placeholder={`Price/${unit}`} type="number" step="0.01" min="0" value={r.price} onChange={(e) => update(i, { price: e.target.value })} className="text-sm w-28" />
+          <Input placeholder="Link (optional)" value={r.url} onChange={(e) => update(i, { url: e.target.value })} className="text-sm flex-1 min-w-32" />
+          <button
+            type="button"
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+            className="p-1.5 text-muted-foreground hover:text-destructive transition-colors rounded"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...rows, emptySupplier()])}>
+        <Plus className="w-3.5 h-3.5 mr-1" />Add supplier
+      </Button>
+    </div>
+  );
+}
+
+function SupplierSummary({ suppliers, unit }: { suppliers: InventorySupplier[]; unit: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = displaySupplier(suppliers);
+  if (!shown) return null;
+  const others = suppliers.length - 1;
+  return (
+    <>
+      <span>{supplierLabel(shown, unit)}</span>
+      {others > 0 && (
+        <button type="button" onClick={() => setExpanded(!expanded)} className="text-primary hover:underline">
+          {expanded ? "Hide" : `+${others} more`}
+        </button>
+      )}
+      {expanded && (
+        <ul className="basis-full space-y-0.5 pt-1">
+          {suppliers.map((s, i) => (
+            <li key={i} className="flex items-center gap-1.5">
+              {s.preferred && <Star className="w-3 h-3 fill-amber-400 text-amber-500" />}
+              <span>{supplierLabel(s, unit)}</span>
+              {s.url && /^https?:\/\//i.test(s.url) && (
+                <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
 }
 
 function InventoryForm({ form, setForm, isEdit = false, isPending, onSubmit, onCancel, unitOptions }: InventoryFormProps) {
@@ -82,8 +191,7 @@ function InventoryForm({ form, setForm, isEdit = false, isPending, onSubmit, onC
         )}
         <div><label className="text-xs text-muted-foreground mb-1 block">Purchased</label><Input type="date" value={form.purchasedDate} onChange={(e) => setForm({ ...form, purchasedDate: e.target.value })} className="text-sm" /></div>
         <div><label className="text-xs text-muted-foreground mb-1 block">Expiry</label><Input type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} className="text-sm" /></div>
-        <Input placeholder="Cost/unit (optional)" type="number" step="0.01" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} className="text-sm" />
-        <Input placeholder="Supplier (optional)" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} className="text-sm" />
+        <SupplierEditor rows={form.suppliers} unit={form.unit} onChange={(suppliers) => setForm({ ...form, suppliers })} />
         <Input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="text-sm col-span-2" />
       </div>
       <div className="flex gap-2 justify-end">
@@ -136,10 +244,9 @@ export default function Inventory() {
         maltType: (form.type === "malt" && form.maltType) ? form.maltType as any : undefined,
         amount: Number(form.amount),
         unit: form.unit,
-        cost: form.cost ? Number(form.cost) : undefined,
         purchasedDate: form.purchasedDate || undefined,
         expiryDate: form.expiryDate || undefined,
-        supplier: form.supplier || undefined,
+        suppliers: fromSupplierForm(form.suppliers),
         notes: form.notes || undefined,
       },
     });
@@ -155,10 +262,9 @@ export default function Inventory() {
         maltType: (form.type === "malt" && form.maltType) ? form.maltType as any : null,
         amount: Number(form.amount),
         unit: form.unit,
-        cost: form.cost ? Number(form.cost) : null,
         purchasedDate: form.purchasedDate || undefined,
         expiryDate: form.expiryDate || undefined,
-        supplier: form.supplier || undefined,
+        suppliers: fromSupplierForm(form.suppliers),
         notes: form.notes || undefined,
       },
     });
@@ -168,9 +274,8 @@ export default function Inventory() {
     setForm({
       name: item.name, type: item.type, maltType: item.maltType ?? "",
       amount: String(item.amount), unit: item.unit,
-      cost: item.cost != null ? String(item.cost) : "",
       purchasedDate: item.purchasedDate ?? "", expiryDate: item.expiryDate ?? "",
-      supplier: item.supplier ?? "", notes: item.notes ?? "",
+      suppliers: toSupplierForm(item.suppliers ?? []), notes: item.notes ?? "",
     });
     setEditingId(item.id);
     setShowAdd(false);
@@ -252,10 +357,9 @@ export default function Inventory() {
                       {isExpired(item.expiryDate) && <span className="text-xs text-destructive font-medium">Expired</span>}
                       {!isExpired(item.expiryDate) && isExpiringSoon(item.expiryDate) && <span className="text-xs text-amber-600 font-medium">Expiring soon</span>}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">{item.amount} {item.unit}</span>
-                      {item.cost != null && <span>${item.cost.toFixed(2)}/{item.unit}</span>}
-                      {item.supplier && <span>{item.supplier}</span>}
+                      <SupplierSummary suppliers={item.suppliers ?? []} unit={item.unit} />
                       {item.expiryDate && <span>Exp: {parseLocalDate(item.expiryDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>}
                       {item.notes && <span className="truncate">{item.notes}</span>}
                     </div>

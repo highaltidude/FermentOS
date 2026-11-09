@@ -266,6 +266,63 @@ export function fermentationTemplate(opts: {
   return { version: 1, nodes, edges };
 }
 
+/** Node ids brewTempControlTemplate gives each stage's thermostats, for reading their live state. */
+export const BREW_CONTROL_NODES = {
+  fermenting: { heat: "ferment-heat", cool: "ferment-cool" },
+  conditioning: { heat: "condition-heat", cool: "condition-cool" },
+} as const;
+
+/**
+ * Hold a brew at its own ideal temperature for each stage, with a heater, a
+ * cooler, or both, from one probe. Heat and cool share the target without
+ * fighting: heating runs from target − hysteresis up to the target, cooling
+ * from target + hysteresis down to it, leaving a band where both are off.
+ */
+export function brewTempControlTemplate(opts: {
+  source: TempSourceChoice;
+  heatRelayId: number | null;
+  coolRelayId: number | null;
+  hysteresisC: number;
+}): FlowGraph {
+  const { heatRelayId, coolRelayId } = opts;
+  if (heatRelayId == null && coolRelayId == null) throw new Error("A heat or a cool relay is needed");
+  if (heatRelayId != null && heatRelayId === coolRelayId) throw new Error("Heating and cooling need different relays");
+  const hysteresisC = Math.round(opts.hysteresisC * 100) / 100;
+  const thermostat = (outputDeviceId: number, mode: "heat" | "cool", setpointFrom: SetpointSource) => ({
+    outputDeviceId,
+    mode,
+    setpointFrom,
+    // Unused while following the brew, but the node needs one to switch back to "fixed".
+    setpointC: 20,
+    hysteresisC,
+    // Spare a fridge compressor short cycles.
+    minOnSec: mode === "cool" ? 60 : 0,
+    minOffSec: mode === "cool" ? 300 : 0,
+  });
+
+  const nodes = [node("trigger", "trigger.temperature", 0, { source: opts.source })];
+  const edges = [];
+  const stages = [
+    { status: "fermenting", from: "fermentIdeal", x: -NODE_COLUMN },
+    { status: "conditioning", from: "conditionIdeal", x: NODE_COLUMN },
+  ] as const;
+  for (const stage of stages) {
+    const ids = BREW_CONTROL_NODES[stage.status];
+    const both = heatRelayId != null && coolRelayId != null;
+    nodes.push(node(stage.status, "condition.brewStatus", 150, { statuses: [stage.status] }, stage.x));
+    edges.push(edge("trigger", stage.status));
+    if (heatRelayId != null) {
+      nodes.push(node(ids.heat, "control.thermostat", 300, thermostat(heatRelayId, "heat", stage.from), stage.x - (both ? NODE_COLUMN / 2 : 0)));
+      edges.push(edge(stage.status, ids.heat));
+    }
+    if (coolRelayId != null) {
+      nodes.push(node(ids.cool, "control.thermostat", 300, thermostat(coolRelayId, "cool", stage.from), stage.x + (both ? NODE_COLUMN / 2 : 0)));
+      edges.push(edge(stage.status, ids.cool));
+    }
+  }
+  return { version: 1, nodes, edges };
+}
+
 export function timedRelayTemplate(opts: { schedule: ScheduleChoice; relayId: number; minutes: number; notify: string | null }): FlowGraph {
   const nodes = [
     node("trigger", "trigger.schedule", 0, { cron: scheduleToCron(opts.schedule) }),

@@ -14,6 +14,10 @@ export type OutputDeviceState = {
   rssi: number | null;
   /** Missing on rows written before Gen2+ support, all of which were relays. */
   hasRelay?: boolean;
+  /** Every probe the device reported; missing on older rows. */
+  probes?: { id: number; tempC: number | null }[];
+  /** The Pill's mode, when it is one; missing on older rows. */
+  pillMode?: string | null;
 };
 
 export const outputDevicesTable = pgTable("output_devices", {

@@ -16,7 +16,8 @@
 //   GEN=2 PILL_MODE=onewire node scripts/shelly-sim.ts   # DS18B20 probe, no relay
 //   GEN=2 PILL_MODE=ssr SHELLY_PASS=secret node scripts/shelly-sim.ts
 //
-// It serves /shelly, /rpc/Shelly.GetStatus, /rpc/Switch.Set (on=, toggle_after=),
+// It serves /shelly, /rpc/Shelly.GetStatus, /rpc/Shelly.GetComponents (where,
+// as on the real Pill, the probe lives), /rpc/Switch.Set (on=, toggle_after=),
 // /rpc/Switch.SetConfig and /rpc/Pill.GetConfig. SHELLY_PASS turns on SHA-256
 // digest auth for user "admin", as on a real Gen2+ device.
 import { createServer } from "node:http";
@@ -128,10 +129,16 @@ createServer((req, res) => {
         };
         if (pillMode === "ssr") {
           for (const sw of switches) body[`switch:${sw.id}`] = { id: sw.id, source: "HTTP_in", output: sw.output };
-        } else if (pillMode === "onewire" && state.tempC != null) {
-          body["temperature:100"] = { id: 100, tC: state.tempC, tF: state.tempC * 9 / 5 + 32 };
         }
+        // Like the real Pill (firmware 1.8), the probe is left out here and
+        // only listed by Shelly.GetComponents.
         return send(200, body);
+      }
+      case "/rpc/Shelly.GetComponents": {
+        const components = pillMode === "onewire" && state.tempC != null
+          ? [{ key: "temperature:200", status: { id: 200, tC: state.tempC, tF: state.tempC * 9 / 5 + 32 } }]
+          : [];
+        return send(200, { components, cfg_rev: 1, offset: 0, total: components.length });
       }
       case "/rpc/Pill.GetConfig":
         return send(200, { mode: pillMode, pin0_mode: "none", pin1_mode: "none", pin2_mode: "none" });

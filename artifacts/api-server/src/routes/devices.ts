@@ -25,20 +25,39 @@ function hasRelay(device: OutputDevice): boolean {
 
 const NO_RELAY = "This device has no relay. If it's The Pill, switch it to SSR mode in the Shelly app to use it as one.";
 
+/**
+ * Why a device that should read a probe doesn't. Only The Pill in OneWire
+ * mode is known to be meant as a probe; a relay without one is normal.
+ */
+function probeHintFor(pillMode: string | null, probes: { tempC: number | null }[]): string | null {
+  if (pillMode !== "onewire") return null;
+  if (probes.length === 0) return "No DS18B20 found. Check the probe is plugged into The Pill and shows up in the Shelly app.";
+  if (probes[0]!.tempC == null) return "The probe isn't giving a reading. Check its connection.";
+  return null;
+}
+
 /** API shape: credentials reduced to hasPassword, live state merged in. */
 function toApi(device: OutputDevice) {
   const { password, lastState, ...rest } = device;
   const live = getLiveState(device.id);
+  const reachable = isReachable(live);
+  const probes = live?.at ? live.probes : (lastState?.probes ?? []);
+  const pillMode = live?.at ? live.pillMode : (lastState?.pillMode ?? null);
   return {
     ...rest,
     hasPassword: !!password,
     controlledBy: relayOwners().get(device.id) ?? null,
     state: {
-      reachable: isReachable(live),
+      reachable,
       ison: live?.ison ?? lastState?.ison ?? null,
       hasRelay: hasRelay(device),
       tempC: live?.tempC ?? lastState?.tempC ?? null,
+      probes,
       rssi: live?.rssi ?? lastState?.rssi ?? null,
+      uptimeSec: live?.uptimeSec ?? null,
+      pillMode,
+      probeHint: reachable ? probeHintFor(pillMode, probes) : null,
+      updatedAt: live?.at?.toISOString() ?? device.lastSeenAt?.toISOString() ?? null,
       lastError: live?.lastError ?? null,
     },
   };

@@ -43,6 +43,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RateBatchWizard } from "@/components/RateBatchWizard";
 import { BrewStatusBadge } from "@/components/BrewStatusBadge";
 import { TempRangeFields } from "@/components/TempRangeFields";
+import { BrewTempControlCard } from "@/components/BrewTempControlCard";
 import { DryHopCard } from "@/components/DryHopCard";
 import { RecipeAsBrewedCard } from "@/components/RecipeAsBrewedCard";
 
@@ -799,6 +800,8 @@ export default function BrewSessionDetail() {
           )}
         </div>
       </div>
+
+      {["brew_day", "fermenting", "conditioning"].includes(session.status) && <BrewTempControlCard session={session} />}
 
       {/* Sensor Telemetry */}
       {telemetry && !telemetry.device ? (

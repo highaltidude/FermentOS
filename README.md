@@ -69,7 +69,8 @@ install to a tracked first batch.
 - **Equipment** — A register of your kit: category, condition, brand and model, serial number, purchase date and price
 - **Auto-advance to Conditioning** — Move a sensor-monitored batch on once it has attenuated and its gravity has stopped moving. It is checked in the background every five minutes, whether or not anyone has the app open, can notify you when it happens, and can be set globally or per batch
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
-- **Shelly relays and The Pill** — Switch a heat wrap, fridge or pump with a Shelly relay over your local network (Shelly 1 SHSW-1, or any Gen2+ device: Plus, Pro, Gen3, Gen4), by hand or for a set number of minutes that the relay itself counts down. A DS18B20 temperature probe is read too, from a Shelly add-on or from **The Pill by Shelly** in OneWire mode, and can be logged to a brew like an iSpindel or drive a Brew Flow. A Pill in SSR mode works as a two-channel relay. See [Connect a Shelly relay](#connect-a-shelly-relay)
+- **Shelly relays and The Pill** — Switch a heat wrap, fridge or pump with a Shelly relay over your local network (Shelly 1 SHSW-1, or any Gen2+ device: Plus, Pro, Gen3, Gen4), by hand or for a set number of minutes that the relay itself counts down. A DS18B20 temperature probe is read too, from a Shelly add-on or from **The Pill by Shelly** in OneWire mode, and can be logged to a brew like an iSpindel or drive a Brew Flow. A Pill in SSR mode works as a two-channel relay. Each device shows its live state, temperature, signal and last-seen time. See [Connect a Shelly relay](#connect-a-shelly-relay)
+- **Brew temperature control** *(Experimental)* — On a brew's page, pick a probe (such as The Pill) and a heater and/or cooler relay, and FermentOS holds the brew at its ideal fermentation, then conditioning, temperature. See [Control a brew's temperature](#6-control-a-brews-temperature)
 - **Brew Flows** *(Experimental)* — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule, and cold crash automatically a set number of days into conditioning. Flows can follow each brew's own temperatures and be linked to recipes, so they only run while a batch of that recipe is on their sensor. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
@@ -656,22 +657,32 @@ Click the shield icon next to the relay. This sets the Shelly to come back **off
 
 Use **Turn on / Turn off**, or set **or run for … min** and click **Start timer** to turn it on for a fixed time. Timed runs are counted down by the Shelly itself, so the relay still switches off on time even if FermentOS restarts or the network drops.
 
-The list refreshes every ten seconds. A red dot means FermentOS couldn't reach the relay on its last three tries — check it is powered and on Wi-Fi, and that its IP address hasn't changed.
+The list refreshes every ten seconds. Each device shows whether it's **On**, **Off**, **Probe only** or **Unreachable**, its probe temperature (and every other probe, if it has more than one), how long ago it last answered, how long it has been up, its Wi-Fi signal and, for The Pill, its mode. **Unreachable** means FermentOS couldn't reach the device on its last three tries — check it is powered and on Wi-Fi, and that its IP address hasn't changed.
 
 #### 5. Log the probe to a brew *(optional)*
 
 Once FermentOS sees a probe reading, a **Log probe to brew…** dropdown appears under the relay. Pick an active brew and the probe's temperature is added to that brew's fermentation chart every five minutes, labelled *Shelly probe*, and counts towards its temperature alerts — the same as an iSpindel would.
 
+#### 6. Control a brew's temperature
+
+Open the brew and find the **Temperature control** card (shown while it's on brew day, fermenting or conditioning). Pick the **Probe** (The Pill, a Shelly add-on probe or an iSpindel), a relay to **Heat with**, a relay to **Cool with**, or both, and how far the temperature may drift either side of the target. Click **Turn on temperature control**.
+
+FermentOS puts the probe on the brew and holds the brew at its ideal **fermentation** temperature while it's fermenting, then its ideal **conditioning** temperature while it's conditioning: the brew's own values, otherwise its recipe's. The heater comes on once the temperature is the drift below the target and the cooler once it's the drift above it; both stop at the target, so they never run together. A cooler waits at least five minutes between runs to spare the compressor.
+
+The card then shows the current temperature, the target and what each relay is doing, and lets you pause or remove the control. Behind the scenes it is a [Brew Flow](#automate-with-brew-flows) linked to the brew's recipe, so you can also open it in **Flows**, and it fails safe the same way: if the probe stops reporting or the brew has no ideal temperature, the relays switch off and you're alerted.
+
 #### Using The Pill
 
 The Pill by Shelly is a tiny USB-powered Shelly that does one job at a time, chosen by its **mode**. Set the mode in the Shelly app; FermentOS shows the mode it finds but never changes it.
 
-- **OneWire mode — a temperature probe.** Plug a Shelly DS18B20 probe into its 3.5 mm jack, tape the probe to the fermenter (or drop it in a thermowell), and add The Pill as above. It has no relay, so it shows as *Temperature probe only*: log it to a brew like any probe, or pick it under **Temperature from** in a Brew Flow to drive a separate relay. A probe that updates every ten seconds gives much tighter control than an iSpindel.
+- **OneWire mode — a temperature probe.** Plug a Shelly DS18B20 probe into its 3.5 mm jack, tape the probe to the fermenter (or drop it in a thermowell), and add The Pill as above. It has no relay, so it shows as *Probe only*: log it to a brew like any probe, use it for a brew's [Temperature control](#6-control-a-brews-temperature), or pick it under **Temperature from** in a Brew Flow to drive a separate relay. A probe that updates every ten seconds gives much tighter control than an iSpindel.
 - **SSR mode — two relays.** With the solid-state relay add-on, The Pill has two relay channels. Add it once per channel you use, choosing **Channel 0** or **Channel 1**. Each channel then works exactly like any other Shelly relay, including timed runs, fail-safe defaults and Brew Flows.
 
 If you switch a Pill to a different mode later, FermentOS notices on its next poll. A Pill that was a flow's relay and is now a probe makes that flow fail off until you pick another relay.
 
-Only the first probe on a Pill is read, so the five-probe splitter isn't supported yet. The DHT22, analog and digital I/O modes are detected but give FermentOS nothing to use.
+With the five-probe splitter every probe's temperature is shown on the device, but only the first is logged to a brew and used for control.
+
+If a Pill in OneWire mode shows *No DS18B20 found*, check the probe is pushed fully into the jack and shows up in the Shelly app. The DHT22, analog and digital I/O modes are detected but give FermentOS nothing to use.
 
 #### Try it without hardware (development)
 
@@ -1717,7 +1728,7 @@ are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/devices` | List Shelly devices with their live state (`reachable`, `ison`, `hasRelay`, probe `tempC`, `rssi`, `lastError`) |
+| GET | `/api/devices` | List Shelly devices with their live state: `reachable`, `ison`, `hasRelay`, probe `tempC`, every probe as `probes` (`[{ id, tempC }]`), `rssi`, `uptimeSec`, The Pill's `pillMode`, a `probeHint` when a probe should be reading but isn't, `updatedAt` (last answer) and `lastError` |
 | POST | `/api/devices/probe` | Check an address before adding it — body `{ "host": string, "username"?: string, "password"?: string }`. Always `200`; `ok` is `false` with an `error` when the device can't be reached, isn't a Shelly, or rejects the credentials. Also reports `model`, `generation`, `isPill`, `pillMode`, `hasRelay` and `relayChannels` |
 | POST | `/api/devices` | Add a device — body `{ "name": string, "host": string, "channel"?: number, "username"?: string, "password"?: string }`. `deviceType` and `model` are detected from the device; `400` when it can't be reached |
 | GET | `/api/devices/:id` | Get one device |

@@ -5517,9 +5517,53 @@ export const ListOutputDevicesResponseItem = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+      ),
+    probes: zod
+      .array(
+        zod.object({
+          id: zod
+            .number()
+            .int()
+            .describe(
+              "Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100, or 200 on The Pill)",
+            ),
+          tempC: zod
+            .number()
+            .nullable()
+            .describe(
+              "Null while the probe reports an error or has lost contact",
+            ),
+        }),
+      )
+      .describe(
+        "Every DS18B20 the device reports, in its own order; the first is tempC",
       ),
     rssi: zod.number().int().nullable(),
+    uptimeSec: zod
+      .number()
+      .int()
+      .nullable()
+      .describe("Seconds since the device last restarted"),
+    pillMode: zod
+      .string()
+      .nullable()
+      .describe(
+        "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, analog_in, digital_io); null for other devices",
+      ),
+    probeHint: zod
+      .string()
+      .nullable()
+      .describe(
+        "Why a device that should have a probe isn't reading one, e.g. The Pill in OneWire mode with no DS18B20 found",
+      ),
+    updatedAt: zod
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .describe(
+        "When the device last answered a poll (every 10 s while reachable)",
+      ),
     lastError: zod.string().nullable(),
   }),
   controlledBy: zod
@@ -5593,9 +5637,53 @@ export const CreateOutputDeviceResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+      ),
+    probes: zod
+      .array(
+        zod.object({
+          id: zod
+            .number()
+            .int()
+            .describe(
+              "Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100, or 200 on The Pill)",
+            ),
+          tempC: zod
+            .number()
+            .nullable()
+            .describe(
+              "Null while the probe reports an error or has lost contact",
+            ),
+        }),
+      )
+      .describe(
+        "Every DS18B20 the device reports, in its own order; the first is tempC",
       ),
     rssi: zod.number().int().nullable(),
+    uptimeSec: zod
+      .number()
+      .int()
+      .nullable()
+      .describe("Seconds since the device last restarted"),
+    pillMode: zod
+      .string()
+      .nullable()
+      .describe(
+        "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, analog_in, digital_io); null for other devices",
+      ),
+    probeHint: zod
+      .string()
+      .nullable()
+      .describe(
+        "Why a device that should have a probe isn't reading one, e.g. The Pill in OneWire mode with no DS18B20 found",
+      ),
+    updatedAt: zod
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .describe(
+        "When the device last answered a poll (every 10 s while reachable)",
+      ),
     lastError: zod.string().nullable(),
   }),
   controlledBy: zod
@@ -5698,9 +5786,53 @@ export const GetOutputDeviceResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+      ),
+    probes: zod
+      .array(
+        zod.object({
+          id: zod
+            .number()
+            .int()
+            .describe(
+              "Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100, or 200 on The Pill)",
+            ),
+          tempC: zod
+            .number()
+            .nullable()
+            .describe(
+              "Null while the probe reports an error or has lost contact",
+            ),
+        }),
+      )
+      .describe(
+        "Every DS18B20 the device reports, in its own order; the first is tempC",
       ),
     rssi: zod.number().int().nullable(),
+    uptimeSec: zod
+      .number()
+      .int()
+      .nullable()
+      .describe("Seconds since the device last restarted"),
+    pillMode: zod
+      .string()
+      .nullable()
+      .describe(
+        "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, analog_in, digital_io); null for other devices",
+      ),
+    probeHint: zod
+      .string()
+      .nullable()
+      .describe(
+        "Why a device that should have a probe isn't reading one, e.g. The Pill in OneWire mode with no DS18B20 found",
+      ),
+    updatedAt: zod
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .describe(
+        "When the device last answered a poll (every 10 s while reachable)",
+      ),
     lastError: zod.string().nullable(),
   }),
   controlledBy: zod
@@ -5775,9 +5907,53 @@ export const UpdateOutputDeviceResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+      ),
+    probes: zod
+      .array(
+        zod.object({
+          id: zod
+            .number()
+            .int()
+            .describe(
+              "Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100, or 200 on The Pill)",
+            ),
+          tempC: zod
+            .number()
+            .nullable()
+            .describe(
+              "Null while the probe reports an error or has lost contact",
+            ),
+        }),
+      )
+      .describe(
+        "Every DS18B20 the device reports, in its own order; the first is tempC",
       ),
     rssi: zod.number().int().nullable(),
+    uptimeSec: zod
+      .number()
+      .int()
+      .nullable()
+      .describe("Seconds since the device last restarted"),
+    pillMode: zod
+      .string()
+      .nullable()
+      .describe(
+        "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, analog_in, digital_io); null for other devices",
+      ),
+    probeHint: zod
+      .string()
+      .nullable()
+      .describe(
+        "Why a device that should have a probe isn't reading one, e.g. The Pill in OneWire mode with no DS18B20 found",
+      ),
+    updatedAt: zod
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .describe(
+        "When the device last answered a poll (every 10 s while reachable)",
+      ),
     lastError: zod.string().nullable(),
   }),
   controlledBy: zod
@@ -5872,9 +6048,53 @@ export const SetOutputDeviceRelayResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+      ),
+    probes: zod
+      .array(
+        zod.object({
+          id: zod
+            .number()
+            .int()
+            .describe(
+              "Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100, or 200 on The Pill)",
+            ),
+          tempC: zod
+            .number()
+            .nullable()
+            .describe(
+              "Null while the probe reports an error or has lost contact",
+            ),
+        }),
+      )
+      .describe(
+        "Every DS18B20 the device reports, in its own order; the first is tempC",
       ),
     rssi: zod.number().int().nullable(),
+    uptimeSec: zod
+      .number()
+      .int()
+      .nullable()
+      .describe("Seconds since the device last restarted"),
+    pillMode: zod
+      .string()
+      .nullable()
+      .describe(
+        "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, analog_in, digital_io); null for other devices",
+      ),
+    probeHint: zod
+      .string()
+      .nullable()
+      .describe(
+        "Why a device that should have a probe isn't reading one, e.g. The Pill in OneWire mode with no DS18B20 found",
+      ),
+    updatedAt: zod
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .describe(
+        "When the device last answered a poll (every 10 s while reachable)",
+      ),
     lastError: zod.string().nullable(),
   }),
   controlledBy: zod
@@ -5938,9 +6158,53 @@ export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted",
+        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+      ),
+    probes: zod
+      .array(
+        zod.object({
+          id: zod
+            .number()
+            .int()
+            .describe(
+              "Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100, or 200 on The Pill)",
+            ),
+          tempC: zod
+            .number()
+            .nullable()
+            .describe(
+              "Null while the probe reports an error or has lost contact",
+            ),
+        }),
+      )
+      .describe(
+        "Every DS18B20 the device reports, in its own order; the first is tempC",
       ),
     rssi: zod.number().int().nullable(),
+    uptimeSec: zod
+      .number()
+      .int()
+      .nullable()
+      .describe("Seconds since the device last restarted"),
+    pillMode: zod
+      .string()
+      .nullable()
+      .describe(
+        "The Pill's mode as set in the Shelly app (onewire, ssr, dht22, analog_in, digital_io); null for other devices",
+      ),
+    probeHint: zod
+      .string()
+      .nullable()
+      .describe(
+        "Why a device that should have a probe isn't reading one, e.g. The Pill in OneWire mode with no DS18B20 found",
+      ),
+    updatedAt: zod
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .describe(
+        "When the device last answered a poll (every 10 s while reachable)",
+      ),
     lastError: zod.string().nullable(),
   }),
   controlledBy: zod

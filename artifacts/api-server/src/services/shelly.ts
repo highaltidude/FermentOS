@@ -4,6 +4,9 @@ import {
   parseShellyStatus,
   parseShelly2Status,
   parsePillMode,
+  hasTemperatureComponents,
+  dynamicComponentsPath,
+  parseComponentsPage,
   parseDigestChallenge,
   digestAuthHeader,
   relayPath,
@@ -101,11 +104,36 @@ export async function probeShelly(target: ShellyTarget): Promise<ShellyResult<Sh
   return info ? { ok: true, value: info } : { ok: false, reason: "Not a Shelly device" };
 }
 
+/** Most pages a component listing is followed for; a Pill has a handful of components. */
+const MAX_COMPONENT_PAGES = 5;
+
+/**
+ * Status of the dynamic components (DS18B20 probes and the like), keyed as in
+ * Shelly.GetStatus. Best effort: older firmware without the call gives {}.
+ */
+async function getDynamicComponentStatuses(target: ShellyTarget): Promise<Record<string, unknown>> {
+  const merged: Record<string, unknown> = {};
+  let offset: number | null = 0;
+  for (let page = 0; offset != null && page < MAX_COMPONENT_PAGES; page++) {
+    const r = await shellyGet(target, dynamicComponentsPath(offset));
+    const parsed = r.ok ? parseComponentsPage(r.value) : null;
+    if (!parsed) break;
+    Object.assign(merged, parsed.statuses);
+    offset = parsed.next;
+  }
+  return merged;
+}
+
 export async function getShellyStatus(target: ShellyTarget): Promise<ShellyResult<ShellyStatus>> {
   const channel = target.channel ?? 0;
   const r = await shellyGet(target, isGen2(target) ? "/rpc/Shelly.GetStatus" : "/status");
   if (!r.ok) return r;
-  const status = isGen2(target) ? parseShelly2Status(r.value, channel) : parseShellyStatus(r.value, channel);
+  let body = r.value;
+  // The Pill reports its probes only through Shelly.GetComponents.
+  if (isGen2(target) && body && typeof body === "object" && !hasTemperatureComponents(body)) {
+    body = { ...(await getDynamicComponentStatuses(target)), ...(body as Record<string, unknown>) };
+  }
+  const status = isGen2(target) ? parseShelly2Status(body, channel) : parseShellyStatus(body, channel);
   return status ? { ok: true, value: status } : { ok: false, reason: "Unexpected status response" };
 }
 

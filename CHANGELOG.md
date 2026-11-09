@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.10.0...fermentos-v1.11.0) (2026-11-09)
+
+
+### Features
+
+* **devices:** read The Pill's probe and control brew temperature from the brew page ([f413248](https://github.com/highaltidude/FermentOS/commit/f4132483b1b80ec8482faa98926b6a3970f9d470))
+
 ## [1.10.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.9.0...fermentos-v1.10.0) (2026-10-30)
 
 

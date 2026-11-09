@@ -74,3 +74,61 @@ describe("evaluateTemperatureTick with brew targets", () => {
     expect(r.desired.get(3)).toMatchObject({ on: false });
   });
 });
+
+// The shape the brew page's temperature control builds (brewTempControlTemplate
+// in the frontend): each stage gets a heater (relay 1) and a cooler (relay 2).
+describe("heat and cool on one probe", () => {
+  const thermostat = (id: string, outputDeviceId: number, mode: "heat" | "cool", setpointFrom: string) => ({
+    id, type: "control.thermostat", position: { x: 0, y: 0 },
+    data: { config: { outputDeviceId, mode, setpointFrom, setpointC: 20, hysteresisC: 0.5, minOnSec: mode === "cool" ? 60 : 0, minOffSec: mode === "cool" ? 300 : 0 } },
+  });
+  const stage = (status: string) => ({ id: status, type: "condition.brewStatus", position: { x: 0, y: 0 }, data: { config: { statuses: [status] } } });
+  const e = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
+  const result = validateFlowGraph({
+    version: 1,
+    nodes: [
+      { id: "trigger", type: "trigger.temperature", position: { x: 0, y: 0 }, data: { config: { source: { kind: "shelly", outputDeviceId: 9 } } } },
+      stage("fermenting"), thermostat("ferment-heat", 1, "heat", "fermentIdeal"), thermostat("ferment-cool", 2, "cool", "fermentIdeal"),
+      stage("conditioning"), thermostat("condition-heat", 1, "heat", "conditionIdeal"), thermostat("condition-cool", 2, "cool", "conditionIdeal"),
+    ],
+    edges: [
+      e("trigger", "fermenting"), e("fermenting", "ferment-heat"), e("fermenting", "ferment-cool"),
+      e("trigger", "conditioning"), e("conditioning", "condition-heat"), e("conditioning", "condition-cool"),
+    ],
+  }, { isValidCron });
+
+  it("is a valid graph", () => {
+    expect(result.problems).toEqual([]);
+    expect(result.compiled?.relays.sort()).toEqual([1, 2]);
+  });
+
+  it("never heats and cools at once across a temperature sweep, either way", () => {
+    const flowC = result.compiled!;
+    // Relays start off and keep whatever the last tick decided; no minimum times
+    // block a switch because each step is ten minutes apart.
+    const relays = new Map<number, { on: boolean; since: number | null }>();
+    const temps = [...Array(81).keys()].map((i) => 15 + i * 0.1);
+    let t = now.getTime();
+    for (const tempC of [...temps, ...temps.reverse()]) {
+      t += 600_000;
+      const r = evaluateTemperatureTick(flowC, { tempC, now: new Date(t), brew: brew(), relays });
+      expect(r.conflicts).toEqual([]);
+      const heat = r.desired.get(1)!.on;
+      const cool = r.desired.get(2)!.on;
+      expect(heat && cool).toBe(false);
+      // Target 19 °C, 0.5 °C band: heat only below it, cool only above it.
+      if (heat) expect(tempC).toBeLessThan(19);
+      if (cool) expect(tempC).toBeGreaterThan(19);
+      for (const [id, want] of [[1, heat], [2, cool]] as const) {
+        if (relays.get(id)?.on !== want) relays.set(id, { on: want, since: t });
+      }
+    }
+  });
+
+  it("follows the conditioning target once the brew moves on", () => {
+    const r = evaluateTemperatureTick(result.compiled!, { tempC: 20, now, brew: brew({ status: "conditioning" }), relays: new Map() });
+    expect(r.nodes["condition-heat"]).toMatchObject({ active: true, targetC: 21, relayOn: true });
+    expect(r.nodes["ferment-cool"]).toMatchObject({ active: false });
+    expect(r.desired.get(2)?.on).toBe(false);
+  });
+});

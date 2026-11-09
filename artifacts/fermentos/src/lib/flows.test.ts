@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FlowGraph } from "@workspace/api-client-react";
-import { allowedInKind, connectionProblem, cronToSchedule, defaultConfig, fermentationTemplate, flowKindOf, fromUnit, scheduleToCron, type ScheduleChoice } from "./flows";
+import { allowedInKind, brewTempControlTemplate, connectionProblem, cronToSchedule, defaultConfig, fermentationTemplate, flowKindOf, fromUnit, scheduleToCron, type ScheduleChoice } from "./flows";
 
 const n = (id: string, type: FlowGraph["nodes"][number]["type"]) => ({ id, type, position: { x: 0, y: 0 }, data: { config: {} } });
 const e = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
@@ -117,5 +117,38 @@ describe("fermentationTemplate following the brew", () => {
     expect(config(g, "thermostat")).toMatchObject({ setpointFrom: "fermentIdeal" });
     expect(config(g, "hold")).toMatchObject({ setpointFrom: "conditionIdeal" });
     expect(config(g, "crash")).toMatchObject({ setpointFrom: "fixed", setpointC: 1 });
+  });
+});
+
+describe("brewTempControlTemplate", () => {
+  const source = { kind: "shelly", outputDeviceId: 9 } as const;
+  const thermostats = (g: FlowGraph) =>
+    g.nodes.filter((n) => n.type === "control.thermostat").map((n) => ({ id: n.id, ...(n.data.config as Record<string, unknown>) }));
+
+  it("gives each stage a heater and a cooler aimed at the brew's own temperature", () => {
+    const g = brewTempControlTemplate({ source, heatRelayId: 1, coolRelayId: 2, hysteresisC: 0.5 });
+    expect(thermostats(g)).toEqual([
+      expect.objectContaining({ id: "ferment-heat", outputDeviceId: 1, mode: "heat", setpointFrom: "fermentIdeal", hysteresisC: 0.5, minOffSec: 0 }),
+      expect.objectContaining({ id: "ferment-cool", outputDeviceId: 2, mode: "cool", setpointFrom: "fermentIdeal", minOnSec: 60, minOffSec: 300 }),
+      expect.objectContaining({ id: "condition-heat", outputDeviceId: 1, mode: "heat", setpointFrom: "conditionIdeal" }),
+      expect.objectContaining({ id: "condition-cool", outputDeviceId: 2, mode: "cool", setpointFrom: "conditionIdeal" }),
+    ]);
+    expect(g.edges.map((x) => `${x.source}>${x.target}`)).toEqual([
+      "trigger>fermenting", "fermenting>ferment-heat", "fermenting>ferment-cool",
+      "trigger>conditioning", "conditioning>condition-heat", "conditioning>condition-cool",
+    ]);
+    expect(flowKindOf(g)).toBe("temperature");
+  });
+
+  it("works with only a heater or only a cooler", () => {
+    expect(thermostats(brewTempControlTemplate({ source, heatRelayId: 1, coolRelayId: null, hysteresisC: 0.5 })).map((t) => t.id))
+      .toEqual(["ferment-heat", "condition-heat"]);
+    expect(thermostats(brewTempControlTemplate({ source, heatRelayId: null, coolRelayId: 2, hysteresisC: 0.5 })).map((t) => t.id))
+      .toEqual(["ferment-cool", "condition-cool"]);
+  });
+
+  it("refuses no relays, or one relay for both jobs", () => {
+    expect(() => brewTempControlTemplate({ source, heatRelayId: null, coolRelayId: null, hysteresisC: 0.5 })).toThrow();
+    expect(() => brewTempControlTemplate({ source, heatRelayId: 3, coolRelayId: 3, hysteresisC: 0.5 })).toThrow();
   });
 });

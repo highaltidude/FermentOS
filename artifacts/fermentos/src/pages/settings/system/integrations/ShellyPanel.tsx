@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Loader2, Power, ShieldCheck, Pencil, Check, X, XCircle, CheckCircle, AlertTriangle, ToggleRight, Timer } from "lucide-react";
+import { Plus, Trash2, Loader2, Power, ShieldCheck, Pencil, Check, X, XCircle, CheckCircle, AlertTriangle, ToggleRight, Timer, Thermometer } from "lucide-react";
 import {
   useListOutputDevices,
   getListOutputDevicesQueryKey,
@@ -21,6 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 import { getErrorMessage } from "@/lib/utils";
@@ -30,6 +31,25 @@ const emptyForm = { name: "", host: "", username: "", password: "", channel: "0"
 
 function formatTemp(tempC: number, unit: "C" | "F"): string {
   return unit === "F" ? `${(tempC * 9 / 5 + 32).toFixed(1)}°F` : `${tempC.toFixed(1)}°C`;
+}
+
+/** "8 s ago", "3 min ago", "2 h ago", "4 d ago". */
+function formatAgo(iso: string): string {
+  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return `${sec} s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
+  if (sec < 86_400) return `${Math.floor(sec / 3600)} h ago`;
+  return `${Math.floor(sec / 86_400)} d ago`;
+}
+
+/** "45 min", "3 h 12 min", "6 d 4 h". */
+function formatUptime(sec: number): string {
+  const d = Math.floor(sec / 86_400);
+  const h = Math.floor((sec % 86_400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d} d ${h} h`;
+  if (h > 0) return `${h} h ${m} min`;
+  return `${m} min`;
 }
 
 const PILL_MODES: Record<string, string> = {
@@ -73,7 +93,8 @@ export function ShellyPanel() {
 
   // Relay state changes on the device too (its button, its own timer), so keep the list fresh.
   const { data: devices = [] } = useListOutputDevices({ query: { refetchInterval: 10_000, queryKey: getListOutputDevicesQueryKey() } });
-  const { data: sensors = [] } = useListSensorDevices();
+  // A probe becomes a sensor the first time it reads, so pick that up without a reload.
+  const { data: sensors = [] } = useListSensorDevices({ query: { refetchInterval: 30_000, queryKey: getListSensorDevicesQueryKey() } });
   const { data: brewSessions = [] } = useListBrewSessions();
   const activeSessions = brewSessions.filter((s) => ["brew_day", "fermenting", "conditioning"].includes(s.status));
 
@@ -193,23 +214,40 @@ export function ShellyPanel() {
                       </div>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
-                      {d.state.reachable ? (
-                        d.state.hasRelay ? (
-                          <span className={d.state.ison ? "text-green-600 dark:text-green-400 font-medium" : ""}>
-                            {d.state.ison ? "On" : "Off"}
-                          </span>
-                        ) : (
-                          <span>Temperature probe only</span>
-                        )
+                    {/* Live status: what it's doing, what it reads, and how fresh that is. */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+                      {!d.state.reachable ? (
+                        <Badge variant="destructive"><AlertTriangle className="w-3 h-3" />Unreachable</Badge>
+                      ) : d.state.hasRelay ? (
+                        <Badge variant={d.state.ison ? "success" : "muted"}><Power className="w-3 h-3" />{d.state.ison ? "On" : "Off"}</Badge>
                       ) : (
-                        <span className="text-destructive flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" />{d.state.lastError ?? "Unreachable"}
+                        <Badge variant="muted"><Thermometer className="w-3 h-3" />Probe only</Badge>
+                      )}
+                      {d.state.tempC != null && (
+                        <span className={`text-lg font-semibold tabular-nums leading-none ${d.state.reachable ? "text-foreground" : "text-muted-foreground"}`}>
+                          {formatTemp(d.state.tempC, unit)}
                         </span>
                       )}
-                      {d.state.tempC != null && <span>{formatTemp(d.state.tempC, unit)}</span>}
+                      {d.state.probes.length > 1 && (
+                        <span className="text-xs text-muted-foreground">
+                          {d.state.probes.slice(1).map((p, i) => (
+                            <span key={p.id} className="mr-2">Probe {i + 2}: {p.tempC != null ? formatTemp(p.tempC, unit) : "no reading"}</span>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+                      {!d.state.reachable && d.state.lastError && <span className="text-destructive">{d.state.lastError}</span>}
+                      {d.state.pillMode && <span>{PILL_MODES[d.state.pillMode] ?? `${d.state.pillMode} mode`}</span>}
+                      {d.state.updatedAt && <span title={new Date(d.state.updatedAt).toLocaleString()}>{d.state.reachable ? "Updated" : "Last seen"} {formatAgo(d.state.updatedAt)}</span>}
+                      {d.state.reachable && d.state.uptimeSec != null && <span>Up {formatUptime(d.state.uptimeSec)}</span>}
                       {d.state.rssi != null && <span>📶 {d.state.rssi} dBm</span>}
                     </div>
+                    {d.state.probeHint && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-start gap-1">
+                        <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />{d.state.probeHint}
+                      </p>
+                    )}
 
                     {/* Manual control */}
                     {!d.state.hasRelay ? null : locked ? (

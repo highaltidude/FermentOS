@@ -2,7 +2,8 @@ import cron from "node-cron";
 import { db, outputDevicesTable, sensorDevicesTable, type OutputDevice } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
-import { getShellyStatus } from "./shelly.js";
+import { getShellyStatus, getPillMode } from "./shelly.js";
+import type { ShellyProbe } from "../lib/shellyParse.js";
 import { ingestReading } from "./sensorIngest.js";
 
 /**
@@ -26,7 +27,12 @@ export type LiveDeviceState = {
   /** Null until the device has answered once. */
   hasRelay: boolean | null;
   tempC: number | null;
+  probes: ShellyProbe[];
   rssi: number | null;
+  uptimeSec: number | null;
+  isPill: boolean;
+  /** The Pill's mode ("onewire", "ssr", …); read when first seen and when its relay comes or goes. */
+  pillMode: string | null;
   /** When the device last answered. */
   at: Date | null;
   failures: number;
@@ -81,7 +87,10 @@ async function ensureProbeSensor(device: OutputDevice): Promise<number> {
 }
 
 async function pollDevice(device: OutputDevice, now: number): Promise<void> {
-  const prev = live.get(device.id) ?? { ison: null, hasRelay: null, tempC: null, rssi: null, at: null, failures: 0, lastError: null };
+  const prev: LiveDeviceState = live.get(device.id) ?? {
+    ison: null, hasRelay: null, tempC: null, probes: [], rssi: null, uptimeSec: null, isPill: false, pillMode: null,
+    at: null, failures: 0, lastError: null,
+  };
   const result = await getShellyStatus(device);
 
   if (!result.ok) {
@@ -94,17 +103,27 @@ async function pollDevice(device: OutputDevice, now: number): Promise<void> {
   }
 
   // hasRelay changes when The Pill is switched between modes in the Shelly app.
-  const { ison, hasRelay, tempC, rssi } = result.value;
+  const { ison, hasRelay, tempC, probes, rssi, uptimeSec, isPill } = result.value;
   const changed = prev.ison !== ison || prev.hasRelay !== hasRelay || prev.at == null;
-  live.set(device.id, { ison, hasRelay, tempC, rssi, at: new Date(now), failures: 0, lastError: null });
+  // The mode only explains the card; a failed read keeps the last one known.
+  let pillMode = isPill ? prev.pillMode : null;
+  if (isPill && (pillMode == null || prev.hasRelay !== hasRelay)) {
+    const mode = await getPillMode(device);
+    if (mode.ok) pillMode = mode.value;
+  }
+  live.set(device.id, { ison, hasRelay, tempC, probes, rssi, uptimeSec, isPill, pillMode, at: new Date(now), failures: 0, lastError: null });
 
   if (changed || now - (lastStateWrite.get(device.id) ?? 0) >= STATE_WRITE_INTERVAL_MS) {
     lastStateWrite.set(device.id, now);
     await db
       .update(outputDevicesTable)
-      .set({ lastSeenAt: new Date(now), lastState: { ison, hasRelay, tempC, rssi } })
+      .set({ lastSeenAt: new Date(now), lastState: { ison, hasRelay, tempC, probes, rssi, pillMode } })
       .where(eq(outputDevicesTable.id, device.id));
   }
+
+  // Register the probe as a sensor as soon as it reads, so it can be put on a
+  // brew (and drive a flow) without waiting for the first logged reading.
+  if (tempC != null && device.probeSensorDeviceId == null) await ensureProbeSensor(device);
 
   if (tempC != null && now - (lastProbeLog.get(device.id) ?? 0) >= PROBE_LOG_INTERVAL_MS) {
     lastProbeLog.set(device.id, now);

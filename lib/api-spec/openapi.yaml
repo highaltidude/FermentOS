@@ -2473,14 +2473,48 @@ components:
         tempC:
           type: number
           nullable: true
-          description: Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted
+          description: Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.
+        probes:
+          type: array
+          description: Every DS18B20 the device reports, in its own order; the first is tempC
+          items:
+            $ref: "#/components/schemas/OutputDeviceProbe"
         rssi:
           type: integer
           nullable: true
+        uptimeSec:
+          type: integer
+          nullable: true
+          description: Seconds since the device last restarted
+        pillMode:
+          type: string
+          nullable: true
+          description: The Pill's mode as set in the Shelly app (onewire, ssr, dht22, analog_in, digital_io); null for other devices
+        probeHint:
+          type: string
+          nullable: true
+          description: Why a device that should have a probe isn't reading one, e.g. The Pill in OneWire mode with no DS18B20 found
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the device last answered a poll (every 10 s while reachable)
         lastError:
           type: string
           nullable: true
-      required: [reachable, ison, hasRelay, tempC, rssi, lastError]
+      required: [reachable, ison, hasRelay, tempC, probes, rssi, uptimeSec, pillMode, probeHint, updatedAt, lastError]
+
+    OutputDeviceProbe:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100, or 200 on The Pill)
+        tempC:
+          type: number
+          nullable: true
+          description: Null while the probe reports an error or has lost contact
+      required: [id, tempC]
 
     CreateOutputDeviceBody:
       type: object

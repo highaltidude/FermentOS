@@ -5,6 +5,9 @@ import {
   parseShelly2Status,
   parsePillMode,
   isPill,
+  hasTemperatureComponents,
+  parseComponentsPage,
+  dynamicComponentsPath,
   normaliseShellyHost,
   relayPath,
   switchSetPath,
@@ -24,7 +27,7 @@ const statusWithProbe = {
 describe("parseShellyStatus", () => {
   it("reads relay state, probe temperature, rssi and uptime", () => {
     expect(parseShellyStatus(statusWithProbe)).toEqual({
-      ison: true, hasRelay: true, relayChannels: 1, tempC: 19.4, rssi: -61, uptimeSec: 86512,
+      ison: true, hasRelay: true, relayChannels: 1, tempC: 19.4, probes: [{ id: 0, tempC: 19.4 }], isPill: false, rssi: -61, uptimeSec: 86512,
     });
   });
 
@@ -92,7 +95,8 @@ describe("parseShelly2Status", () => {
       "temperature:100": { id: 100, tC: 19.8, tF: 67.6 },
     };
     expect(parseShelly2Status(body)).toEqual({
-      ison: null, hasRelay: false, relayChannels: 0, tempC: 19.8, rssi: -55, uptimeSec: 3600,
+      ison: null, hasRelay: false, relayChannels: 0, tempC: 19.8,
+      probes: [{ id: 100, tempC: 19.8 }, { id: 101, tempC: 25.0 }], isPill: true, rssi: -55, uptimeSec: 3600,
     });
   });
 
@@ -103,7 +107,7 @@ describe("parseShelly2Status", () => {
       "switch:1": { id: 1, source: "HTTP_in", output: true, timer_started_at: 1761400000, timer_duration: 90 },
     };
     expect(parseShelly2Status(body, 1)).toEqual({
-      ison: true, hasRelay: true, relayChannels: 2, tempC: null, rssi: -55, uptimeSec: 3600,
+      ison: true, hasRelay: true, relayChannels: 2, tempC: null, probes: [], isPill: false, rssi: -55, uptimeSec: 3600,
     });
     expect(parseShelly2Status(body, 0)?.ison).toBe(false);
     expect(parseShelly2Status(body, 2)?.hasRelay).toBe(false);
@@ -118,6 +122,59 @@ describe("parseShelly2Status", () => {
   it("returns null for bodies that aren't a Gen2+ status", () => {
     expect(parseShelly2Status(null)).toBeNull();
     expect(parseShelly2Status(statusWithProbe)).toBeNull(); // Gen1 shape
+  });
+});
+
+// Captured from a real Pill (S3SN-0U53X, firmware 1.8.99-pillprod0) in OneWire
+// mode with one DS18B20 fitted. Its Shelly.GetStatus leaves the probe out;
+// only Shelly.GetComponents lists it, as temperature:200.
+const realPillStatus = {
+  ble: {}, cloud: { connected: true }, mqtt: { connected: false }, pill: {},
+  sys: { mac: "70AF09E521B4", restart_required: false, uptime: 1323, cfg_rev: 10 },
+  wifi: { sta_ip: "192.168.1.144", status: "got ip", rssi: -31 },
+  ws: { connected: false },
+};
+const realPillComponents = {
+  components: [{ key: "temperature:200", status: { id: 200, tC: 22.8, tF: 73.0 } }],
+  cfg_rev: 10, offset: 0, total: 1,
+};
+
+describe("The Pill's probe via Shelly.GetComponents", () => {
+  it("finds no probe in the real Pill's GetStatus alone", () => {
+    expect(hasTemperatureComponents(realPillStatus)).toBe(false);
+    expect(parseShelly2Status(realPillStatus)?.tempC).toBeNull();
+  });
+
+  it("reads the probe once the component statuses are merged in", () => {
+    const page = parseComponentsPage(realPillComponents)!;
+    expect(page).toEqual({ statuses: { "temperature:200": { id: 200, tC: 22.8, tF: 73.0 } }, next: null });
+    const merged = { ...page.statuses, ...realPillStatus };
+    expect(hasTemperatureComponents(merged)).toBe(true);
+    expect(parseShelly2Status(merged)).toEqual({
+      ison: null, hasRelay: false, relayChannels: 0, tempC: 22.8, probes: [{ id: 200, tempC: 22.8 }], isPill: true, rssi: -31, uptimeSec: 1323,
+    });
+  });
+
+  it("follows pagination and skips components without a status", () => {
+    const page = parseComponentsPage({ components: [{ key: "temperature:200", status: { tC: 20 } }, { key: "x" }], offset: 0, total: 5 });
+    expect(page?.next).toBe(2);
+    expect(Object.keys(page!.statuses)).toEqual(["temperature:200"]);
+    expect(parseComponentsPage({ components: [], offset: 4, total: 5 })?.next).toBeNull();
+    expect(parseComponentsPage({ code: 404, message: "No handler" })).toBeNull();
+  });
+
+  it("asks only for dynamic components' status", () => {
+    expect(dynamicComponentsPath()).toBe("/rpc/Shelly.GetComponents?dynamic_only=true&include=%5B%22status%22%5D");
+    expect(dynamicComponentsPath(3)).toContain("&offset=3");
+  });
+});
+
+describe("parseShellyStatus probes", () => {
+  it("lists every add-on slot and keeps slot 0 in control", () => {
+    const body = { ...statusWithProbe, ext_temperature: { "1": { tC: 4.5 }, "0": { tC: 19.4 }, "2": { tC: -127 } } };
+    const s = parseShellyStatus(body)!;
+    expect(s.tempC).toBe(19.4);
+    expect(s.probes).toEqual([{ id: 0, tempC: 19.4 }, { id: 1, tempC: 4.5 }, { id: 2, tempC: null }]);
   });
 });
 

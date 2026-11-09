@@ -20,6 +20,13 @@ export type ShellyInfo = {
   firmware: string | null;
 };
 
+export type ShellyProbe = {
+  /** Add-on slot (Gen1) or temperature component id (Gen2+, e.g. 100 or 200). */
+  id: number;
+  /** Null while the probe reports an error or has lost contact. */
+  tempC: number | null;
+};
+
 export type ShellyStatus = {
   /** Relay state; null when the device has no relay on the requested channel. */
   ison: boolean | null;
@@ -29,6 +36,10 @@ export type ShellyStatus = {
   relayChannels: number;
   /** The first DS18B20 probe, in °C. Null when no probe is fitted. */
   tempC: number | null;
+  /** Every probe the device reports, in its own order; tempC is the first. */
+  probes: ShellyProbe[];
+  /** True for The Pill (Gen2+ status with a "pill" component). */
+  isPill: boolean;
   rssi: number | null;
   uptimeSec: number | null;
 };
@@ -92,17 +103,24 @@ export function parseShellyStatus(body: unknown, channel = 0): ShellyStatus | nu
   if (!isObject(relay) || typeof relay.ison !== "boolean") return null;
 
   // The add-on reports every slot, with an unplugged slot simply absent.
-  let tempC: number | null = null;
+  const probes: ShellyProbe[] = [];
   if (isObject(body.ext_temperature)) {
-    const slot = body.ext_temperature["0"];
-    if (isObject(slot)) tempC = probeTemp(slot.tC);
+    const slots = body.ext_temperature;
+    for (const key of Object.keys(slots).filter((k) => /^\d+$/.test(k)).sort((a, b) => Number(a) - Number(b))) {
+      const slot = slots[key];
+      if (isObject(slot)) probes.push({ id: Number(key), tempC: probeTemp(slot.tC) });
+    }
   }
+  // Slot 0 is the probe FermentOS has always read; it stays the one in control.
+  const slot0 = probes.find((p) => p.id === 0);
 
   return {
     ison: relay.ison,
     hasRelay: true,
     relayChannels: body.relays.length,
-    tempC,
+    tempC: slot0?.tempC ?? null,
+    probes,
+    isPill: false,
     rssi: isObject(body.wifi_sta) ? numOrNull(body.wifi_sta.rssi) : null,
     uptimeSec: numOrNull(body.uptime),
   };
@@ -129,18 +147,56 @@ export function parseShelly2Status(body: unknown, channel = 0): ShellyStatus | n
   const relay = body[`switch:${channel}`];
   const ison = isObject(relay) && typeof relay.output === "boolean" ? relay.output : null;
 
-  // Probes are numbered from 100 in the order they were found; read the first.
-  const [firstProbe] = componentIds(body, "temperature");
-  const probe = firstProbe != null ? body[`temperature:${firstProbe}`] : null;
+  // Add-on probes are numbered from 100 in the order they were found, The
+  // Pill's from 200; the lowest id is the one in control.
+  const probes = componentIds(body, "temperature").map((id): ShellyProbe => {
+    const c = body[`temperature:${id}`];
+    return { id, tempC: isObject(c) ? probeTemp(c.tC) : null };
+  });
 
   return {
     ison,
     hasRelay: ison != null,
     relayChannels: componentIds(body, "switch").length,
-    tempC: isObject(probe) ? probeTemp(probe.tC) : null,
+    tempC: probes[0]?.tempC ?? null,
+    probes,
+    // Only The Pill reports a "pill" component.
+    isPill: isObject(body.pill),
     rssi: isObject(body.wifi) ? numOrNull(body.wifi.rssi) : null,
     uptimeSec: numOrNull(body.sys.uptime),
   };
+}
+
+/** Whether a Gen2+ status body lists any temperature component. */
+export function hasTemperatureComponents(body: unknown): boolean {
+  return isObject(body) && componentIds(body, "temperature").length > 0;
+}
+
+/**
+ * Path for one page of Shelly.GetComponents, asking only for the dynamic
+ * components' status. The Pill (firmware 1.8) leaves its DS18B20s out of
+ * Shelly.GetStatus entirely and lists them only here.
+ */
+export function dynamicComponentsPath(offset = 0): string {
+  const q = new URLSearchParams({ dynamic_only: "true", include: JSON.stringify(["status"]) });
+  if (offset > 0) q.set("offset", String(offset));
+  return `/rpc/Shelly.GetComponents?${q.toString()}`;
+}
+
+/**
+ * One Shelly.GetComponents page as {key: status} entries, plus where the next
+ * page starts (null on the last). Null when the body isn't such a page.
+ */
+export function parseComponentsPage(body: unknown): { statuses: Record<string, unknown>; next: number | null } | null {
+  if (!isObject(body) || !Array.isArray(body.components)) return null;
+  const statuses: Record<string, unknown> = {};
+  for (const c of body.components) {
+    if (isObject(c) && typeof c.key === "string" && isObject(c.status)) statuses[c.key] = c.status;
+  }
+  const offset = numOrNull(body.offset) ?? 0;
+  const total = numOrNull(body.total);
+  const end = offset + body.components.length;
+  return { statuses, next: total != null && body.components.length > 0 && end < total ? end : null };
 }
 
 /**

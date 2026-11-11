@@ -208,7 +208,49 @@ export function normaliseShellyHost(input: string): string | null {
   let s = input.trim();
   if (!s) return null;
   s = s.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-  return /^[a-z0-9.-]+(:\d{1,5})?$/i.test(s) ? s.toLowerCase() : null;
+  if (!/^[a-z0-9.-]+(:\d{1,5})?$/i.test(s)) return null;
+  // Port 80 is the default, so "host:80" and "host" are the same device.
+  return s.toLowerCase().replace(/:0*80$/, "");
+}
+
+export const BLOCKED_HOST_MESSAGE = "That's the FermentOS machine itself or a reserved address, not a device on your network";
+
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+
+/**
+ * True for an address a Shelly can never be at: loopback (the FermentOS
+ * machine itself), link-local (including cloud metadata at 169.254.169.254)
+ * or unspecified. Takes resolved addresses, so IPv6 is handled too.
+ */
+export function isBlockedAddress(ip: string): boolean {
+  const addr = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  const v4 = IPV4.exec(addr.replace(/^::ffff:/, ""));
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 127 || a === 0 || (a === 169 && b === 254);
+  }
+  if (!addr.includes(":")) return false;
+  if (addr === "::1" || addr === "::" || /^0*:(0*:)*0*1?$/.test(addr)) return true;
+  // fe80::/10 covers fe80 to febf.
+  return /^fe[89ab][0-9a-f]:/.test(addr);
+}
+
+/**
+ * Why FermentOS won't talk to a normalised host, or null when it will. A
+ * Shelly serves its local API on port 80 on the LAN, so anything else is
+ * refused: probing other ports or the FermentOS machine itself would make
+ * the device endpoints a port scanner (#226). `allowAny` lifts this for the
+ * development simulator.
+ */
+export function shellyHostProblem(host: string, allowAny: boolean): string | null {
+  if (allowAny) return null;
+  const m = /^(.*?)(?::(\d+))?$/.exec(host)!;
+  const name = m[1]!;
+  if (m[2] != null && Number(m[2]) !== 80) return "Shelly devices answer on port 80; leave the port off";
+  if (name === "localhost" || name.endsWith(".localhost") || (IPV4.test(name) && isBlockedAddress(name))) {
+    return BLOCKED_HOST_MESSAGE;
+  }
+  return null;
 }
 
 /** Gen1 path for switching a relay; `timerSec` makes the device flip back on its own. */

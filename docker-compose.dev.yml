@@ -31,6 +31,8 @@ services:
       BASE_PATH: /
       API_PROXY_TARGET: http://localhost:8080
       WATCH_POLLING: "1"
+      # Lets the Shelly simulator be added at localhost:8081 (see README).
+      SHELLY_ALLOW_ANY_HOST: "true"
     ports:
       - "8080:8080"
       - "23975:23975"

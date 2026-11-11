@@ -645,7 +645,7 @@ Set the Shelly up with the Shelly app or its own hotspot (`http://192.168.33.1`)
 
 #### 2. Add it to FermentOS
 
-Go to **Settings → System → Integrations → Shelly Devices** and click **Add device**. Enter its IP address and click **Check device** — FermentOS confirms it found a Shelly, whether the relay is on, and whether a probe is fitted. If the device has more than one relay channel, pick the channel (add each channel as its own device). Give it a name and click **Add device**.
+Go to **Settings → System → Integrations → Shelly Devices** and click **Add device**. Enter its IP address and click **Check device** — FermentOS confirms it found a Shelly, whether the relay is on, and whether a probe is fitted. If the device has more than one relay channel, pick the channel (add each channel as its own device). Give it a name and click **Add device**. Use the device's own IP address or hostname with no port: a Shelly answers on port 80, and FermentOS won't talk to any other port, to its own machine (`localhost`, `127.0.0.1`) or to link-local addresses.
 
 If you turned on *Restricted Login* in the Shelly's settings, enter the same username and password. On Plus, Pro, Gen3, Gen4 and The Pill the username is always `admin`, so only the password is needed. Credentials are stored on your FermentOS server and never sent back to the browser.
 
@@ -696,7 +696,7 @@ If the probe in control is unplugged, FermentOS doesn't fall back to another pro
 
 #### Try it without hardware (development)
 
-`scripts/shelly-sim.ts` is a stand-in Shelly 1 for testing. Run it with `node scripts/shelly-sim.ts` (Node 24 or later), add `localhost:8081` as the relay address, and set the fake probe's temperature with `curl 'localhost:8081/sim?temp=21.5'`.
+`scripts/shelly-sim.ts` is a stand-in Shelly 1 for testing. Run it with `node scripts/shelly-sim.ts` (Node 24 or later), start the API with `SHELLY_ALLOW_ANY_HOST=true` (the dev Docker stack sets it already) so FermentOS accepts a port other than 80 on its own machine, add `localhost:8081` as the relay address, and set the fake probe's temperature with `curl 'localhost:8081/sim?temp=21.5'`.
 
 With `GEN=2` it stands in for The Pill instead: `GEN=2 PILL_MODE=onewire node scripts/shelly-sim.ts` for a probe, or `GEN=2 PILL_MODE=ssr SHELLY_PASS=secret node scripts/shelly-sim.ts` for two relay channels behind a password (username `admin`).
 
@@ -1742,8 +1742,8 @@ are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/devices` | List Shelly devices with their live state: `reachable`, `ison`, `hasRelay`, the control probe's `tempC`, every probe as `probes` (`[{ id, tempC, sensorDeviceId, isControl }]`), `rssi`, `uptimeSec`, The Pill's `pillMode`, a `probeHint` when a probe should be reading but isn't (or the control probe is missing), `updatedAt` (last answer) and `lastError` |
-| POST | `/api/devices/probe` | Check an address before adding it — body `{ "host": string, "username"?: string, "password"?: string }`. Always `200`; `ok` is `false` with an `error` when the device can't be reached, isn't a Shelly, or rejects the credentials. Also reports `model`, `generation`, `isPill`, `pillMode`, `hasRelay` and `relayChannels` |
-| POST | `/api/devices` | Add a device — body `{ "name": string, "host": string, "channel"?: number, "username"?: string, "password"?: string }`. `deviceType` and `model` are detected from the device; `400` when it can't be reached |
+| POST | `/api/devices/probe` | Check an address before adding it — body `{ "host": string, "username"?: string, "password"?: string }`. `400` when the host isn't a plain IP or hostname, uses a port other than 80, or is a loopback, link-local or unspecified address. Otherwise always `200` (a hostname that resolves to such an address gives `ok: false` with that reason); `ok` is `false` with an `error` when the device can't be reached, isn't a Shelly, or rejects the credentials. Also reports `model`, `generation`, `isPill`, `pillMode`, `hasRelay` and `relayChannels` |
+| POST | `/api/devices` | Add a device — body `{ "name": string, "host": string, "channel"?: number, "username"?: string, "password"?: string }`. `deviceType` and `model` are detected from the device; `400` when it can't be reached or its host is refused as for `/probe`. Device requests never follow redirects |
 | GET | `/api/devices/:id` | Get one device |
 | PATCH | `/api/devices/:id` | Update any of `name`, `host`, `channel`, `username`, `password`, `enabled`, `controlProbeId`. Omit `password` to keep it; send `null` to clear it. A new `host` is probed again to detect its type. Disabling the device, or changing its `host` or `channel`, switches the old relay off first; disabling also unassigns its probes from their brews. `controlProbeId` picks which `state.probes` id flows control on (`400` if the device hasn't reported it; `null` goes back to the lowest-numbered one); the new probe takes over the old one's brew |
 | DELETE | `/api/devices/:id` | Switch the relay off (if it has one) and remove the device. If the relay can't be switched off the device is kept and `502` is returned; add `?force=true` to remove it anyway. Its probes are unassigned from their brews, and their sensor devices and readings are kept |

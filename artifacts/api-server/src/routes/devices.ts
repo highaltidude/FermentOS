@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
 import { normaliseShellyHost, isPill, type ShellyInfo } from "../lib/shellyParse";
-import { probeShelly, getShellyStatus, getPillMode, setShellyRelay, applyShellySafeDefaults } from "../services/shelly";
+import { probeShelly, getShellyStatus, getPillMode, setShellyRelay, applyShellySafeDefaults, checkShellyHost } from "../services/shelly";
 import { getLiveState, isReachable, noteRelayState, forgetDevice, pollNow, probeSensorsOf, forgetProbeSensors, noteControlProbe } from "../services/devicePoller";
 import { controlProbe, renamedProbeSensor } from "../lib/shellyProbes";
 import { relayOwners } from "../services/flowEngine";
@@ -105,6 +105,8 @@ router.post("/probe", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
   const host = normaliseShellyHost(body.data.host);
   if (!host) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
+  const hostProblem = checkShellyHost(host);
+  if (hostProblem) return res.status(400).json({ error: hostProblem });
 
   const empty = {
     host, model: null, generation: null, isPill: false, pillMode: null, authRequired: false,
@@ -139,6 +141,8 @@ router.post("/", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
   const host = normaliseShellyHost(body.data.host);
   if (!host) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
+  const hostProblem = checkShellyHost(host);
+  if (hostProblem) return res.status(400).json({ error: hostProblem });
   // Ask the device which API it speaks rather than trusting the client.
   const info = await probeShelly({ host });
   if (!info.ok) return res.status(400).json({ error: info.reason });
@@ -184,6 +188,8 @@ router.patch("/:id", async (req, res) => {
   if (rawHost !== undefined) {
     const normalised = normaliseShellyHost(rawHost);
     if (!normalised) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
+    const hostProblem = checkShellyHost(normalised);
+    if (hostProblem) return res.status(400).json({ error: hostProblem });
     host = normalised;
     // A new address may be a different device, possibly of another generation.
     const info = await probeShelly({ host });

@@ -266,9 +266,42 @@ export function startScheduler(schedule: BackupConfig["schedule"]) {
   if (!expr) { logger.info("Backup scheduler disabled"); return; }
   activeCronJob = cron.schedule(expr, () => {
     logger.info({ schedule }, "Running scheduled backup");
-    runScheduledBackup().catch((e) => logger.error({ e }, "Scheduled backup error"));
+    startScheduledBackup("Scheduled backup error");
   });
   logger.info({ schedule, expr }, "Backup scheduler started");
+}
+
+let scheduledRun: Promise<void> | null = null;
+
+/**
+ * Start a scheduled backup unless one is already under way, so the 2 AM run
+ * and a catch-up landing on it never run two pg_dumps at once. Returns false
+ * when it skipped.
+ */
+function startScheduledBackup(errorMessage: string): boolean {
+  if (scheduledRun) {
+    logger.info("A scheduled backup is already running; not starting another");
+    return false;
+  }
+  scheduledRun = runScheduledBackup()
+    .catch((e) => logger.error({ e }, errorMessage))
+    .finally(() => {
+      scheduledRun = null;
+    });
+  return true;
+}
+
+/**
+ * Run the backup missed while FermentOS was down, if one still is. Decided
+ * when it fires rather than at boot: by then the 2 AM run may have started or
+ * finished, and a Pi without a clock battery has had time to set its clock.
+ */
+async function catchUpMissedBackup(): Promise<void> {
+  const cfg = await getConfig();
+  const status = await getStatus();
+  if (scheduledRun || !isBackupOverdue(cfg.schedule, status, new Date())) return;
+  logger.warn({ lastRun: status.lastRun, schedule: cfg.schedule }, "Scheduled backup was missed; running it now");
+  startScheduledBackup("Missed scheduled backup error");
 }
 
 /**
@@ -313,13 +346,10 @@ export async function initBackupScheduler() {
     warnIfLocalPathUnwritable(localBackupDir(cfg));
     startScheduler(cfg.schedule);
 
-    const status = await getStatus();
-    if (isBackupOverdue(cfg.schedule, status, new Date())) {
-      logger.warn({ lastRun: status.lastRun, schedule: cfg.schedule }, "Scheduled backup was missed; running it shortly");
-      // A short delay keeps the dump clear of everything else starting up.
+    // A short delay keeps any catch-up dump clear of everything else starting up.
+    if (cfg.schedule !== "none") {
       setTimeout(() => {
-        logger.info("Running missed scheduled backup");
-        runScheduledBackup().catch((e) => logger.error({ e }, "Missed scheduled backup error"));
+        catchUpMissedBackup().catch((e) => logger.error({ e }, "Missed scheduled backup check failed"));
       }, CATCH_UP_DELAY_MS).unref();
     }
   } catch (e) {

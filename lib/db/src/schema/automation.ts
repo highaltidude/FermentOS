@@ -15,7 +15,7 @@ export type OutputDeviceState = {
   /** Missing on rows written before Gen2+ support, all of which were relays. */
   hasRelay?: boolean;
   /** Every probe the device reported; missing on older rows. */
-  probes?: { id: number; tempC: number | null }[];
+  probes?: { id: number; tempC: number | null; sensorDeviceId?: number | null }[];
   /** The Pill's mode, when it is one; missing on older rows. */
   pillMode?: string | null;
 };
@@ -35,11 +35,16 @@ export const outputDevicesTable = pgTable("output_devices", {
   username: text("username"),
   password: text("password"),
   enabled: boolean("enabled").notNull().default(true),
-  // The add-on DS18B20 probe, registered as a sensor device on first sight so
-  // its readings flow through the normal sensor pipeline.
+  // Every DS18B20 the device reports is registered as its own sensor device
+  // (deviceKey "shelly:<id>:<probe id>") on first sight, so its readings flow
+  // through the normal sensor pipeline. This points at the control probe's.
   probeSensorDeviceId: integer("probe_sensor_device_id").references(() => sensorDevicesTable.id, {
     onDelete: "set null",
   }),
+  // The probe (add-on slot or temperature component id) flows control on.
+  // Pinned to the lowest-numbered one when the first is seen, so a control
+  // probe dropping out reads as no temperature rather than another probe.
+  controlProbeId: integer("control_probe_id"),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   lastState: jsonb("last_state").$type<OutputDeviceState>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

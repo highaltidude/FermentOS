@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FlowGraph } from "@workspace/api-client-react";
-import { allowedInKind, brewTempControlTemplate, connectionProblem, cronToSchedule, defaultConfig, fermentationTemplate, flowKindOf, fromUnit, scheduleToCron, type ScheduleChoice } from "./flows";
+import type { FlowGraph, OutputDevice, SensorDeviceWithStatus } from "@workspace/api-client-react";
+import { allowedInKind, brewTempControlTemplate, connectionProblem, cronToSchedule, defaultConfig, fermentationTemplate, flowKindOf, fromUnit, scheduleToCron, sourceKey, tempSourceOptions, type ScheduleChoice } from "./flows";
 
 const n = (id: string, type: FlowGraph["nodes"][number]["type"]) => ({ id, type, position: { x: 0, y: 0 }, data: { config: {} } });
 const e = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
@@ -150,5 +150,39 @@ describe("brewTempControlTemplate", () => {
   it("refuses no relays, or one relay for both jobs", () => {
     expect(() => brewTempControlTemplate({ source, heatRelayId: null, coolRelayId: null, hysteresisC: 0.5 })).toThrow();
     expect(() => brewTempControlTemplate({ source, heatRelayId: 3, coolRelayId: 3, hysteresisC: 0.5 })).toThrow();
+  });
+});
+
+describe("tempSourceOptions", () => {
+  const sensor = (id: number, deviceType: string, deviceKey: string, deviceName: string) =>
+    ({ device: { id, deviceType, deviceKey, deviceName } }) as unknown as SensorDeviceWithStatus;
+  const pill = { id: 3, probeSensorDeviceId: 10 } as unknown as OutputDevice;
+
+  it("offers the control probe as the device, and other probes by id", () => {
+    const options = tempSourceOptions(
+      [
+        sensor(10, "shelly_probe", "shelly:3:200", "Pill probe"),
+        sensor(11, "shelly_probe", "shelly:3:201", "Ambient"),
+        sensor(12, "ispindel", "iSpindel001", "Green"),
+      ],
+      [pill],
+    );
+    expect(options.map((o) => [o.key, o.label])).toEqual([
+      ["shelly:3", "Pill probe (Shelly probe)"],
+      ["shelly:3:201", "Ambient (Shelly probe)"],
+      ["sensor:12", "Green (iSpindel)"],
+    ]);
+    expect(options[1]!.value).toEqual({ kind: "shelly", outputDeviceId: 3, probeId: 201 });
+  });
+
+  it("matches flows saved before probes had ids", () => {
+    expect(sourceKey({ kind: "shelly", outputDeviceId: 3 })).toBe("shelly:3");
+    const [legacy] = tempSourceOptions([sensor(10, "shelly_probe", "shelly:3", "Pill probe")], [pill]);
+    expect(legacy!.value).toEqual({ kind: "shelly", outputDeviceId: 3 });
+  });
+
+  it("falls back to logged readings for a probe whose device is gone", () => {
+    const [orphan] = tempSourceOptions([sensor(10, "shelly_probe", "shelly:9:200", "Old probe")], [pill]);
+    expect(orphan!.value).toEqual({ kind: "sensor", sensorDeviceId: 10 });
   });
 });

@@ -33,10 +33,15 @@ import { brewTempControlTemplate, deltaFromUnit, deltaToUnit, formatTemp, source
 
 const SETTINGS_LINK = "/settings?tab=system&section=connectivity";
 
-/** The temperature trigger's source key ("shelly:3", "sensor:5"), or "" for other flows. */
-function flowSourceKey(flow: Flow): string {
+/** The temperature trigger's source, if the flow has one. */
+function flowSource(flow: Flow): TempSourceChoice | undefined {
   const trigger = flow.graph.nodes.find((n) => n.type === "trigger.temperature");
-  return trigger ? sourceKey((trigger.data.config as { source?: unknown }).source) : "";
+  return (trigger?.data.config as { source?: TempSourceChoice } | undefined)?.source;
+}
+
+/** The temperature trigger's source key ("shelly:3", "shelly:3:201", "sensor:5"), or "" for other flows. */
+function flowSourceKey(flow: Flow): string {
+  return sourceKey(flowSource(flow));
 }
 
 /**
@@ -74,7 +79,7 @@ export function BrewTempControlCard({ session }: {
       <div className="p-4 space-y-3">
         {controlFlows.length > 0 ? (
           <ul className="divide-y divide-border">
-            {controlFlows.map((f) => <ControlFlow key={f.id} flow={f} devices={devices} />)}
+            {controlFlows.map((f) => <ControlFlow key={f.id} flow={f} devices={devices} sensors={sensors} />)}
           </ul>
         ) : (
           <SetupForm session={session} sources={sources} devices={devices} />
@@ -234,7 +239,7 @@ const REASONS: Record<string, string> = {
   holding_min_off: "resting (compressor protection)",
 };
 
-function ControlFlow({ flow, devices }: { flow: Flow; devices: OutputDevice[] }) {
+function ControlFlow({ flow, devices, sensors }: { flow: Flow; devices: OutputDevice[]; sensors: SensorDeviceWithStatus[] }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const unit = useFermentTempUnit();
@@ -260,6 +265,17 @@ function ControlFlow({ flow, devices }: { flow: Flow; devices: OutputDevice[] })
       const cfg = n.data.config as { outputDeviceId: number; mode: "heat" | "cool" };
       return { id: n.id, ...cfg, state: status!.nodes[n.id]!, device: devices.find((d) => d.id === cfg.outputDeviceId) };
     });
+
+  // The source device's other probes (say, the room beside the wort), for context.
+  const source = flowSource(flow);
+  const sourceDevice = source?.kind === "shelly" ? devices.find((d) => d.id === source.outputDeviceId) : undefined;
+  const otherProbes = (sourceDevice?.state.probes ?? [])
+    .filter((p) => (source?.kind === "shelly" && source.probeId != null ? p.id !== source.probeId : !p.isControl))
+    .map((p) => ({
+      id: p.id,
+      name: sensors.find((s) => s.device.id === p.sensorDeviceId)?.device.deviceName ?? `Probe ${p.id}`,
+      tempC: p.tempC,
+    }));
 
   return (
     <li className="py-2 first:pt-0 last:pb-0">
@@ -293,6 +309,11 @@ function ControlFlow({ flow, devices }: { flow: Flow; devices: OutputDevice[] })
             <p className="text-sm text-foreground">
               <span className="text-lg font-semibold tabular-nums">{formatTemp(status.tempC, unit)}</span>
               <span className="text-muted-foreground"> · target {formatTemp(active[0].state.targetC, unit)}</span>
+            </p>
+          )}
+          {otherProbes.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {otherProbes.map((p) => `${p.name} ${p.tempC != null ? formatTemp(p.tempC, unit) : "no reading"}`).join(" · ")}
             </p>
           )}
           {active.map((t) => (

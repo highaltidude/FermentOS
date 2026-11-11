@@ -11,6 +11,11 @@
 //   curl 'localhost:8081/sim?probe=off'       # unplug the probe
 //   curl 'localhost:8081/sim'                 # show simulator state
 //
+// PROBES=2 (or 3) adds more DS18B20s: add-on slots 1 and 2 on Gen1,
+// temperature:201 and :202 on The Pill. Drive them with temp2=, probe2=off, …
+// An unplugged extra probe on The Pill stays listed but reads nothing, as a
+// configured component does on a real device.
+//
 // With GEN=2 it is instead The Pill by Shelly, speaking the Gen2+ RPC API:
 //
 //   GEN=2 PILL_MODE=onewire node scripts/shelly-sim.ts   # DS18B20 probe, no relay
@@ -28,6 +33,7 @@ const user = process.env.SHELLY_USER ?? "";
 const pass = process.env.SHELLY_PASS ?? "";
 const gen = Number(process.env.GEN ?? 1);
 const pillMode = process.env.PILL_MODE ?? "onewire";
+const probeCount = Math.min(3, Math.max(1, Number(process.env.PROBES ?? 1)));
 
 // Gen2+ (The Pill): two SSR channels in "ssr" mode, a probe in "onewire" mode.
 const realm = "shellypill-a0b1c2d3e4f5";
@@ -51,6 +57,8 @@ const state = {
   ison: false,
   timerEndsAt: null as number | null,
   tempC: 20 as number | null,
+  /** Probes 2 and up, in order. */
+  extraTemps: Array.from({ length: probeCount - 1 }, (_, i) => 16 - i * 2) as (number | null)[],
   defaultState: "last",
   startedAt: Date.now(),
 };
@@ -98,6 +106,11 @@ createServer((req, res) => {
     const temp = url.searchParams.get("temp");
     if (temp != null) state.tempC = Number(temp);
     if (url.searchParams.get("probe") === "off") state.tempC = null;
+    state.extraTemps.forEach((_, i) => {
+      const t = url.searchParams.get(`temp${i + 2}`);
+      if (t != null) state.extraTemps[i] = Number(t);
+      if (url.searchParams.get(`probe${i + 2}`) === "off") state.extraTemps[i] = null;
+    });
     return send(200, state);
   }
 
@@ -135,8 +148,15 @@ createServer((req, res) => {
         return send(200, body);
       }
       case "/rpc/Shelly.GetComponents": {
-        const components = pillMode === "onewire" && state.tempC != null
-          ? [{ key: "temperature:200", status: { id: 200, tC: state.tempC, tF: state.tempC * 9 / 5 + 32 } }]
+        const probe = (id: number, tC: number | null) => ({
+          key: `temperature:${id}`,
+          status: tC == null ? { id, tC: null, tF: null, errors: ["read"] } : { id, tC, tF: tC * 9 / 5 + 32 },
+        });
+        const components = pillMode === "onewire"
+          ? [
+              ...(state.tempC != null ? [probe(200, state.tempC)] : []),
+              ...state.extraTemps.map((t, i) => probe(201 + i, t)),
+            ]
           : [];
         return send(200, { components, cfg_rev: 1, offset: 0, total: components.length });
       }
@@ -181,7 +201,12 @@ createServer((req, res) => {
       wifi_sta: { connected: true, ssid: "sim", ip: "127.0.0.1", rssi: -58 },
       relays: [relayBody()],
       ext_sensors: { temperature_unit: "C" },
-      ext_temperature: state.tempC == null ? {} : { "0": { hwID: "28ff000000000000", tC: state.tempC, tF: state.tempC * 9 / 5 + 32 } },
+      // The add-on leaves an unplugged slot out.
+      ext_temperature: Object.fromEntries(
+        [state.tempC, ...state.extraTemps]
+          .map((tC, slot) => [String(slot), tC == null ? null : { hwID: `28ff00000000000${slot}`, tC, tF: tC * 9 / 5 + 32 }] as const)
+          .filter(([, v]) => v != null),
+      ),
       uptime: Math.round((Date.now() - state.startedAt) / 1000),
     });
   }

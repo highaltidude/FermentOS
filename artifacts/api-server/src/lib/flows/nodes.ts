@@ -27,7 +27,8 @@ export type BrewStatus = (typeof BREW_STATUSES)[number];
 
 export type TempSource =
   | { kind: "sensor"; sensorDeviceId: number }
-  | { kind: "shelly"; outputDeviceId: number };
+  /** A Shelly's probe, read live. Without probeId, whichever probe is the device's control probe. */
+  | { kind: "shelly"; outputDeviceId: number; probeId?: number };
 
 export type ScheduleConfig = { cron: string };
 export type TemperatureTriggerConfig = { source: TempSource };
@@ -107,7 +108,9 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
         return { ok: true, value: { source: { kind: "sensor", sensorDeviceId: s.sensorDeviceId } } };
       }
       if (isObj(s) && s.kind === "shelly" && isId(s.outputDeviceId)) {
-        return { ok: true, value: { source: { kind: "shelly", outputDeviceId: s.outputDeviceId } } };
+        if (s.probeId != null && !(Number.isInteger(s.probeId) && (s.probeId as number) >= 0)) return fail("Choose a temperature source");
+        const probe = s.probeId != null ? { probeId: s.probeId as number } : {};
+        return { ok: true, value: { source: { kind: "shelly", outputDeviceId: s.outputDeviceId, ...probe } } };
       }
       return fail("Choose a temperature source");
     }

@@ -2439,7 +2439,11 @@ components:
         probeSensorDeviceId:
           type: integer
           nullable: true
-          description: Sensor device that records the add-on probe's temperature, once one has been seen
+          description: Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes
+        controlProbeId:
+          type: integer
+          nullable: true
+          description: The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that
         lastSeenAt:
           type: string
           format: date-time
@@ -2457,7 +2461,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, deviceType, model, name, host, channel, username, hasPassword, enabled, probeSensorDeviceId, lastSeenAt, state, controlledBy, createdAt, updatedAt]
+      required: [id, deviceType, model, name, host, channel, username, hasPassword, enabled, probeSensorDeviceId, controlProbeId, lastSeenAt, state, controlledBy, createdAt, updatedAt]
 
     OutputDeviceLiveState:
       type: object
@@ -2473,10 +2477,10 @@ components:
         tempC:
           type: number
           nullable: true
-          description: Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.
+          description: The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.
         probes:
           type: array
-          description: Every DS18B20 the device reports, in its own order; the first is tempC
+          description: Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from
           items:
             $ref: "#/components/schemas/OutputDeviceProbe"
         rssi:
@@ -2514,7 +2518,14 @@ components:
           type: number
           nullable: true
           description: Null while the probe reports an error or has lost contact
-      required: [id, tempC]
+        sensorDeviceId:
+          type: integer
+          nullable: true
+          description: Sensor device this probe's readings are logged to; null until it has read once
+        isControl:
+          type: boolean
+          description: True for the probe flows control on
+      required: [id, tempC, sensorDeviceId, isControl]
 
     CreateOutputDeviceBody:
       type: object
@@ -2556,6 +2567,11 @@ components:
           nullable: true
         enabled:
           type: boolean
+        controlProbeId:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: The probe (state.probes id) flows control on. Null goes back to the lowest-numbered one
 
     ProbeOutputDeviceBody:
       type: object

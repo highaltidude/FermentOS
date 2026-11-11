@@ -6,6 +6,8 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  # To check which referenced issues are still open.
+  issues: read
 
 jobs:
   promote:
@@ -31,6 +33,29 @@ jobs:
           BODY="Commits being promoted from beta to main:
 
           $COMMITS"
+
+          # Fix commits carry a "Fixes #N" trailer. GitHub only acts on it
+          # once the commit reaches main, so list the open issues here: they
+          # show under the PR's Development sidebar and close when it merges.
+          RESOLVES=""
+          for N in $(git log origin/main..origin/beta --format=%B \
+                       | grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+' \
+                       | grep -oE '[0-9]+$' | sort -un); do
+            if ! OPEN="$(gh api "repos/$GITHUB_REPOSITORY/issues/$N" \
+                           --jq 'select(.pull_request == null and .state == "open") | .number' 2>/dev/null)"; then
+              echo "::warning::Couldn't look up #$N, referenced by a promoted commit; skipping it."
+              continue
+            fi
+            if [ -n "$OPEN" ]; then RESOLVES="${RESOLVES}Closes #${OPEN}"$'\n'; fi
+          done
+          if [ -n "$RESOLVES" ]; then
+            BODY="$BODY
+
+          Issues this promotion resolves (closed when merged):
+
+          $RESOLVES"
+            echo "Resolves:"; printf '%s' "$RESOLVES"
+          fi
 
           EXISTING="$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head beta --json number --jq '.[0].number // empty')"
           if [ -n "$EXISTING" ]; then

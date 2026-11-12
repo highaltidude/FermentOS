@@ -216,6 +216,14 @@ export function NodeInspector({ id, type, config, onChange, onDelete, kind, unit
               </div>
             )}
           </div>
+          <div>
+            <label className={label}>Re-arm margin °{unit}</label>
+            <NumberField value={config.rearmC ?? 0} onChange={(v) => set({ rearmC: v ?? 0 })} {...delta} min={0} className="w-28" />
+            <p className={hint}>
+              Once this step passes, it keeps passing until the temperature moves back past the line by this much, so a reading hovering on
+              the line doesn't trigger again and again. 0 = none.
+            </p>
+          </div>
         </>
       );
       break;
@@ -383,13 +391,22 @@ export function NodeInspector({ id, type, config, onChange, onDelete, kind, unit
     }
     case "action.notify":
       fields = (
-        <div>
-          <label className={label}>Message</label>
-          <Textarea value={String(config.message ?? "")} onChange={(e) => set({ message: e.target.value })} rows={3} className="text-sm" maxLength={500} />
-          <p className={hint}>
-            <code>{"{flow}"}</code> is replaced by the flow's name and <code>{"{temp}"}</code> by the current temperature. Sent each time this step is newly reached.
-          </p>
-        </div>
+        <>
+          <div>
+            <label className={label}>Message</label>
+            <Textarea value={String(config.message ?? "")} onChange={(e) => set({ message: e.target.value })} rows={3} className="text-sm" maxLength={500} />
+            <p className={hint}>
+              <code>{"{flow}"}</code> is replaced by the flow's name and <code>{"{temp}"}</code> by the current temperature. Sent each time this step is newly reached.
+            </p>
+          </div>
+          {kind === "temperature" && (
+            <div>
+              <label className={label}>Remind every (minutes)</label>
+              <NumberField value={config.repeatMinutes} onChange={(v) => set({ repeatMinutes: v })} step="1" min={5} max={1440} className="w-28" />
+              <p className={hint}>Sends the message again at this interval for as long as the step stays reached. Leave blank to send it once.</p>
+            </div>
+          )}
+        </>
       );
       break;
     case "action.delay":

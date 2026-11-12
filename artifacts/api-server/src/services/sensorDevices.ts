@@ -47,6 +47,17 @@ export async function closeActiveAssignment(deviceId: number): Promise<void> {
     );
 }
 
+/**
+ * Put `toId` on the brew `fromId` is on, taking `fromId` off it. Does nothing
+ * when `fromId` isn't on a brew or `toId` already is.
+ */
+export async function moveActiveAssignment(fromId: number, toId: number): Promise<void> {
+  const from = await getActiveAssignment(fromId);
+  if (!from || (await getActiveAssignment(toId))) return;
+  await closeActiveAssignment(fromId);
+  await db.insert(sensorDeviceBrewAssignmentsTable).values({ deviceId: toId, brewSessionId: from.brewSessionId });
+}
+
 export async function getBrewName(brewSessionId: number): Promise<string | null> {
   const [session] = await db
     .select({ recipeName: brewSessionsTable.recipeName })

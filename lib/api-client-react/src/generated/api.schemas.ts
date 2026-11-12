@@ -239,6 +239,13 @@ export interface OutputDeviceProbe {
    * @nullable
    */
   tempC: number | null;
+  /**
+   * Sensor device this probe's readings are logged to; null until it has read once
+   * @nullable
+   */
+  sensorDeviceId: number | null;
+  /** True for the probe flows control on */
+  isControl: boolean;
 }
 
 export interface OutputDeviceLiveState {
@@ -248,11 +255,11 @@ export interface OutputDeviceLiveState {
   /** False for a probe-only device, such as The Pill in OneWire mode. Kept current by polling. */
   hasRelay: boolean;
   /**
-   * Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.
+   * The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.
    * @nullable
    */
   tempC: number | null;
-  /** Every DS18B20 the device reports, in its own order; the first is tempC */
+  /** Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from */
   probes: OutputDeviceProbe[];
   /** @nullable */
   rssi: number | null;
@@ -298,10 +305,15 @@ export interface OutputDevice {
   hasPassword: boolean;
   enabled: boolean;
   /**
-   * Sensor device that records the add-on probe's temperature, once one has been seen
+   * Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes
    * @nullable
    */
   probeSensorDeviceId: number | null;
+  /**
+   * The probe (state.probes id) flows control on. Null means the lowest-numbered probe
+   * @nullable
+   */
+  controlProbeId: number | null;
   /** @nullable */
   lastSeenAt: string | null;
   state: OutputDeviceLiveState;
@@ -336,6 +348,12 @@ export interface UpdateOutputDeviceBody {
   /** @nullable */
   password?: string | null;
   enabled?: boolean;
+  /**
+   * The probe (state.probes id) flows control on; null for the lowest-numbered one
+   * @minimum 0
+   * @nullable
+   */
+  controlProbeId?: number | null;
 }
 
 export interface ProbeOutputDeviceBody {

@@ -168,25 +168,44 @@ const node = (id: string, type: FlowGraphNodeType, y: number, config: Record<str
 });
 const edge = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
 
-export type TempSourceChoice = { kind: "sensor"; sensorDeviceId: number } | { kind: "shelly"; outputDeviceId: number };
+/**
+ * Where a flow reads its temperature. A Shelly source without probeId follows
+ * whichever probe is the device's control probe.
+ */
+export type TempSourceChoice =
+  | { kind: "sensor"; sensorDeviceId: number }
+  | { kind: "shelly"; outputDeviceId: number; probeId?: number };
 
 export const sourceKey = (source: unknown): string => {
-  const s = source as Partial<{ kind: string; sensorDeviceId: number; outputDeviceId: number }> | null;
-  if (s?.kind === "shelly") return `shelly:${s.outputDeviceId}`;
+  const s = source as Partial<{ kind: string; sensorDeviceId: number; outputDeviceId: number; probeId: number }> | null;
+  if (s?.kind === "shelly") return s.probeId != null ? `shelly:${s.outputDeviceId}:${s.probeId}` : `shelly:${s.outputDeviceId}`;
   if (s?.kind === "sensor") return `sensor:${s.sensorDeviceId}`;
   return "";
 };
 
+/** The output device and probe a Shelly probe sensor's key ("shelly:3:200", or "shelly:3" from before per-probe sensors) names. */
+export function parseProbeDeviceKey(key: string): { outputDeviceId: number; probeId: number | null } | null {
+  const m = /^shelly:(\d+)(?::(\d+))?$/.exec(key);
+  return m ? { outputDeviceId: Number(m[1]), probeId: m[2] != null ? Number(m[2]) : null } : null;
+}
+
 /**
- * Temperature sources for a picker: every sensor that reports temperature. A
- * Shelly probe reads its relay's live 10-second value rather than the logged
- * five-minute readings, so control is tighter.
+ * Temperature sources for a picker: every sensor that reports temperature, in
+ * the order given. A Shelly probe reads its device's live 10-second value
+ * rather than the logged five-minute readings, so control is tighter. The
+ * control probe is offered as the device itself, so it matches flows saved
+ * before a device could have more than one probe.
  */
 export function tempSourceOptions(sensors: SensorDeviceWithStatus[], devices: OutputDevice[]): { key: string; label: string; value: TempSourceChoice }[] {
   return sensors.map((s) => {
     const probe = s.device.deviceType === "shelly_probe";
-    const owner = probe ? devices.find((d) => d.probeSensorDeviceId === s.device.id) : undefined;
-    const value: TempSourceChoice = owner ? { kind: "shelly", outputDeviceId: owner.id } : { kind: "sensor", sensorDeviceId: s.device.id };
+    const parsed = probe ? parseProbeDeviceKey(s.device.deviceKey) : null;
+    const owner = parsed ? devices.find((d) => d.id === parsed.outputDeviceId) : undefined;
+    let value: TempSourceChoice = { kind: "sensor", sensorDeviceId: s.device.id };
+    if (owner && parsed) {
+      const isControl = parsed.probeId == null || owner.probeSensorDeviceId === s.device.id;
+      value = isControl ? { kind: "shelly", outputDeviceId: owner.id } : { kind: "shelly", outputDeviceId: owner.id, probeId: parsed.probeId! };
+    }
     return { key: sourceKey(value), label: `${s.device.deviceName} (${probe ? "Shelly probe" : "iSpindel"})`, value };
   });
 }

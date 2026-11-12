@@ -18,6 +18,7 @@ import { inTimeWindow, type FlowNode, type TempSource } from "../lib/flows/nodes
 import type { RelayTiming } from "../lib/flows/thermostat.js";
 import { setShellyRelay } from "./shelly.js";
 import { getLiveState, isReachable, noteRelayState } from "./devicePoller.js";
+import { probeDeviceKey } from "../lib/shellyProbes.js";
 import { getLatestReading, getActiveAssignment } from "./sensorDevices.js";
 import { sendNotification } from "./notifications.js";
 import { getConfigValue } from "./appConfig.js";
@@ -228,18 +229,38 @@ function standbyReason({ recipes }: ActiveFlow, brew: BrewContext | null): strin
   return null;
 }
 
+async function sensorIdByKey(deviceKey: string): Promise<number | null> {
+  const [sensor] = await db.select({ id: sensorDevicesTable.id }).from(sensorDevicesTable).where(eq(sensorDevicesTable.deviceKey, deviceKey));
+  return sensor?.id ?? null;
+}
+
+async function sensorName(id: number | null): Promise<string | null> {
+  if (id == null) return null;
+  const [sensor] = await db.select({ name: sensorDevicesTable.deviceName }).from(sensorDevicesTable).where(eq(sensorDevicesTable.id, id));
+  return sensor?.name ?? null;
+}
+
 async function readSource(source: TempSource, wantsBrew: boolean): Promise<SourceReading> {
   if (source.kind === "shelly") {
     const [device] = await db.select().from(outputDevicesTable).where(eq(outputDevicesTable.id, source.outputDeviceId));
     if (!device) return { tempC: null, stale: "The temperature source relay has been removed", brew: null };
-    const brew = wantsBrew ? await brewContextFor(device.probeSensorDeviceId) : null;
     const live = getLiveState(device.id);
+    // A flow on a particular probe follows that probe's brew; otherwise the control probe's.
+    const probe = source.probeId != null ? live?.probes.find((p) => p.id === source.probeId) : undefined;
+    const sensorId = source.probeId != null
+      ? (probe?.sensorDeviceId ?? await sensorIdByKey(probeDeviceKey(device.id, source.probeId)))
+      : device.probeSensorDeviceId;
+    const brew = wantsBrew ? await brewContextFor(sensorId) : null;
     if (!live || !isReachable(live)) return { tempC: null, stale: `Can't reach ${device.name} to read its probe`, brew };
-    if (live.tempC == null) return { tempC: null, stale: `${device.name} has no temperature probe reading`, brew };
+    const tempC = source.probeId != null ? (probe?.tempC ?? null) : live.tempC;
+    if (tempC == null) {
+      const which = source.probeId != null ? `${await sensorName(sensorId) ?? `${device.name}'s probe ${source.probeId}`} has` : `${device.name} has`;
+      return { tempC: null, stale: `${which} no temperature probe reading`, brew };
+    }
     if (!live.at || Date.now() - live.at.getTime() > SHELLY_TEMP_MAX_AGE_MS) {
       return { tempC: null, stale: `${device.name}'s probe reading is out of date`, brew };
     }
-    return { tempC: live.tempC, stale: null, brew };
+    return { tempC, stale: null, brew };
   }
 
   const [sensor] = await db.select().from(sensorDevicesTable).where(eq(sensorDevicesTable.id, source.sensorDeviceId));

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Plus, Trash2, Loader2, Power, ShieldCheck, Pencil, Check, X, XCircle, CheckCircle, AlertTriangle, ToggleRight, Timer, Thermometer } from "lucide-react";
 import {
   useListOutputDevices,
@@ -13,9 +13,12 @@ import {
   getListSensorDevicesQueryKey,
   useAssignSensorDevice,
   useUnassignSensorDevice,
+  useUpdateSensorDevice,
   useListBrewSessions,
   type OutputDevice,
   type ProbeOutputDeviceResult,
+  type OutputDeviceProbe,
+  type SensorDeviceWithStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -78,6 +81,66 @@ function describeProbe(p: ProbeOutputDeviceResult, unit: "C" | "F"): string {
     parts.push("No relay, so it will be added as a temperature probe only.");
   }
   return parts.join(" ");
+}
+
+/** One probe on a device with several: its name, reading, whether it's in control, and its brew. */
+function ProbeRow({ probe, index, sensor, unit, brewPicker, controlBusy, onControl, onRename }: {
+  probe: OutputDeviceProbe;
+  index: number;
+  sensor: SensorDeviceWithStatus | undefined;
+  unit: "C" | "F";
+  brewPicker: (sensor: SensorDeviceWithStatus, what: string) => ReactNode;
+  controlBusy: boolean;
+  onControl: () => void;
+  onRename: (sensorId: number, name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const label = sensor?.device.deviceName ?? `Probe ${index + 1}`;
+  return (
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <Thermometer className="w-3 h-3 text-muted-foreground shrink-0" />
+      {editing && sensor ? (
+        <form
+          className="flex items-center gap-1"
+          onSubmit={(e) => { e.preventDefault(); if (name.trim()) { onRename(sensor.device.id, name.trim()); setEditing(false); } }}
+        >
+          <Input value={name} onChange={(e) => setName(e.target.value)} className="h-6 w-36 text-xs" autoFocus aria-label="Probe name" />
+          <Button type="submit" size="sm" variant="ghost" className="h-6 px-1.5"><Check className="w-3 h-3" /></Button>
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5" onClick={() => setEditing(false)}><X className="w-3 h-3" /></Button>
+        </form>
+      ) : (
+        <span className="group flex items-center gap-1">
+          <span className="font-medium text-foreground">{label}</span>
+          {sensor && (
+            <button
+              type="button"
+              className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+              onClick={() => { setName(sensor.device.deviceName); setEditing(true); }}
+              title="Rename probe, e.g. Wort or Ambient"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+        </span>
+      )}
+      <span className="tabular-nums text-foreground">{probe.tempC != null ? formatTemp(probe.tempC, unit) : <span className="text-muted-foreground">no reading</span>}</span>
+      {probe.isControl ? (
+        <Badge variant="muted" title="Flows and brew temperature control read this probe">Controls flows</Badge>
+      ) : (
+        <button
+          type="button"
+          className="text-primary underline underline-offset-2 disabled:opacity-50"
+          disabled={controlBusy}
+          onClick={onControl}
+          title="Make flows and brew temperature control read this probe instead"
+        >
+          Use for control
+        </button>
+      )}
+      {sensor && brewPicker(sensor, "Probe")}
+    </li>
+  );
 }
 
 export function ShellyPanel() {
@@ -149,6 +212,38 @@ export function ShellyPanel() {
   const sensorMutation = { mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() }) } };
   const assignSensor = useAssignSensorDevice(sensorMutation);
   const unassignSensor = useUnassignSensorDevice(sensorMutation);
+  const renameSensor = useUpdateSensorDevice({
+    mutation: { ...sensorMutation.mutation, onError: onError("Could not rename probe") },
+  });
+
+  /** The brew a probe logs to, with a way to take it off; or a picker to put it on one. */
+  const brewPicker = (sensor: SensorDeviceWithStatus, what: string) =>
+    sensor.assignedBrewSessionId ? (
+      <span className="flex items-center gap-1.5">
+        <span className="text-xs text-green-600 dark:text-green-400 font-medium">{what} → {sensor.assignedBrewName ?? "Active brew"}</span>
+        <button
+          type="button"
+          onClick={() => unassignSensor.mutate({ id: sensor.device.id })}
+          className="text-muted-foreground hover:text-destructive transition-colors"
+          title={`Unassign ${what.toLowerCase()}`}
+        >
+          <XCircle className="w-3.5 h-3.5" />
+        </button>
+      </span>
+    ) : (
+      <select
+        className="text-xs bg-background border border-border rounded px-2 py-1 text-foreground max-w-[220px]"
+        value=""
+        onChange={(e) => {
+          if (e.target.value) assignSensor.mutate({ id: sensor.device.id, data: { brewSessionId: Number(e.target.value) } });
+        }}
+      >
+        <option value="">Log {what.toLowerCase()} to brew…</option>
+        {activeSessions.map((s) => (
+          <option key={s.id} value={s.id}>{s.recipeName}</option>
+        ))}
+      </select>
+    );
 
   const credentials = { username: form.username || null, password: form.password || null };
 
@@ -228,13 +323,6 @@ export function ShellyPanel() {
                           {formatTemp(d.state.tempC, unit)}
                         </span>
                       )}
-                      {d.state.probes.length > 1 && (
-                        <span className="text-xs text-muted-foreground">
-                          {d.state.probes.slice(1).map((p, i) => (
-                            <span key={p.id} className="mr-2">Probe {i + 2}: {p.tempC != null ? formatTemp(p.tempC, unit) : "no reading"}</span>
-                          ))}
-                        </span>
-                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                       {!d.state.reachable && d.state.lastError && <span className="text-destructive">{d.state.lastError}</span>}
@@ -303,36 +391,26 @@ export function ShellyPanel() {
                     </div>
                     )}
 
-                    {/* The add-on probe is a sensor device, so it can feed a brew's chart and alerts. */}
-                    {sensor && (
-                      <div className="flex items-center gap-2 mt-2">
-                        {sensor.assignedBrewSessionId ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-green-600 dark:text-green-400 font-medium">Probe → {sensor.assignedBrewName ?? "Active brew"}</span>
-                            <button
-                              type="button"
-                              onClick={() => unassignSensor.mutate({ id: sensor.device.id })}
-                              className="text-muted-foreground hover:text-destructive transition-colors"
-                              title="Unassign probe"
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <select
-                            className="text-xs bg-background border border-border rounded px-2 py-1 text-foreground max-w-[220px]"
-                            value=""
-                            onChange={(e) => {
-                              if (e.target.value) assignSensor.mutate({ id: sensor.device.id, data: { brewSessionId: Number(e.target.value) } });
-                            }}
-                          >
-                            <option value="">Log probe to brew…</option>
-                            {activeSessions.map((s) => (
-                              <option key={s.id} value={s.id}>{s.recipeName}</option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
+                    {/* Each probe is a sensor device, so it can feed a brew's chart and alerts. */}
+                    {/* A list once there is a choice to make: several probes, or a control probe gone missing. */}
+                    {d.state.probes.length > 1 || (d.state.probes.length === 1 && !d.state.probes[0]!.isControl) ? (
+                      <ul className="mt-2 space-y-1.5">
+                        {d.state.probes.map((p, i) => (
+                          <ProbeRow
+                            key={p.id}
+                            probe={p}
+                            index={i}
+                            sensor={sensors.find((s) => s.device.id === p.sensorDeviceId)}
+                            unit={unit}
+                            brewPicker={brewPicker}
+                            controlBusy={updateDevice.isPending}
+                            onControl={() => updateDevice.mutate({ id: d.id, data: { controlProbeId: p.id } })}
+                            onRename={(sensorId, deviceName) => renameSensor.mutate({ id: sensorId, data: { deviceName } })}
+                          />
+                        ))}
+                      </ul>
+                    ) : sensor && (
+                      <div className="flex items-center gap-2 mt-2">{brewPicker(sensor, "Probe")}</div>
                     )}
                   </div>
 

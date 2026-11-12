@@ -9,10 +9,11 @@ import {
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
 import { normaliseShellyHost, isPill, type ShellyInfo } from "../lib/shellyParse";
-import { probeShelly, getShellyStatus, getPillMode, setShellyRelay, applyShellySafeDefaults } from "../services/shelly";
-import { getLiveState, isReachable, noteRelayState, forgetDevice, pollNow } from "../services/devicePoller";
+import { probeShelly, getShellyStatus, getPillMode, setShellyRelay, applyShellySafeDefaults, checkShellyHost } from "../services/shelly";
+import { getLiveState, isReachable, noteRelayState, forgetDevice, pollNow, probeSensorsOf, forgetProbeSensors, noteControlProbe } from "../services/devicePoller";
+import { controlProbe, renamedProbeSensor } from "../lib/shellyProbes";
 import { relayOwners } from "../services/flowEngine";
-import { closeActiveAssignment } from "../services/sensorDevices";
+import { closeActiveAssignment, moveActiveAssignment } from "../services/sensorDevices";
 
 const router = Router();
 
@@ -25,23 +26,41 @@ function hasRelay(device: OutputDevice): boolean {
 
 const NO_RELAY = "This device has no relay. If it's The Pill, switch it to SSR mode in the Shelly app to use it as one.";
 
-/**
- * Why a device that should read a probe doesn't. Only The Pill in OneWire
- * mode is known to be meant as a probe; a relay without one is normal.
- */
-function probeHintFor(pillMode: string | null, probes: { tempC: number | null }[]): string | null {
-  if (pillMode !== "onewire") return null;
-  if (probes.length === 0) return "No DS18B20 found. Check the probe is plugged into The Pill and shows up in the Shelly app.";
-  if (probes[0]!.tempC == null) return "The probe isn't giving a reading. Check its connection.";
-  return null;
+type ApiProbe = { id: number; tempC: number | null; sensorDeviceId: number | null; isControl: boolean };
+
+/** Why a device's probes aren't all reading, or null when they are (or none is expected). */
+function probeHintFor(device: OutputDevice, pillMode: string | null, probes: ApiProbe[], names: Map<number, string>): string | null {
+  if (device.controlProbeId != null && !probes.some((p) => p.id === device.controlProbeId)) {
+    return "The probe chosen for control isn't connected, so flows reading this device have no temperature. Plug it back in or choose another.";
+  }
+  // Only The Pill in OneWire mode is known to be meant as a probe; a relay without one is normal.
+  if (probes.length === 0) {
+    return pillMode === "onewire" ? "No DS18B20 found. Check the probe is plugged into The Pill and shows up in the Shelly app." : null;
+  }
+  const silent = probes.filter((p) => p.tempC == null);
+  if (silent.length === 0) return null;
+  if (probes.length === 1) return "The probe isn't giving a reading. Check its connection.";
+  const label = (p: ApiProbe) => (p.sensorDeviceId != null ? names.get(p.sensorDeviceId) : undefined) ?? `Probe ${probes.indexOf(p) + 1}`;
+  return `${silent.map(label).join(", ")} ${silent.length === 1 ? "isn't" : "aren't"} giving a reading. Check the connection.`;
+}
+
+/** Names of every Shelly probe sensor, for hints. */
+async function probeSensorNames(): Promise<Map<number, string>> {
+  const rows = await db
+    .select({ id: sensorDevicesTable.id, name: sensorDevicesTable.deviceName })
+    .from(sensorDevicesTable)
+    .where(eq(sensorDevicesTable.deviceType, "shelly_probe"));
+  return new Map(rows.map((r) => [r.id, r.name]));
 }
 
 /** API shape: credentials reduced to hasPassword, live state merged in. */
-function toApi(device: OutputDevice) {
+function toApi(device: OutputDevice, names: Map<number, string>) {
   const { password, lastState, ...rest } = device;
   const live = getLiveState(device.id);
   const reachable = isReachable(live);
-  const probes = live?.at ? live.probes : (lastState?.probes ?? []);
+  const seen = live?.at ? live.probes : (lastState?.probes ?? []);
+  const control = controlProbe(seen, device.controlProbeId);
+  const probes: ApiProbe[] = seen.map((p) => ({ id: p.id, tempC: p.tempC, sensorDeviceId: p.sensorDeviceId ?? null, isControl: p.id === control?.id }));
   const pillMode = live?.at ? live.pillMode : (lastState?.pillMode ?? null);
   return {
     ...rest,
@@ -51,16 +70,20 @@ function toApi(device: OutputDevice) {
       reachable,
       ison: live?.ison ?? lastState?.ison ?? null,
       hasRelay: hasRelay(device),
-      tempC: live?.tempC ?? lastState?.tempC ?? null,
+      tempC: live?.at ? live.tempC : (lastState?.tempC ?? null),
       probes,
       rssi: live?.rssi ?? lastState?.rssi ?? null,
       uptimeSec: live?.uptimeSec ?? null,
       pillMode,
-      probeHint: reachable ? probeHintFor(pillMode, probes) : null,
+      probeHint: reachable ? probeHintFor(device, pillMode, probes, names) : null,
       updatedAt: live?.at?.toISOString() ?? device.lastSeenAt?.toISOString() ?? null,
       lastError: live?.lastError ?? null,
     },
   };
+}
+
+async function toApiOne(device: OutputDevice) {
+  return toApi(device, await probeSensorNames());
 }
 
 async function findDevice(id: number): Promise<OutputDevice | undefined> {
@@ -71,7 +94,8 @@ async function findDevice(id: number): Promise<OutputDevice | undefined> {
 // ── GET /devices ───────────────────────────────────────────────────────────
 router.get("/", async (_req, res) => {
   const devices = await db.select().from(outputDevicesTable).orderBy(outputDevicesTable.name);
-  res.json(devices.map(toApi));
+  const names = await probeSensorNames();
+  res.json(devices.map((d) => toApi(d, names)));
 });
 
 // ── POST /devices/probe ────────────────────────────────────────────────────
@@ -81,6 +105,8 @@ router.post("/probe", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
   const host = normaliseShellyHost(body.data.host);
   if (!host) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
+  const hostProblem = checkShellyHost(host);
+  if (hostProblem) return res.status(400).json({ error: hostProblem });
 
   const empty = {
     host, model: null, generation: null, isPill: false, pillMode: null, authRequired: false,
@@ -115,6 +141,8 @@ router.post("/", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "Invalid request body" });
   const host = normaliseShellyHost(body.data.host);
   if (!host) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
+  const hostProblem = checkShellyHost(host);
+  if (hostProblem) return res.status(400).json({ error: hostProblem });
   // Ask the device which API it speaks rather than trusting the client.
   const info = await probeShelly({ host });
   if (!info.ok) return res.status(400).json({ error: info.reason });
@@ -133,7 +161,7 @@ router.post("/", async (req, res) => {
     .returning();
   // Poll straight away so the list shows real state instead of "unreachable".
   await pollNow();
-  return res.status(201).json(toApi((await findDevice(device!.id)) ?? device!));
+  return res.status(201).json(await toApiOne((await findDevice(device!.id)) ?? device!));
 });
 
 // ── GET /devices/:id ───────────────────────────────────────────────────────
@@ -142,7 +170,7 @@ router.get("/:id", async (req, res) => {
   if (id === undefined) return;
   const device = await findDevice(id);
   if (!device) return res.status(404).json({ error: "Device not found" });
-  return res.json(toApi(device));
+  return res.json(await toApiOne(device));
 });
 
 // ── PATCH /devices/:id ─────────────────────────────────────────────────────
@@ -160,11 +188,17 @@ router.patch("/:id", async (req, res) => {
   if (rawHost !== undefined) {
     const normalised = normaliseShellyHost(rawHost);
     if (!normalised) return res.status(400).json({ error: "Enter an IP address or hostname, e.g. 192.168.1.40" });
+    const hostProblem = checkShellyHost(normalised);
+    if (hostProblem) return res.status(400).json({ error: hostProblem });
     host = normalised;
     // A new address may be a different device, possibly of another generation.
     const info = await probeShelly({ host });
     if (!info.ok) return res.status(400).json({ error: info.reason });
     detected = info.value;
+  }
+  if (rest.controlProbeId != null) {
+    const known = getLiveState(id)?.probes ?? before.lastState?.probes ?? [];
+    if (!known.some((p) => p.id === rest.controlProbeId)) return res.status(400).json({ error: "That probe isn't on this device" });
   }
 
   const [device] = await db
@@ -174,6 +208,8 @@ router.patch("/:id", async (req, res) => {
       ...(rest.name !== undefined && { name: rest.name.trim() }),
       ...(host !== undefined && { host }),
       ...(detected !== undefined && { deviceType: deviceTypeOf(detected), model: detected.type }),
+      // Another device may number its probes differently; pick the control probe afresh.
+      ...(host !== undefined && host !== before.host && rest.controlProbeId === undefined && { controlProbeId: null }),
       ...(username !== undefined && { username: username || null }),
       // Omitted keeps the stored password; null or "" clears it.
       ...(password !== undefined && { password: password || null }),
@@ -193,21 +229,37 @@ router.patch("/:id", async (req, res) => {
     const off = await setShellyRelay(before, false);
     if (!off.ok) req.log.warn({ deviceId: id, reason: off.reason }, "Could not switch the old relay off");
   }
-  if (disabled && device.probeSensorDeviceId != null) await closeActiveAssignment(device.probeSensorDeviceId);
+  if (disabled) {
+    for (const sensor of await probeSensorsOf(id)) await closeActiveAssignment(sensor.id);
+  }
 
-  // Keep the probe's sensor name in step, so brew charts show the new name.
-  if (rest.name !== undefined && device.probeSensorDeviceId != null) {
-    await db
-      .update(sensorDevicesTable)
-      .set({ deviceName: `${device.name} probe`, updatedAt: new Date() })
-      .where(eq(sensorDevicesTable.id, device.probeSensorDeviceId));
+  // Keep the probes' sensor names in step, so brew charts show the new name;
+  // a name the brewer gave a probe is left alone.
+  if (rest.name !== undefined && device.name !== before.name) {
+    for (const sensor of await probeSensorsOf(id)) {
+      const name = renamedProbeSensor(sensor.deviceName, before.name, device.name);
+      if (name == null) continue;
+      await db.update(sensorDevicesTable).set({ deviceName: name, updatedAt: new Date() }).where(eq(sensorDevicesTable.id, sensor.id));
+    }
+  }
+
+  // A new control probe takes over the old one's brew, so flows reading this
+  // device keep following that brew, and takes effect without waiting for a poll.
+  if (rest.controlProbeId !== undefined && rest.controlProbeId !== before.controlProbeId) {
+    const control = noteControlProbe(id, device.controlProbeId);
+    const sensorId = control?.sensorDeviceId ?? null;
+    if (sensorId != null && sensorId !== before.probeSensorDeviceId) {
+      if (before.probeSensorDeviceId != null) await moveActiveAssignment(before.probeSensorDeviceId, sensorId);
+      await db.update(outputDevicesTable).set({ probeSensorDeviceId: sensorId }).where(eq(outputDevicesTable.id, id));
+      device.probeSensorDeviceId = sensorId;
+    }
   }
 
   // A new address or credentials invalidates what we knew about the old one.
   if (host !== undefined || password !== undefined || username !== undefined || rest.channel !== undefined || rest.enabled === false) {
     forgetDevice(id);
   }
-  return res.json(toApi(device));
+  return res.json(await toApiOne(device));
 });
 
 // ── DELETE /devices/:id ────────────────────────────────────────────────────
@@ -226,10 +278,11 @@ router.delete("/:id", async (req, res) => {
         return res.status(502).json({ error: `Couldn't switch ${device.name} off: ${off.reason}` });
       }
     }
-    // Its probe stops reporting, so it comes off its brew; the history stays.
-    if (device.probeSensorDeviceId != null) await closeActiveAssignment(device.probeSensorDeviceId);
+    // Its probes stop reporting, so they come off their brews; the history stays.
+    for (const sensor of await probeSensorsOf(id)) await closeActiveAssignment(sensor.id);
     await db.delete(outputDevicesTable).where(eq(outputDevicesTable.id, id));
     forgetDevice(id);
+    forgetProbeSensors(id);
   }
   return res.status(204).end();
 });
@@ -251,7 +304,7 @@ router.post("/:id/relay", async (req, res) => {
   if (!result.ok) return res.status(502).json({ error: result.reason });
   noteRelayState(id, result.value);
   req.log.info({ deviceId: id, on: result.value, durationSec: body.data.durationSec }, "Relay switched by hand");
-  return res.json(toApi(device));
+  return res.json(await toApiOne(device));
 });
 
 // ── POST /devices/:id/safe-defaults ────────────────────────────────────────
@@ -264,7 +317,7 @@ router.post("/:id/safe-defaults", async (req, res) => {
 
   const result = await applyShellySafeDefaults(device);
   if (!result.ok) return res.status(502).json({ error: result.reason });
-  return res.json(toApi(device));
+  return res.json(await toApiOne(device));
 });
 
 export default router;

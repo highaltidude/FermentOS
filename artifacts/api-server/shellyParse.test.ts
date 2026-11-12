@@ -9,6 +9,8 @@ import {
   parseComponentsPage,
   dynamicComponentsPath,
   normaliseShellyHost,
+  shellyHostProblem,
+  isBlockedAddress,
   relayPath,
   switchSetPath,
   parseDigestChallenge,
@@ -192,12 +194,53 @@ describe("normaliseShellyHost", () => {
     expect(normaliseShellyHost("  http://192.168.1.40/  ")).toBe("192.168.1.40");
     expect(normaliseShellyHost("Shelly1-A4CF12.local")).toBe("shelly1-a4cf12.local");
     expect(normaliseShellyHost("192.168.1.40:8081")).toBe("192.168.1.40:8081");
+    expect(normaliseShellyHost("192.168.1.40:80")).toBe("192.168.1.40");
+    expect(normaliseShellyHost("http://Shelly1.local:80/")).toBe("shelly1.local");
   });
 
   it("rejects empty or odd input", () => {
     expect(normaliseShellyHost("")).toBeNull();
     expect(normaliseShellyHost("user@host")).toBeNull();
     expect(normaliseShellyHost("a b")).toBeNull();
+  });
+});
+
+describe("shellyHostProblem", () => {
+  it("allows a device on the LAN, by address or name, on port 80", () => {
+    for (const host of ["192.168.1.40", "shelly1-a4cf12.local", "10.0.0.5", "fermenter.lan"]) {
+      expect(shellyHostProblem(host, false)).toBeNull();
+    }
+  });
+
+  it("refuses another port (#226)", () => {
+    expect(shellyHostProblem("192.168.1.40:8081", false)).toMatch(/port 80/);
+    expect(shellyHostProblem("192.168.1.40:5432", false)).toMatch(/port 80/);
+  });
+
+  it("refuses the FermentOS machine itself and reserved addresses (#226)", () => {
+    for (const host of ["localhost", "foo.localhost", "127.0.0.1", "127.1.2.3", "169.254.169.254", "0.0.0.0"]) {
+      expect(shellyHostProblem(host, false)).toMatch(/FermentOS machine itself/);
+    }
+  });
+
+  it("allows anything for the development simulator", () => {
+    for (const host of ["localhost:8081", "127.0.0.1", "169.254.169.254", "pill:8081"]) {
+      expect(shellyHostProblem(host, true)).toBeNull();
+    }
+  });
+});
+
+describe("isBlockedAddress", () => {
+  it("blocks loopback, link-local and unspecified addresses, IPv4 and IPv6", () => {
+    for (const ip of ["127.0.0.1", "127.255.0.9", "169.254.1.1", "0.0.0.0", "::1", "::", "0:0:0:0:0:0:0:1", "fe80::1", "FEBF::1", "::ffff:127.0.0.1", "::ffff:169.254.169.254"]) {
+      expect(isBlockedAddress(ip), ip).toBe(true);
+    }
+  });
+
+  it("lets LAN and other addresses through", () => {
+    for (const ip of ["192.168.1.40", "10.0.0.1", "172.16.0.2", "169.255.0.1", "fd00::1", "2001:db8::1", "fec0::1", "fe8::1", "::ffff:192.168.1.40"]) {
+      expect(isBlockedAddress(ip), ip).toBe(false);
+    }
   });
 });
 

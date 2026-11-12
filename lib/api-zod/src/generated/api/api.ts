@@ -5502,7 +5502,14 @@ export const ListOutputDevicesResponseItem = zod.object({
     .int()
     .nullable()
     .describe(
-      "Sensor device that records the add-on probe's temperature, once one has been seen",
+      "Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes",
+    ),
+  controlProbeId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -5517,7 +5524,7 @@ export const ListOutputDevicesResponseItem = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+        "The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.",
       ),
     probes: zod
       .array(
@@ -5534,10 +5541,20 @@ export const ListOutputDevicesResponseItem = zod.object({
             .describe(
               "Null while the probe reports an error or has lost contact",
             ),
+          sensorDeviceId: zod
+            .number()
+            .int()
+            .nullable()
+            .describe(
+              "Sensor device this probe's readings are logged to; null until it has read once",
+            ),
+          isControl: zod
+            .boolean()
+            .describe("True for the probe flows control on"),
         }),
       )
       .describe(
-        "Every DS18B20 the device reports, in its own order; the first is tempC",
+        "Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from",
       ),
     rssi: zod.number().int().nullable(),
     uptimeSec: zod
@@ -5622,7 +5639,14 @@ export const CreateOutputDeviceResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "Sensor device that records the add-on probe's temperature, once one has been seen",
+      "Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes",
+    ),
+  controlProbeId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -5637,7 +5661,7 @@ export const CreateOutputDeviceResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+        "The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.",
       ),
     probes: zod
       .array(
@@ -5654,10 +5678,20 @@ export const CreateOutputDeviceResponse = zod.object({
             .describe(
               "Null while the probe reports an error or has lost contact",
             ),
+          sensorDeviceId: zod
+            .number()
+            .int()
+            .nullable()
+            .describe(
+              "Sensor device this probe's readings are logged to; null until it has read once",
+            ),
+          isControl: zod
+            .boolean()
+            .describe("True for the probe flows control on"),
         }),
       )
       .describe(
-        "Every DS18B20 the device reports, in its own order; the first is tempC",
+        "Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from",
       ),
     rssi: zod.number().int().nullable(),
     uptimeSec: zod
@@ -5771,7 +5805,14 @@ export const GetOutputDeviceResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "Sensor device that records the add-on probe's temperature, once one has been seen",
+      "Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes",
+    ),
+  controlProbeId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -5786,7 +5827,7 @@ export const GetOutputDeviceResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+        "The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.",
       ),
     probes: zod
       .array(
@@ -5803,10 +5844,20 @@ export const GetOutputDeviceResponse = zod.object({
             .describe(
               "Null while the probe reports an error or has lost contact",
             ),
+          sensorDeviceId: zod
+            .number()
+            .int()
+            .nullable()
+            .describe(
+              "Sensor device this probe's readings are logged to; null until it has read once",
+            ),
+          isControl: zod
+            .boolean()
+            .describe("True for the probe flows control on"),
         }),
       )
       .describe(
-        "Every DS18B20 the device reports, in its own order; the first is tempC",
+        "Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from",
       ),
     rssi: zod.number().int().nullable(),
     uptimeSec: zod
@@ -5859,6 +5910,8 @@ export const UpdateOutputDeviceParams = zod.object({
 
 export const updateOutputDeviceBodyChannelMin = 0;
 
+export const updateOutputDeviceBodyControlProbeIdMin = 0;
+
 export const UpdateOutputDeviceBody = zod.object({
   name: zod.string().min(1).optional(),
   host: zod.string().min(1).optional(),
@@ -5866,6 +5919,14 @@ export const UpdateOutputDeviceBody = zod.object({
   username: zod.string().nullish(),
   password: zod.string().nullish(),
   enabled: zod.boolean().optional(),
+  controlProbeId: zod
+    .number()
+    .int()
+    .min(updateOutputDeviceBodyControlProbeIdMin)
+    .nullish()
+    .describe(
+      "The probe (state.probes id) flows control on; null for the lowest-numbered one",
+    ),
 });
 
 export const UpdateOutputDeviceResponse = zod.object({
@@ -5892,7 +5953,14 @@ export const UpdateOutputDeviceResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "Sensor device that records the add-on probe's temperature, once one has been seen",
+      "Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes",
+    ),
+  controlProbeId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -5907,7 +5975,7 @@ export const UpdateOutputDeviceResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+        "The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.",
       ),
     probes: zod
       .array(
@@ -5924,10 +5992,20 @@ export const UpdateOutputDeviceResponse = zod.object({
             .describe(
               "Null while the probe reports an error or has lost contact",
             ),
+          sensorDeviceId: zod
+            .number()
+            .int()
+            .nullable()
+            .describe(
+              "Sensor device this probe's readings are logged to; null until it has read once",
+            ),
+          isControl: zod
+            .boolean()
+            .describe("True for the probe flows control on"),
         }),
       )
       .describe(
-        "Every DS18B20 the device reports, in its own order; the first is tempC",
+        "Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from",
       ),
     rssi: zod.number().int().nullable(),
     uptimeSec: zod
@@ -6033,7 +6111,14 @@ export const SetOutputDeviceRelayResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "Sensor device that records the add-on probe's temperature, once one has been seen",
+      "Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes",
+    ),
+  controlProbeId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -6048,7 +6133,7 @@ export const SetOutputDeviceRelayResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+        "The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.",
       ),
     probes: zod
       .array(
@@ -6065,10 +6150,20 @@ export const SetOutputDeviceRelayResponse = zod.object({
             .describe(
               "Null while the probe reports an error or has lost contact",
             ),
+          sensorDeviceId: zod
+            .number()
+            .int()
+            .nullable()
+            .describe(
+              "Sensor device this probe's readings are logged to; null until it has read once",
+            ),
+          isControl: zod
+            .boolean()
+            .describe("True for the probe flows control on"),
         }),
       )
       .describe(
-        "Every DS18B20 the device reports, in its own order; the first is tempC",
+        "Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from",
       ),
     rssi: zod.number().int().nullable(),
     uptimeSec: zod
@@ -6143,7 +6238,14 @@ export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "Sensor device that records the add-on probe's temperature, once one has been seen",
+      "Sensor device that records the control probe's temperature, once one has been seen. Every probe has its own sensor device; see state.probes",
+    ),
+  controlProbeId: zod
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -6158,7 +6260,7 @@ export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
       .number()
       .nullable()
       .describe(
-        "Probe temperature in °C (Gen1 add-on or the first DS18B20 on a Gen2+ device), null when no probe is fitted. This is the probe flows control on.",
+        "The control probe's temperature in °C (controlProbeId, else the lowest-numbered probe), null when it isn't reading. This is the probe flows control on.",
       ),
     probes: zod
       .array(
@@ -6175,10 +6277,20 @@ export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
             .describe(
               "Null while the probe reports an error or has lost contact",
             ),
+          sensorDeviceId: zod
+            .number()
+            .int()
+            .nullable()
+            .describe(
+              "Sensor device this probe's readings are logged to; null until it has read once",
+            ),
+          isControl: zod
+            .boolean()
+            .describe("True for the probe flows control on"),
         }),
       )
       .describe(
-        "Every DS18B20 the device reports, in its own order; the first is tempC",
+        "Every DS18B20 the device reports, lowest id first; isControl marks the one tempC is from",
       ),
     rssi: zod.number().int().nullable(),
     uptimeSec: zod

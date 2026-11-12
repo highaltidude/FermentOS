@@ -1,5 +1,9 @@
 import { randomBytes } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import {
+  BLOCKED_HOST_MESSAGE,
+  isBlockedAddress,
+  shellyHostProblem,
   parseShellyInfo,
   parseShellyStatus,
   parseShelly2Status,
@@ -45,9 +49,38 @@ const GEN2_USER = "admin";
 
 const isGen2 = (target: ShellyTarget) => target.deviceType === "shelly_gen2";
 
+/** Lifts the host rules so the development simulator (localhost:8081) can be added. */
+const ALLOW_ANY_HOST = process.env.SHELLY_ALLOW_ANY_HOST === "true";
+
+/** Why FermentOS won't talk to this host, or null when it will. See shellyHostProblem. */
+export function checkShellyHost(host: string): string | null {
+  return shellyHostProblem(host, ALLOW_ANY_HOST);
+}
+
+/**
+ * The host rules, applied to every request so a device saved before them is
+ * refused too, and to what a hostname resolves to, so a LAN DNS name pointing
+ * at 127.0.0.1 can't get round them. A DNS answer could still change between
+ * this lookup and the request; that needs a hostile DNS server on the user's
+ * own network, so the connection isn't pinned to the checked address.
+ */
+async function hostRefusal(host: string): Promise<string | null> {
+  const problem = checkShellyHost(host);
+  if (problem || ALLOW_ANY_HOST) return problem;
+  const name = host.replace(/:\d+$/, "");
+  try {
+    const addresses = await lookup(name, { all: true });
+    if (addresses.some((a) => isBlockedAddress(a.address))) return BLOCKED_HOST_MESSAGE;
+  } catch {
+    // Unresolvable: the request itself fails with "Could not reach device".
+  }
+  return null;
+}
+
 async function send(url: string, headers: Record<string, string>): Promise<Response | string> {
   try {
-    return await fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    // A Shelly never redirects; following one could lead anywhere.
+    return await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (err) {
     const name = (err as Error)?.name;
     return name === "TimeoutError" || name === "AbortError" ? "Device did not respond" : "Could not reach device";
@@ -55,6 +88,8 @@ async function send(url: string, headers: Record<string, string>): Promise<Respo
 }
 
 async function shellyGet(target: ShellyTarget, path: string): Promise<ShellyResult<unknown>> {
+  const refusal = await hostRefusal(target.host);
+  if (refusal) return { ok: false, reason: refusal };
   const url = `http://${target.host}${path}`;
   const headers: Record<string, string> = {};
   if (!isGen2(target) && (target.username || target.password)) {
@@ -80,6 +115,7 @@ async function shellyGet(target: ShellyTarget, path: string): Promise<ShellyResu
   }
 
   if (typeof res === "string") return { ok: false, reason: res };
+  if (res.status >= 300 && res.status < 400) return { ok: false, reason: "Device answered with a redirect, which FermentOS doesn't follow" };
   if (res.status === 401) return { ok: false, reason: "Device rejected the username or password" };
   if (!res.ok) {
     // Gen2+ explains a refused call as {code, message}.

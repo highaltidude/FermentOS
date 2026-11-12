@@ -13,6 +13,7 @@ export const fromUnit = (v: number, unit: TempUnit) => (unit === "F" ? (v - 32) 
 export const deltaToUnit = (c: number, unit: TempUnit) => (unit === "F" ? c * 9 / 5 : c);
 export const deltaFromUnit = (v: number, unit: TempUnit) => (unit === "F" ? v * 5 / 9 : v);
 export const formatTemp = (c: number, unit: TempUnit) => `${toUnit(c, unit).toFixed(1)}°${unit}`;
+export const formatDelta = (c: number, unit: TempUnit) => `${deltaToUnit(c, unit).toFixed(1)}°${unit}`;
 
 export const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -103,9 +104,12 @@ export function describeNode(node: FlowGraphNode, l: Lookups): string {
       return `Runs ${describeCron(String(c.cron ?? ""))}`;
     case "trigger.temperature":
       return `Reads ${sourceName(c.source, l)}`;
-    case "condition.compare":
-      if (c.op === "between") return `If between ${t(c.valueC)} and ${t(c.value2C)}`;
-      return `If ${c.op === "lt" ? "below" : "above"} ${t(c.valueC)}`;
+    case "condition.compare": {
+      const rearm = Number(c.rearmC ?? 0);
+      const band = rearm > 0 ? `, re-arms ${formatDelta(rearm, l.unit)} back` : "";
+      if (c.op === "between") return `If between ${t(c.valueC)} and ${t(c.value2C)}${band}`;
+      return `If ${c.op === "lt" ? "below" : "above"} ${t(c.valueC)}${band}`;
+    }
     case "condition.timeWindow": {
       const days = Array.isArray(c.days) && c.days.length > 0 && c.days.length < 7
         ? ` on ${c.days.map((d: number) => DAY_LABELS[d]).join(", ")}` : "";
@@ -129,7 +133,7 @@ export function describeNode(node: FlowGraphNode, l: Lookups): string {
       if (c.action === "onFor") return `Turn ${relayName(c.outputDeviceId, l)} on for ${c.minutes} min`;
       return `Turn ${relayName(c.outputDeviceId, l)} ${c.action === "off" ? "off" : "on"}`;
     case "action.notify":
-      return `Notify: "${c.message}"`;
+      return `Notify: "${c.message}"${c.repeatMinutes ? `, every ${c.repeatMinutes} min while it lasts` : ""}`;
     case "action.delay":
       return `Wait ${c.minutes} min`;
   }
@@ -355,6 +359,30 @@ export function timedRelayTemplate(opts: { schedule: ScheduleChoice; relayId: nu
   return { version: 1, nodes, edges };
 }
 
+/**
+ * Alert-only flow: notify when a sensor goes above (or below) a temperature,
+ * re-arming once it has moved back by `rearmC`, and reminding every
+ * `repeatMinutes` (null = once) while it stays there. No relays.
+ */
+export function temperatureAlertTemplate(opts: {
+  source: TempSourceChoice;
+  op: "gt" | "lt";
+  thresholdC: number;
+  rearmC: number;
+  repeatMinutes: number | null;
+  message: string;
+}): FlowGraph {
+  return {
+    version: 1,
+    nodes: [
+      node("trigger", "trigger.temperature", 0, { source: opts.source }),
+      node("compare", "condition.compare", 150, { op: opts.op, valueC: opts.thresholdC, value2C: null, rearmC: opts.rearmC }),
+      node("notify", "action.notify", 300, { message: opts.message, repeatMinutes: opts.repeatMinutes }),
+    ],
+    edges: [edge("trigger", "compare"), edge("compare", "notify")],
+  };
+}
+
 // ── Editor ─────────────────────────────────────────────────────────────────
 
 export type NodeCategory = "trigger" | "condition" | "control" | "action";
@@ -411,7 +439,7 @@ export function defaultConfig(type: FlowGraphNodeType, unit: TempUnit, kind: Gra
     case "trigger.temperature":
       return { source: null };
     case "condition.compare":
-      return { op: "gt", valueC: temp(22, 72), value2C: null };
+      return { op: "gt", valueC: temp(22, 72), value2C: null, rearmC: 0 };
     case "condition.timeWindow":
       return { from: "22:00", to: "06:00", days: [] };
     case "condition.brewStatus":
@@ -425,7 +453,7 @@ export function defaultConfig(type: FlowGraphNodeType, unit: TempUnit, kind: Gra
         ? { outputDeviceId: null, action: "onFor", minutes: 15 }
         : { outputDeviceId: null, action: "on", minutes: null };
     case "action.notify":
-      return { message: kind === "schedule" ? "{flow} ran" : "{flow}: now {temp}" };
+      return { message: kind === "schedule" ? "{flow} ran" : "{flow}: now {temp}", repeatMinutes: null };
     case "action.delay":
       return { minutes: 10 };
   }

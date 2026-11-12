@@ -13,7 +13,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { validateFlowGraph, type CompiledFlow, type FlowProblem } from "../lib/flows/graph.js";
-import { evaluateTemperatureTick, renderMessage, type BrewContext, type NodeState } from "../lib/flows/evaluate.js";
+import { evaluateTemperatureTick, notifyDue, renderMessage, type BrewContext, type NodeState } from "../lib/flows/evaluate.js";
 import { inTimeWindow, type FlowNode, type TempSource } from "../lib/flows/nodes.js";
 import type { RelayTiming } from "../lib/flows/thermostat.js";
 import { setShellyRelay } from "./shelly.js";
@@ -72,7 +72,8 @@ type ActiveFlow = { flow: Flow; compiled: CompiledFlow; recipes: { id: number; n
 const active = new Map<number, ActiveFlow>();
 const status = new Map<number, FlowLiveStatus>();
 const scheduleTasks = new Map<number, ScheduledTask>();
-const notifyActive = new Map<number, Set<string>>();
+/** Per flow, the notify steps currently reached and when each last sent (ms). */
+const notifyActive = new Map<number, Map<string, number>>();
 /** Relay state as FermentOS last set it, shared by every flow. */
 const relayTiming = new Map<number, RelayTiming>();
 /** Bumped on every reload so a schedule run sleeping in a delay can tell it was superseded. */
@@ -296,7 +297,7 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
   if (standby) {
     await Promise.all([...devices.values()].map((d) => driveRelay(d, false)));
     if (superseded(entry)) return;
-    notifyActive.set(flow.id, new Set());
+    notifyActive.set(flow.id, new Map());
     status.set(flow.id, {
       flowId: flow.id,
       kind: "temperature",
@@ -338,11 +339,17 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
   const holdOff = async (reason: string, quiet: boolean) => {
     await Promise.all([...devices.values()].map((d) => driveRelay(d, false)));
     if (superseded(entry)) return;
-    notifyActive.set(flow.id, new Set());
+    notifyActive.set(flow.id, new Map());
     status.set(flow.id, next);
     if (!quiet && prev?.failsafe !== reason) {
-      await logRun(flow.id, "tick", "failsafe", `Relays off: ${reason}`);
-      await notify(flow, "relays switched off", `${reason}. Its relays have been switched off until this is fixed.`, "flow_failsafe");
+      if (compiled.relays.length === 0) {
+        // An alert-only flow has nothing to switch off; say what it means for the user.
+        await logRun(flow.id, "tick", "failsafe", `Paused: ${reason}`);
+        await notify(flow, "can't read temperature", `${reason}. Alerts from this flow are paused until it reports again.`, "flow_failsafe");
+      } else {
+        await logRun(flow.id, "tick", "failsafe", `Relays off: ${reason}`);
+        await notify(flow, "relays switched off", `${reason}. Its relays have been switched off until this is fixed.`, "flow_failsafe");
+      }
     }
   };
 
@@ -356,6 +363,7 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
     now,
     brew: reading.brew,
     relays: relayTiming,
+    prevActive: new Set(Object.entries(prev?.nodes ?? {}).filter(([, s]) => s.active).map(([id]) => id)),
   });
   next.nodes = result.nodes;
 
@@ -403,16 +411,23 @@ async function tickTemperatureFlow(entry: ActiveFlow): Promise<void> {
     }
   }
 
-  // Notify on the edge only: the step being newly reached.
-  const was = notifyActive.get(flow.id) ?? new Set<string>();
+  // Notify when a step is newly reached, then remind at its interval (if any)
+  // for as long as it stays reached.
+  const was = notifyActive.get(flow.id) ?? new Map<string, number>();
+  const sent = new Map<string, number>();
   for (const node of result.notify) {
-    if (!was.has(node.id)) {
-      const message = renderMessage(node.config.message, { flow: flow.name, temp });
-      await notify(flow, "notification", message, "flow_action");
-      await logRun(flow.id, "tick", "ok", `Sent notification: ${message}`, { nodeId: node.id });
+    const last = was.get(node.id);
+    const due = notifyDue(last, node.config.repeatMinutes, now.getTime());
+    if (!due) {
+      sent.set(node.id, last!);
+      continue;
     }
+    const message = renderMessage(node.config.message, { flow: flow.name, temp });
+    await notify(flow, due === "first" ? "notification" : "reminder", message, "flow_action");
+    await logRun(flow.id, "tick", "ok", `${due === "first" ? "Sent notification" : "Sent reminder"}: ${message}`, { nodeId: node.id });
+    sent.set(node.id, now.getTime());
   }
-  notifyActive.set(flow.id, new Set(result.notify.map((n) => n.id)));
+  notifyActive.set(flow.id, sent);
 
   const refusal = refused.length > 0 ? `${refused.join(", ")} didn't accept the command to switch` : null;
   if (refusal && flow.lastError !== refusal) {

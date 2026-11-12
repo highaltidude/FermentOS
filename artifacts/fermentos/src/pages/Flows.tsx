@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Plus, Trash2, Play, ChevronDown, ChevronRight, Thermometer, Clock, AlertTriangle, Loader2, Workflow, Pencil, BookOpen,
+  Plus, Trash2, Play, ChevronDown, ChevronRight, Thermometer, Clock, AlertTriangle, Loader2, Workflow, Pencil, BookOpen, Bell,
 } from "lucide-react";
 import {
   useListFlows,
@@ -19,6 +19,7 @@ import {
   getListOutputDevicesQueryKey,
   useListSensorDevices,
   useListRecipes,
+  useGetNotificationSettings,
   type Flow,
   type FlowGraph,
 } from "@workspace/api-client-react";
@@ -41,6 +42,7 @@ import {
   fermentationTemplate,
   fromUnit,
   outline,
+  temperatureAlertTemplate,
   tempSourceOptions,
   timedRelayTemplate,
 } from "@/lib/flows";
@@ -57,6 +59,9 @@ export default function Flows() {
   const { data: devices = [] } = useListOutputDevices({ query: { queryKey: getListOutputDevicesQueryKey() } });
   // A probe-only device (The Pill in OneWire mode) can feed a flow but not be switched by one.
   const hasRelays = devices.some((d) => d.state.hasRelay);
+  // A temperature alert needs only a sensor, so a relay isn't required to start.
+  const { data: sensors = [] } = useListSensorDevices();
+  const canCreate = hasRelays || sensors.length > 0;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
@@ -66,16 +71,16 @@ export default function Flows() {
             <h1 className="text-xl font-bold text-foreground whitespace-nowrap">Brew Flows</h1>
             <ExperimentalBadge />
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">Automations that switch your relays from a temperature or on a schedule.</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Automations that switch your relays or alert you, from a temperature or on a schedule.</p>
         </div>
-        <Button size="sm" onClick={() => setShowNew(true)} disabled={!hasRelays}>
+        <Button size="sm" onClick={() => setShowNew(true)} disabled={!canCreate}>
           <Plus className="w-4 h-4" />New flow
         </Button>
       </div>
 
-      {!hasRelays && (
+      {!canCreate && (
         <div className="bg-card border border-card-border rounded-lg p-4 text-sm text-muted-foreground">
-          Flows switch Shelly relays. Add one under{" "}
+          Flows read a temperature sensor or switch Shelly relays. Add one under{" "}
           <Link href="/settings?tab=system&section=connectivity" className="text-primary underline underline-offset-2">
             Settings → System → Integrations
           </Link>{" "}
@@ -85,10 +90,10 @@ export default function Flows() {
 
       {isLoading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-      ) : flows.length === 0 && hasRelays ? (
+      ) : flows.length === 0 && canCreate ? (
         <div className="bg-card border border-card-border rounded-lg p-8 text-center">
           <Workflow className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-          <p className="text-sm text-muted-foreground">No flows yet. Start from a template — hold a fermenter at temperature, or run a relay on a timer.</p>
+          <p className="text-sm text-muted-foreground">No flows yet. Start from a template — hold a fermenter at temperature, run a relay on a timer, or get alerted when a temperature crosses a line.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -253,7 +258,7 @@ function FlowCard({ flow }: { flow: Flow }) {
 
 // ── New flow from a template ────────────────────────────────────────────────
 
-type Template = "fermentation" | "timer";
+type Template = "fermentation" | "timer" | "alert";
 
 /**
  * New flow from a template. Given a `recipe`, it goes straight to the
@@ -288,6 +293,13 @@ export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClos
   const [days, setDays] = useState<number[]>([]);
   const [everyHours, setEveryHours] = useState("6");
   const [minutes, setMinutes] = useState("15");
+  // Temperature alert
+  const [alertOp, setAlertOp] = useState<"gt" | "lt">("gt");
+  const [threshold, setThreshold] = useState(unit === "F" ? "40" : "4");
+  const [rearm, setRearm] = useState(unit === "F" ? "2" : "1");
+  const [remind, setRemind] = useState("30");
+  const { data: notifySettings } = useGetNotificationSettings();
+  const noChannel = notifySettings?.channel === "none";
 
   const reset = () => {
     setTemplate(recipe ? "fermentation" : null); setName(""); setSource(""); setRelayId(""); setOnlyFermenting(false); setCrash(false); setFollowBrew(!!recipe);
@@ -339,6 +351,20 @@ export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClos
         coldCrash: crash ? { afterDays: cd, crashC: fromUnit(ct, unit), notify: crashNotify } : null,
         followBrew,
       });
+    } else if (template === "alert") {
+      const src = sourceOptions.find((o) => o.key === source)?.value;
+      const th = Number(threshold);
+      const ra = rearm.trim() === "" ? 0 : Number(rearm);
+      const rm = remind.trim() === "" ? null : Number(remind);
+      if (!src || !Number.isFinite(th) || !(ra >= 0) || (rm !== null && !(rm >= 5 && rm <= 1440))) return;
+      graph = temperatureAlertTemplate({
+        source: src,
+        op: alertOp,
+        thresholdC: fromUnit(th, unit),
+        rearmC: deltaFromUnit(ra, unit),
+        repeatMinutes: rm === null ? null : Math.round(rm),
+        message: `{flow}: ${alertOp === "gt" ? "up" : "down"} to {temp}`,
+      });
     } else {
       const m = Number(minutes);
       if (!relayId || !(m >= 1)) return;
@@ -350,7 +376,9 @@ export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClos
       });
     }
     const relayName = devices.find((d) => d.id === Number(relayId))?.name ?? "relay";
-    const fallback = template !== "fermentation" ? `${relayName} timer`
+    const sourceLabel = sourceOptions.find((o) => o.key === source)?.label.replace(/ \(.*\)$/, "") ?? "Temperature";
+    const fallback = template === "alert" ? `${sourceLabel} ${alertOp === "gt" ? "too warm" : "too cold"}`
+      : template !== "fermentation" ? `${relayName} timer`
       : recipe ? `${recipe.name} on ${relayName}`
       : crash ? `${relayName} with cold crash`
       : `${mode === "heat" ? "Heat" : "Cool"} with ${relayName}`;
@@ -364,19 +392,29 @@ export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClos
     <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{template === null ? "New flow" : template === "fermentation" ? "Fermentation temperature" : "Timed relay"}</DialogTitle>
+          <DialogTitle>{template === null ? "New flow" : template === "fermentation" ? "Fermentation temperature" : template === "alert" ? "Temperature alert" : "Timed relay"}</DialogTitle>
         </DialogHeader>
 
         {template === null ? (
           <div className="grid gap-2">
-            <button type="button" onClick={() => setTemplate("fermentation")} className="text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors">
-              <p className="text-sm font-medium flex items-center gap-1.5"><Thermometer className="w-4 h-4" />Fermentation temperature</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Hold a fermenter at a target by switching a heat wrap or a fridge, from an iSpindel or a Shelly probe.</p>
-            </button>
-            <button type="button" onClick={() => setTemplate("timer")} className="text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors">
-              <p className="text-sm font-medium flex items-center gap-1.5"><Clock className="w-4 h-4" />Timed relay</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Run a relay for a set time on a schedule — a recirculation pump, a crash-chill window.</p>
-            </button>
+            {relays.length > 0 && (
+              <>
+                <button type="button" onClick={() => setTemplate("fermentation")} className="text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors">
+                  <p className="text-sm font-medium flex items-center gap-1.5"><Thermometer className="w-4 h-4" />Fermentation temperature</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Hold a fermenter at a target by switching a heat wrap or a fridge, from an iSpindel or a Shelly probe.</p>
+                </button>
+                <button type="button" onClick={() => setTemplate("timer")} className="text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors">
+                  <p className="text-sm font-medium flex items-center gap-1.5"><Clock className="w-4 h-4" />Timed relay</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Run a relay for a set time on a schedule — a recirculation pump, a crash-chill window.</p>
+                </button>
+              </>
+            )}
+            {sourceOptions.length > 0 && (
+              <button type="button" onClick={() => setTemplate("alert")} className="text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors">
+                <p className="text-sm font-medium flex items-center gap-1.5"><Bell className="w-4 h-4" />Temperature alert</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Notify me when a probe goes above or below a temperature — an ice bath warming up, a fridge failing.</p>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => { close(); navigate("/flows/new"); }}
@@ -390,21 +428,70 @@ export function NewFlowDialog({ open, onClose, recipe }: { open: boolean; onClos
           <form className="space-y-3" onSubmit={submit}>
             <div>
               <label className={label}>Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={recipe ? `${recipe.name} fermentation` : template === "fermentation" ? "Fermenter 1 heat" : "Morning recirculation"} className="text-sm" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={recipe ? `${recipe.name} fermentation` : template === "fermentation" ? "Fermenter 1 heat" : template === "alert" ? "Ice bath" : "Morning recirculation"} className="text-sm" />
             </div>
 
-            <div>
-              <label className={label}>Relay</label>
-              <select className={select} value={relayId} onChange={(e) => setRelayId(e.target.value)} required>
-                <option value="">Choose a relay…</option>
-                {freeRelays.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-              {freeRelays.length < relays.length && (
-                <p className="text-[11px] text-muted-foreground mt-1">Relays already used by an enabled flow aren't listed.</p>
-              )}
-            </div>
+            {template !== "alert" && (
+              <div>
+                <label className={label}>Relay</label>
+                <select className={select} value={relayId} onChange={(e) => setRelayId(e.target.value)} required>
+                  <option value="">Choose a relay…</option>
+                  {freeRelays.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                {freeRelays.length < relays.length && (
+                  <p className="text-[11px] text-muted-foreground mt-1">Relays already used by an enabled flow aren't listed.</p>
+                )}
+              </div>
+            )}
 
-            {template === "fermentation" ? (
+            {template === "alert" ? (
+              <>
+                <div>
+                  <label className={label}>Temperature from</label>
+                  <select className={select} value={source} onChange={(e) => setSource(e.target.value)} required>
+                    <option value="">Choose a sensor…</option>
+                    {sourceOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={label}>Alert when it goes</label>
+                    <select className={select} value={alertOp} onChange={(e) => setAlertOp(e.target.value as "gt" | "lt")}>
+                      <option value="gt">Above</option>
+                      <option value="lt">Below</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={label}>Temperature °{unit}</label>
+                    <Input type="number" step="0.1" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="text-sm" required />
+                  </div>
+                  <div>
+                    <label className={label}>Re-arm margin °{unit}</label>
+                    <Input type="number" step="0.1" min="0" value={rearm} onChange={(e) => setRearm(e.target.value)} className="text-sm" />
+                  </div>
+                  <div>
+                    <label className={label}>Remind every (min)</label>
+                    <Input type="number" step="1" min="5" max="1440" value={remind} onChange={(e) => setRemind(e.target.value)} placeholder="Once" className="text-sm" />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {Number.isFinite(Number(threshold)) && (
+                    <>
+                      Alerts once it goes {alertOp === "gt" ? "above" : "below"} {Number(threshold).toFixed(1)}°{unit}
+                      {remind.trim() ? `, then every ${remind} minutes while it stays there` : ""}. It's ready to alert again once it's back{" "}
+                      {alertOp === "gt" ? "below" : "above"} {(Number(threshold) + (alertOp === "gt" ? -1 : 1) * (Number(rearm) || 0)).toFixed(1)}°{unit}.
+                      {" "}If the sensor stops reporting, you're told that too.
+                    </>
+                  )}
+                </p>
+                {noChannel && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    No notification channel is set up, so alerts have nowhere to go. Choose one under{" "}
+                    <Link href="/settings?tab=brewing" className="underline underline-offset-2">Settings → Brewing → Notifications</Link>.
+                  </p>
+                )}
+              </>
+            ) : template === "fermentation" ? (
               <>
                 <div>
                   <label className={label}>Temperature from</label>

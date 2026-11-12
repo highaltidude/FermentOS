@@ -32,7 +32,12 @@ export type TempSource =
 
 export type ScheduleConfig = { cron: string };
 export type TemperatureTriggerConfig = { source: TempSource };
-export type CompareConfig = { op: "lt" | "gt" | "between"; valueC: number; value2C: number | null };
+/**
+ * `rearmC` is a hysteresis band: once the comparison has passed, it keeps
+ * passing until the temperature moves back past the threshold by this much,
+ * so a reading hovering on the line doesn't flap. 0 = plain threshold.
+ */
+export type CompareConfig = { op: "lt" | "gt" | "between"; valueC: number; value2C: number | null; rearmC: number };
 export type TimeWindowConfig = { from: string; to: string; days: number[] };
 export type BrewStatusConfig = { statuses: BrewStatus[] };
 export type StageAgeConfig = { status: BrewStatus; op: "atLeast" | "lessThan"; days: number };
@@ -55,7 +60,8 @@ export type ThermostatConfig = {
   minOffSec: number;
 };
 export type RelayConfig = { outputDeviceId: number; action: "on" | "off" | "onFor"; minutes: number | null };
-export type NotifyConfig = { message: string };
+/** `repeatMinutes`: remind at this interval while the step stays reached; null = once. */
+export type NotifyConfig = { message: string; repeatMinutes: number | null };
 export type DelayConfig = { minutes: number };
 
 export type FlowNode =
@@ -83,6 +89,11 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const TEMP_MIN_C = -10;
 const TEMP_MAX_C = 110;
 const inTempRange = (t: number) => t >= TEMP_MIN_C && t <= TEMP_MAX_C;
+/** Largest compare re-arm margin, in °C. */
+export const REARM_MAX_C = 10;
+/** Bounds on a notify step's reminder interval, in minutes. */
+export const REPEAT_MIN = 5;
+export const REPEAT_MAX = 1440;
 
 /** Minutes past midnight for an "HH:MM" string already checked against HHMM. */
 export function minutesOfDay(hhmm: string): number {
@@ -117,12 +128,16 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
     case "condition.compare": {
       if (c.op !== "lt" && c.op !== "gt" && c.op !== "between") return fail("Choose a comparison");
       if (!isNum(c.valueC) || !inTempRange(c.valueC)) return fail("Enter a temperature to compare with");
+      if (c.rearmC != null && (!isNum(c.rearmC) || c.rearmC < 0 || c.rearmC > REARM_MAX_C)) {
+        return fail(`Re-arm margin must be 0–${REARM_MAX_C} °C`);
+      }
+      const rearmC = isNum(c.rearmC) ? Math.round(c.rearmC * 100) / 100 : 0;
       if (c.op === "between") {
         if (!isNum(c.value2C) || !inTempRange(c.value2C)) return fail("Enter both ends of the range");
         if (c.value2C <= c.valueC) return fail("The upper temperature must be above the lower one");
-        return { ok: true, value: { op: c.op, valueC: c.valueC, value2C: c.value2C } };
+        return { ok: true, value: { op: c.op, valueC: c.valueC, value2C: c.value2C, rearmC } };
       }
-      return { ok: true, value: { op: c.op, valueC: c.valueC, value2C: null } };
+      return { ok: true, value: { op: c.op, valueC: c.valueC, value2C: null, rearmC } };
     }
     case "condition.timeWindow": {
       if (typeof c.from !== "string" || !HHMM.test(c.from) || typeof c.to !== "string" || !HHMM.test(c.to)) {
@@ -184,7 +199,11 @@ export function parseNodeConfig(type: NodeType, raw: unknown, isValidCron: (expr
     case "action.notify": {
       if (typeof c.message !== "string" || !c.message.trim()) return fail("Enter a message");
       if (c.message.length > 500) return fail("Message is too long");
-      return { ok: true, value: { message: c.message.trim() } };
+      if (c.repeatMinutes != null && (!isNum(c.repeatMinutes) || c.repeatMinutes < REPEAT_MIN || c.repeatMinutes > REPEAT_MAX)) {
+        return fail(`Reminders must be every ${REPEAT_MIN}–${REPEAT_MAX} minutes`);
+      }
+      const repeatMinutes = isNum(c.repeatMinutes) ? Math.round(c.repeatMinutes) : null;
+      return { ok: true, value: { message: c.message.trim(), repeatMinutes } };
     }
     case "action.delay": {
       if (!isNum(c.minutes) || c.minutes < 1 || c.minutes > 1440) return fail("Delay must be 1–1440 minutes");
@@ -232,8 +251,14 @@ export function stageAgePasses(
   return cfg.op === "atLeast" ? days >= cfg.days : days < cfg.days;
 }
 
-export function compareTemp(cfg: CompareConfig, tempC: number): boolean {
-  if (cfg.op === "lt") return tempC < cfg.valueC;
-  if (cfg.op === "gt") return tempC > cfg.valueC;
-  return tempC >= cfg.valueC && tempC <= cfg.value2C!;
+/**
+ * Whether a compare step passes. `wasActive` is whether it passed last tick:
+ * if so, the threshold is relaxed by the re-arm margin, so it only lets go
+ * once the temperature has clearly moved back.
+ */
+export function compareTemp(cfg: CompareConfig, tempC: number, wasActive = false): boolean {
+  const m = wasActive ? cfg.rearmC : 0;
+  if (cfg.op === "lt") return tempC < cfg.valueC + m;
+  if (cfg.op === "gt") return tempC > cfg.valueC - m;
+  return tempC >= cfg.valueC - m && tempC <= cfg.value2C! + m;
 }

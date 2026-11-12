@@ -15,6 +15,8 @@ export type TickInput = {
   brew: BrewContext | null;
   /** Current relay state per output device, as the engine last left it. */
   relays: Map<number, RelayTiming>;
+  /** Nodes reached last tick, so compare steps can apply their re-arm margin. */
+  prevActive?: ReadonlySet<string>;
 };
 
 export type BrewContext = {
@@ -74,7 +76,7 @@ export type TickResult = {
 function conditionPasses(node: FlowNode, input: TickInput): boolean {
   switch (node.type) {
     case "condition.compare":
-      return compareTemp(node.config, input.tempC);
+      return compareTemp(node.config, input.tempC, input.prevActive?.has(node.id) ?? false);
     case "condition.timeWindow":
       return inTimeWindow(node.config, input.now);
     case "condition.brewStatus":
@@ -135,6 +137,17 @@ export function evaluateTemperatureTick(flow: CompiledFlow, input: TickInput): T
     }
   }
   return result;
+}
+
+/**
+ * Whether a reached notify step should send this tick: always when it has
+ * just been reached (nothing sent yet), otherwise only once its reminder
+ * interval has passed.
+ */
+export function notifyDue(lastSentMs: number | undefined, repeatMinutes: number | null, nowMs: number): "first" | "reminder" | null {
+  if (lastSentMs === undefined) return "first";
+  if (repeatMinutes != null && nowMs - lastSentMs >= repeatMinutes * 60_000) return "reminder";
+  return null;
 }
 
 /** Fill {temp} and {flow} placeholders in a notify message. */

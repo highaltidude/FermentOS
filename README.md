@@ -71,7 +71,7 @@ install to a tracked first batch.
 - **iSpindel integration** — Live gravity, temperature, battery, and tilt from iSpindel Wi-Fi hydrometers. Devices register themselves on their first reading and appear on the brew session page once assigned
 - **Shelly relays and The Pill** — Switch a heat wrap, fridge or pump with a Shelly relay over your local network (Shelly 1 SHSW-1, or any Gen2+ device: Plus, Pro, Gen3, Gen4), by hand or for a set number of minutes that the relay itself counts down. A DS18B20 temperature probe is read too, from a Shelly add-on or from **The Pill by Shelly** in OneWire mode, and can be logged to a brew like an iSpindel or drive a Brew Flow. With several probes on one device (say, wort and room), each is its own sensor with its own history and brew, and you choose which one controls. A Pill in SSR mode works as a two-channel relay. Each device shows its live state, temperature, signal and last-seen time. See [Connect a Shelly relay](#connect-a-shelly-relay)
 - **Brew temperature control** *(Experimental)* — On a brew's page, pick a probe (such as The Pill) and a heater and/or cooler relay, and FermentOS holds the brew at its ideal fermentation, then conditioning, temperature. See [Control a brew's temperature](#6-control-a-brews-temperature)
-- **Brew Flows** *(Experimental)* — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule, and cold crash automatically a set number of days into conditioning. Flows can follow each brew's own temperatures and be linked to recipes, so they only run while a batch of that recipe is on their sensor. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
+- **Brew Flows** *(Experimental)* — Automations that switch your Shelly relays: hold a fermenter at temperature from an iSpindel or a Shelly probe, or run a relay on a schedule, and cold crash automatically a set number of days into conditioning. A flow can also just alert you when a temperature goes too high or low, say an ice bath warming up, with a re-arm margin and optional reminders. Flows can follow each brew's own temperatures and be linked to recipes, so they only run while a batch of that recipe is on their sensor. Start from a template or build your own from triggers, conditions and actions on a drag-and-drop canvas that shows each step's live state. Relays fail off if a reading goes stale, a relay drops off the network or FermentOS itself stops, and you are notified when that happens. See [Automate with Brew Flows](#automate-with-brew-flows)
 - **Home Assistant integration** — A REST endpoint plus a settings panel that writes the `configuration.yaml` block and Lovelace card for you
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
@@ -706,7 +706,7 @@ Add `PROBES=2` or `PROBES=3` for more DS18B20s (add-on slots 1 and 2 on the Shel
 
 > **Experimental.** Brew Flows are new and are marked Experimental in the app. They switch real equipment, so watch your first batches closely and check that each relay does what you expect.
 
-A Brew Flow switches your [Shelly relays](#connect-a-shelly-relay) for you, either to hold a fermenter at a temperature or on a schedule. Open **Flows** in the sidebar (on a phone, tap the **Brew Flows** card on the Dashboard) and click **New flow**.
+A Brew Flow switches your [Shelly relays](#connect-a-shelly-relay) for you, either to hold a fermenter at a temperature or on a schedule, or alerts you when a temperature crosses a line. Open **Flows** in the sidebar (on a phone, tap the **Brew Flows** card on the Dashboard) and click **New flow**.
 
 #### Hold a fermenter at temperature
 
@@ -743,14 +743,25 @@ To tie a flow to a recipe, open the recipe and use the **Brew Flows** card: **Ne
 
 Choose **Timed relay**, pick a relay, choose a time of day (and optionally which days) or every few hours, and set how many minutes it should run. **Run now** on the flow's card tests it straight away.
 
+#### Get alerted when a temperature goes too high or low
+
+A flow doesn't have to switch anything. To be told when an ice bath warms up or a fridge stops cooling, choose **Temperature alert**. It needs only a sensor, not a relay. Then set:
+
+- **Temperature from**: the probe or iSpindel to watch. With several probes on one Shelly, each has its own entry.
+- **Alert when it goes** above or below a **Temperature**.
+- **Re-arm margin**: once it has alerted, it won't alert again until the temperature has come back past the line by this much. A reading hovering right on the line then sends one alert, not one every 30 seconds.
+- **Remind every**: how often to repeat the alert while the temperature stays past the line. Leave it blank to be told just once.
+
+The alert goes to the channel you set up in [Get alerts on your phone](#get-alerts-on-your-phone), so set one up first; the dialog warns you if there isn't one. If the sensor stops reporting, you get a "can't read temperature" alert, and alerts pick up again once it's back. On the canvas, this is a **Temperature** trigger, a **Compare** step with a **Re-arm margin**, and a **Notify** step with **Remind every**. Both settings can be added to any temperature flow.
+
 #### Build or change a flow on the canvas
 
 Click **Open** on a flow's card to see it as a diagram, or choose **Blank flow** under **New flow** to start from nothing. Steps run top to bottom:
 
 - **Start with** a trigger. **Temperature** re-checks a sensor every 30 seconds; **Schedule** runs at set times. A flow has exactly one.
-- **Only if** steps let the flow continue only while something is true: the temperature is above, below or between values, the time is inside a window (which may cross midnight), the sensor's brew is at a given stage, or it has been at a stage for a number of days.
+- **Only if** steps let the flow continue only while something is true: the temperature is above, below or between values (with an optional re-arm margin so a reading on the line doesn't flap), the time is inside a window (which may cross midnight), the sensor's brew is at a given stage, or it has been at a stage for a number of days.
 - **Control** holds a temperature with a thermostat. It must be the last step on its branch.
-- **Then** steps act: switch a relay, send a notification, or (in schedule flows) wait.
+- **Then** steps act: switch a relay, send a notification (in temperature flows, optionally repeated as a reminder), or (in schedule flows) wait.
 
 Click a step in the left-hand list to add it under the selected step, or drag it onto the canvas. To join two steps, drag from the dot at the bottom of one to the dot at the top of the next. A step can branch into several steps, but each step follows only one. Select a step to change its settings on the right; press **Delete** to remove a step or a line.
 
@@ -770,7 +781,7 @@ A flow also switches its relays off and sends you a notification when it can no 
 - the flow hits an error;
 - two branches that share a relay are reached at the same time.
 
-It picks up again by itself once the problem clears. These alerts go to the channel you set up in [Get alerts on your phone](#get-alerts-on-your-phone); set one up if you rely on flows.
+A flow with no relays (a temperature alert) has nothing to switch off, so it tells you it can't read the temperature and pauses its alerts instead. It picks up again by itself once the problem clears. These alerts go to the channel you set up in [Get alerts on your phone](#get-alerts-on-your-phone); set one up if you rely on flows.
 
 After FermentOS restarts, every relay a flow controls is switched off first, then the flows take over again.
 

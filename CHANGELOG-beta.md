@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.11.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.11.0-beta1...fermentos-v1.11.0-beta2) (2026-11-12)
+
+
+### Features
+
+* **devices:** log every Shelly probe as its own sensor and choose which one controls ([4bb27b7](https://github.com/highaltidude/FermentOS/commit/4bb27b71f70c4b4173bdb272c69ec442f5ce73ef))
+
+
+### Bug Fixes
+
+* **backup:** catch up a missed backup against the last scheduled slot and never run two at once ([7096ddd](https://github.com/highaltidude/FermentOS/commit/7096ddd98bdc05eed3778de9cfbab92eeaa5a53c))
+* **devices:** only talk to Shelly devices on port 80 and refuse loopback and link-local hosts ([b883514](https://github.com/highaltidude/FermentOS/commit/b8835144a375bc46c699c34ccd8cfb9dcb40ac39))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

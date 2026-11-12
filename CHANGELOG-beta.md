@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.12.0-beta1...fermentos-v1.12.0-beta2) (2026-11-12)
+
+
+### Features
+
+* **flows:** temperature alert template with re-arm margin and reminders ([3f288a2](https://github.com/highaltidude/FermentOS/commit/3f288a2904df9c7e2eccb328465795c89162d3c6))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

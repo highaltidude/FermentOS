@@ -12,6 +12,7 @@ import {
   probeSensorName,
 } from "../lib/shellyProbes.js";
 import { ingestReading } from "./sensorIngest.js";
+import { recordRelayState } from "./relayRuns.js";
 
 /**
  * Polls every enabled output device on a short interval and keeps its latest
@@ -211,6 +212,11 @@ async function pollDevice(device: OutputDevice, now: number): Promise<void> {
     ison, hasRelay, tempC, probes, controlProbeId: control?.id ?? null, rssi, uptimeSec, isPill, pillMode,
     at: new Date(now), failures: 0, lastError: null,
   });
+  // The device switched without FermentOS saying so: its timer ran out, it lost
+  // power, or someone used the Shelly app. Keep its run time honest.
+  if (hasRelay !== false && ison != null && prev.ison !== ison) {
+    await recordRelayState(device.id, ison, { at: new Date(now) });
+  }
 
   if (changed || now - (lastStateWrite.get(device.id) ?? 0) >= STATE_WRITE_INTERVAL_MS) {
     lastStateWrite.set(device.id, now);

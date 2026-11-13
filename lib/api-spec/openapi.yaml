@@ -1445,6 +1445,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/BrewSensorTelemetry"
 
+  /brew-sessions/{id}/relay-runs:
+    get:
+      operationId: getBrewRelayRuns
+      tags: [brew-sessions]
+      summary: How long each relay ran heating or cooling this brew, run by run
+      description: >
+        One entry per stretch a relay was on while a flow was controlling the
+        temperature of a sensor assigned to this brew. Recorded from the
+        version that added it onwards. An open run (endedAt null) is still on.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Relay runs, oldest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewRelayRuns"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ── iSpindel integration ───────────────────────────────────────────────────
   /integrations/ispindel:
     post:
@@ -4911,6 +4936,40 @@ components:
             $ref: "#/components/schemas/SensorReading"
       required: [device, isActive, connectionStatus, latestReading, readings]
 
+    RelayRunMode:
+      type: string
+      enum: [heat, cool]
+    RelayRun:
+      type: object
+      required: [outputDeviceId, deviceName, mode, startedAt, endedAt]
+      properties:
+        outputDeviceId:
+          type: integer
+        deviceName:
+          type: string
+        mode:
+          description: Heating or cooling, from the thermostat that switched it on; null when switched by a schedule, by hand, or in the Shelly app.
+          allOf:
+            - $ref: "#/components/schemas/RelayRunMode"
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+    BrewRelayRuns:
+      type: object
+      required: [runs, hasRelays]
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RelayRun"
+        hasRelays:
+          type: boolean
+          description: Whether any enabled output device has a relay, so there could be anything to show.
     BrewSensorTelemetry:
       type: object
       properties:

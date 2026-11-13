@@ -5305,6 +5305,35 @@ export const GetBrewSensorTelemetryResponse = zod.object({
 });
 
 /**
+ * One entry per stretch a relay was on while a flow was controlling the temperature of a sensor assigned to this brew. Recorded from the version that added it onwards. An open run (endedAt null) is still on.
+ * @summary How long each relay ran heating or cooling this brew, run by run
+ */
+export const GetBrewRelayRunsParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const GetBrewRelayRunsResponse = zod.object({
+  runs: zod.array(
+    zod.object({
+      outputDeviceId: zod.number().int(),
+      deviceName: zod.string(),
+      mode: zod
+        .union([zod.enum(["heat", "cool"]), zod.null()])
+        .describe(
+          "Heating or cooling, from the thermostat that switched it on; null when switched by a schedule, by hand, or in the Shelly app.",
+        ),
+      startedAt: zod.string().datetime({ offset: true }),
+      endedAt: zod.string().datetime({ offset: true }).nullable(),
+    }),
+  ),
+  hasRelays: zod
+    .boolean()
+    .describe(
+      "Whether any enabled output device has a relay, so there could be anything to show.",
+    ),
+});
+
+/**
  * @summary Receive telemetry from an iSpindel device (no auth required)
  */
 export const IngestISpindelReadingBody = zod.object({

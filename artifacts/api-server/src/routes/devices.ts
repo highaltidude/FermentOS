@@ -14,6 +14,7 @@ import { getLiveState, isReachable, noteRelayState, forgetDevice, pollNow, probe
 import { controlProbe, renamedProbeSensor } from "../lib/shellyProbes";
 import { relayOwners } from "../services/flowEngine";
 import { closeActiveAssignment, moveActiveAssignment } from "../services/sensorDevices";
+import { recordRelayState, forgetRelayRuns } from "../services/relayRuns";
 
 const router = Router();
 
@@ -228,6 +229,7 @@ router.patch("/:id", async (req, res) => {
   if ((disabled || moved) && hasRelay(before)) {
     const off = await setShellyRelay(before, false);
     if (!off.ok) req.log.warn({ deviceId: id, reason: off.reason }, "Could not switch the old relay off");
+    else await recordRelayState(id, false);
   }
   if (disabled) {
     for (const sensor of await probeSensorsOf(id)) await closeActiveAssignment(sensor.id);
@@ -283,6 +285,7 @@ router.delete("/:id", async (req, res) => {
     await db.delete(outputDevicesTable).where(eq(outputDevicesTable.id, id));
     forgetDevice(id);
     forgetProbeSensors(id);
+    forgetRelayRuns(id);
   }
   return res.status(204).end();
 });
@@ -303,6 +306,7 @@ router.post("/:id/relay", async (req, res) => {
   const result = await setShellyRelay(device, body.data.on, body.data.on ? body.data.durationSec : undefined);
   if (!result.ok) return res.status(502).json({ error: result.reason });
   noteRelayState(id, result.value);
+  await recordRelayState(id, result.value, { timerSec: result.value ? body.data.durationSec : undefined });
   req.log.info({ deviceId: id, on: result.value, durationSec: body.data.durationSec }, "Relay switched by hand");
   return res.json(await toApiOne(device));
 });

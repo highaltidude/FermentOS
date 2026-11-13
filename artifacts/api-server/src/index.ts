@@ -7,7 +7,8 @@ import { startSystemHealthSampler } from "./services/systemHealthSampler";
 import { startAlertMonitor } from "./services/alertMonitor";
 import { resumeBoilAlerts } from "./services/boilScheduler";
 import { startDevicePoller } from "./services/devicePoller";
-import { startFlowEngine } from "./services/flowEngine";
+import { startFlowEngine, RELAY_HEARTBEAT_SEC } from "./services/flowEngine";
+import { closeStaleRelayRuns } from "./services/relayRuns";
 
 const rawPort = process.env["PORT"];
 
@@ -40,7 +41,10 @@ app.listen(port, (err) => {
   migrateInventorySuppliers().catch((e) => logger.error({ e }, "Inventory suppliers migration failed"));
   startSystemHealthSampler();
   startAlertMonitor();
-  startDevicePoller();
-  startFlowEngine().catch((e) => logger.error({ e }, "Flow engine start failed"));
+  // Runs left open by the last shutdown are closed before anything can open new ones.
+  void closeStaleRelayRuns(RELAY_HEARTBEAT_SEC).then(() => {
+    startDevicePoller();
+    startFlowEngine().catch((e) => logger.error({ e }, "Flow engine start failed"));
+  });
   resumeBoilAlerts().catch((e) => logger.error({ e }, "Boil timer resume failed"));
 });

@@ -2188,6 +2188,29 @@ export interface BrewReferenceSensor {
   readings: SensorReading[];
 }
 
+export type RelayRunMode = (typeof RelayRunMode)[keyof typeof RelayRunMode];
+
+export const RelayRunMode = {
+  heat: "heat",
+  cool: "cool",
+} as const;
+
+export interface RelayRun {
+  outputDeviceId: number;
+  deviceName: string;
+  /** Heating or cooling, from the thermostat that switched it on; null when switched by a schedule, by hand, or in the Shelly app. */
+  mode: RelayRunMode | null;
+  startedAt: string;
+  /** @nullable */
+  endedAt: string | null;
+}
+
+export interface BrewRelayRuns {
+  runs: RelayRun[];
+  /** Whether any enabled output device has a relay, so there could be anything to show. */
+  hasRelays: boolean;
+}
+
 export interface BrewSensorTelemetry {
   brewSessionId: number;
   device?: SensorDevice | null;

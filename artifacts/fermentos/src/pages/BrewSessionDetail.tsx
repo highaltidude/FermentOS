@@ -46,6 +46,8 @@ import { TempRangeFields } from "@/components/TempRangeFields";
 import { BrewTempControlCard } from "@/components/BrewTempControlCard";
 import { DryHopCard } from "@/components/DryHopCard";
 import { RecipeAsBrewedCard } from "@/components/RecipeAsBrewedCard";
+import { BrewSensorsCard } from "@/components/BrewSensorsCard";
+import { ReferenceSensorChart } from "@/components/ReferenceSensorChart";
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: BrewStatus; onStatusChange: (s: BrewStatus) => void; isPending?: boolean }) {
   const idx = BREW_STATUSES.indexOf(status);
@@ -266,7 +268,7 @@ export default function BrewSessionDetail() {
 
   useEffect(() => {
     const alerts = telemetry?.alerts ?? [];
-    const hasOutOfRange = (telemetry as any)?.isDeviceActive && alerts.some((a) => a.type === "temp_out_of_range");
+    const hasOutOfRange = telemetry?.isDeviceActive && alerts.some((a) => a.type === "temp_out_of_range");
     if (hasOutOfRange) {
       tempAlertCount.current += 1;
       if (tempAlertCount.current >= tempAlertThreshold) {
@@ -864,7 +866,7 @@ export default function BrewSessionDetail() {
             </div>
           )}
         </div>
-      ) : telemetry?.device && (telemetry as any).isDeviceActive ? (
+      ) : telemetry?.device && telemetry.isDeviceActive ? (
         <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -893,7 +895,7 @@ export default function BrewSessionDetail() {
                 <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
                   <p className="text-xs text-muted-foreground">Temperature</p>
                   <p className="text-base font-semibold text-amber-700 dark:text-amber-400">
-                    {formatSensorTemp(telemetry.latestReading.temperature, telemetry.latestReading.temperatureUnit)}
+                    {formatSensorTemp(telemetry.latestReading.temperature, telemetry.latestReading.temperatureUnit, tempUnit)}
                   </p>
                 </div>
               )}
@@ -978,8 +980,24 @@ export default function BrewSessionDetail() {
         </div>
       ) : null}
 
-      {/* iSpindel Readings History */}
-      {telemetry?.device && telemetry.readings && telemetry.readings.length > 0 && (
+      {sensorDevices && <BrewSensorsCard brewSessionId={id} sensors={sensorDevices} unit={tempUnit} />}
+
+      {/* Sensor Readings History (fermenter sensors only) */}
+      {telemetry?.device && telemetry.readings && telemetry.readings.length > 0 && (() => {
+        const rows = telemetry.readings;
+        // Only the columns some reading fills: a Shelly probe has no gravity, angle or battery.
+        const has = {
+          gravity: rows.some((r) => r.gravity != null),
+          temp: rows.some((r) => r.temperature != null),
+          angle: rows.some((r) => r.angle != null),
+          battery: rows.some((r) => r.battery != null),
+          rssi: rows.some((r) => r.rssi != null),
+        };
+        const deviceIds = new Set(rows.map((r) => r.deviceId));
+        const showSensor = deviceIds.size > 1;
+        const sensorName = (deviceId: number) => sensorDevices?.find((d) => d.device.id === deviceId)?.device.deviceName ?? `Sensor ${deviceId}`;
+        const colSpan = 2 + (showSensor ? 1 : 0) + Object.values(has).filter(Boolean).length;
+        return (
         <div className="bg-card border border-card-border rounded-lg">
           <button
             type="button"
@@ -988,8 +1006,8 @@ export default function BrewSessionDetail() {
           >
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-muted-foreground" />
-              iSpindel Readings
-              <span className="text-xs text-muted-foreground font-normal">({telemetry.readings.length} for this brew)</span>
+              Sensor Readings
+              <span className="text-xs text-muted-foreground font-normal">({rows.length} for this brew)</span>
             </div>
             {showSensorHistory ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
           </button>
@@ -999,32 +1017,36 @@ export default function BrewSessionDetail() {
                 <thead className="bg-muted/30 border-b border-border">
                   <tr>
                     <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap">Received</th>
-                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Gravity</th>
-                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Temp</th>
-                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Angle</th>
-                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">Battery</th>
-                    <th className="text-right px-2 py-2 font-medium text-muted-foreground">RSSI</th>
+                    {showSensor && <th className="text-left px-2 py-2 font-medium text-muted-foreground">Sensor</th>}
+                    {has.gravity && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Gravity</th>}
+                    {has.temp && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Temp</th>}
+                    {has.angle && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Angle</th>}
+                    {has.battery && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Battery</th>}
+                    {has.rssi && <th className="text-right px-2 py-2 font-medium text-muted-foreground">RSSI</th>}
                     <th className="w-6 px-2 py-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {[...telemetry.readings].reverse().map((r) => (
+                  {[...rows].reverse().map((r) => (
                     <Fragment key={r.id}>
                       <tr key={r.id} className="hover:bg-muted/20 transition-colors">
                         <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
                           {formatDateTimeShort(r.receivedAt)}
                         </td>
-                        <td className="px-2 py-1.5 text-right font-mono text-blue-700 dark:text-blue-400">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>
-                        <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? formatSensorTemp(r.temperature, r.temperatureUnit) : "—"}</td>
-                        <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>
-                        <td className="px-2 py-1.5 text-right whitespace-nowrap">
-                          {r.battery != null ? (
-                            <span className={batteryClass(r.batteryPercentEstimate)}>
-                              {Number(r.battery).toFixed(2)}V{r.batteryPercentEstimate != null ? ` (~${Math.round(r.batteryPercentEstimate)}%)` : ""}
-                            </span>
-                          ) : "—"}
-                        </td>
-                        <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rssi != null ? `${r.rssi} dBm` : "—"}</td>
+                        {showSensor && <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{sensorName(r.deviceId)}</td>}
+                        {has.gravity && <td className="px-2 py-1.5 text-right font-mono text-blue-700 dark:text-blue-400">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>}
+                        {has.temp && <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? formatSensorTemp(r.temperature, r.temperatureUnit, tempUnit) : "—"}</td>}
+                        {has.angle && <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>}
+                        {has.battery && (
+                          <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                            {r.battery != null ? (
+                              <span className={batteryClass(r.batteryPercentEstimate)}>
+                                {Number(r.battery).toFixed(2)}V{r.batteryPercentEstimate != null ? ` (~${Math.round(r.batteryPercentEstimate)}%)` : ""}
+                              </span>
+                            ) : "—"}
+                          </td>
+                        )}
+                        {has.rssi && <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rssi != null ? `${r.rssi} dBm` : "—"}</td>}
                         <td className="px-2 py-1.5">
                           {r.rawPayload && (
                             <button type="button" onClick={() => setExpandedRawId(expandedRawId === r.id ? null : r.id)}
@@ -1036,7 +1058,7 @@ export default function BrewSessionDetail() {
                       </tr>
                       {expandedRawId === r.id && r.rawPayload && (
                         <tr key={`${r.id}-raw`}>
-                          <td colSpan={7} className="px-3 pb-2 bg-muted/10">
+                          <td colSpan={colSpan} className="px-3 pb-2 bg-muted/10">
                             <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(r.rawPayload, null, 2)}</pre>
                           </td>
                         </tr>
@@ -1048,7 +1070,8 @@ export default function BrewSessionDetail() {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Fermentation Chart */}
       {chartData.length > 1 && (() => {
@@ -1067,7 +1090,7 @@ export default function BrewSessionDetail() {
 
         const fermStartLabel = fermStartEntry ? formatDateTimeShort(fermStartEntry.changedAt) : null;
         const fermEndLabel = fermEndEntry ? formatDateTimeShort(fermEndEntry.changedAt) : null;
-        const tempRange = (telemetry as any)?.tempRange;
+        const tempRange = telemetry?.tempRange;
         // The server sends the range for the current stage; say which one in the labels.
         const rangeTag = tempRange?.phase === "conditioning" ? "Cond. " : "";
 
@@ -1252,6 +1275,11 @@ export default function BrewSessionDetail() {
         );
       })()}
 
+      {/* Reference sensors (ice bath, room…): each on its own chart */}
+      {(telemetry?.referenceSensors ?? []).map((s) => (
+        <ReferenceSensorChart key={s.device.id} sensor={s} unit={tempUnit} />
+      ))}
+
       {/* Fermentation Readings */}
       <div className="bg-card border border-card-border rounded-lg">
         <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
@@ -1337,7 +1365,7 @@ export default function BrewSessionDetail() {
                         </div>
                         <div className="flex items-center gap-3 flex-1 flex-wrap">
                           {reading.temperatureFahrenheit != null && (() => {
-                            const tr = (telemetry as any)?.tempRange;
+                            const tr = telemetry?.tempRange;
                             const tempF = reading.temperatureFahrenheit;
                             let devEl: React.ReactNode = null;
                             if (tr?.ideal != null) {

@@ -2580,6 +2580,13 @@ export const GetBrewSessionResponse = zod
           ph: zod.number().nullish(),
           notes: zod.string().nullish(),
           source: zod.enum(["manual", "ispindel", "shelly"]),
+          sensorDeviceId: zod
+            .number()
+            .int()
+            .nullish()
+            .describe(
+              "The sensor a mirrored reading came from; null for manual readings.",
+            ),
         }),
       ),
       statusLog: zod.array(
@@ -3641,6 +3648,13 @@ export const ListFermentationReadingsResponseItem = zod.object({
   ph: zod.number().nullish(),
   notes: zod.string().nullish(),
   source: zod.enum(["manual", "ispindel", "shelly"]),
+  sensorDeviceId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe(
+      "The sensor a mirrored reading came from; null for manual readings.",
+    ),
 });
 export const ListFermentationReadingsResponse = zod.array(
   ListFermentationReadingsResponseItem,
@@ -3670,6 +3684,13 @@ export const AddFermentationReadingResponse = zod.object({
   ph: zod.number().nullish(),
   notes: zod.string().nullish(),
   source: zod.enum(["manual", "ispindel", "shelly"]),
+  sensorDeviceId: zod
+    .number()
+    .int()
+    .nullish()
+    .describe(
+      "The sensor a mirrored reading came from; null for manual readings.",
+    ),
 });
 
 /**
@@ -4658,6 +4679,16 @@ export const ListSensorDevicesResponseItem = zod.object({
     .optional(),
   assignedBrewSessionId: zod.number().int().nullish(),
   assignedBrewName: zod.string().nullish(),
+  assignedRole: zod
+    .union([
+      zod
+        .enum(["fermenter", "reference"])
+        .describe(
+          "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
   connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
   alerts: zod.array(
     zod.object({
@@ -4746,6 +4777,16 @@ export const GetSensorDeviceResponse = zod.object({
     .optional(),
   assignedBrewSessionId: zod.number().int().nullish(),
   assignedBrewName: zod.string().nullish(),
+  assignedRole: zod
+    .union([
+      zod
+        .enum(["fermenter", "reference"])
+        .describe(
+          "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
   connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
   alerts: zod.array(
     zod.object({
@@ -4805,6 +4846,12 @@ export const AssignSensorDeviceParams = zod.object({
 
 export const AssignSensorDeviceBody = zod.object({
   brewSessionId: zod.number().int(),
+  role: zod
+    .enum(["fermenter", "reference"])
+    .optional()
+    .describe(
+      "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+    ),
 });
 
 export const AssignSensorDeviceResponse = zod.object({
@@ -4846,6 +4893,96 @@ export const AssignSensorDeviceResponse = zod.object({
     .optional(),
   assignedBrewSessionId: zod.number().int().nullish(),
   assignedBrewName: zod.string().nullish(),
+  assignedRole: zod
+    .union([
+      zod
+        .enum(["fermenter", "reference"])
+        .describe(
+          "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
+  connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
+  alerts: zod.array(
+    zod.object({
+      type: zod.enum([
+        "gravity_stalled",
+        "temp_out_of_range",
+        "battery_low",
+        "device_offline",
+      ]),
+      message: zod.string(),
+      triggeredAt: zod.string().datetime({ offset: true }),
+    }),
+  ),
+});
+
+/**
+ * Sets the role on every assignment of the device to its current brew. Switching to reference also removes the device's mirrored rows from that brew's fermentation readings; its own sensor readings are kept.
+ * @summary Change the role of a sensor on its current brew
+ */
+export const SetSensorDeviceRoleParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const SetSensorDeviceRoleBody = zod.object({
+  role: zod
+    .enum(["fermenter", "reference"])
+    .describe(
+      "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+    ),
+});
+
+export const SetSensorDeviceRoleResponse = zod.object({
+  device: zod.object({
+    id: zod.number().int(),
+    deviceType: zod.string(),
+    deviceName: zod.string(),
+    deviceKey: zod.string(),
+    enabled: zod.boolean(),
+    notes: zod.string().nullish(),
+    lastSeenAt: zod.string().datetime({ offset: true }).nullish(),
+    createdAt: zod.string().datetime({ offset: true }),
+    updatedAt: zod.string().datetime({ offset: true }),
+  }),
+  latestReading: zod
+    .union([
+      zod.object({
+        id: zod.number().int(),
+        deviceId: zod.number().int(),
+        brewSessionId: zod.number().int().nullish(),
+        gravity: zod.number().nullish(),
+        temperature: zod.number().nullish(),
+        temperatureUnit: zod.string().nullish(),
+        angle: zod.number().nullish(),
+        battery: zod.number().nullish(),
+        batteryPercentEstimate: zod
+          .number()
+          .nullish()
+          .describe(
+            "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+          ),
+        rssi: zod.number().int().nullish(),
+        reportedInterval: zod.number().int().nullish(),
+        rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
+        receivedAt: zod.string().datetime({ offset: true }),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  assignedBrewSessionId: zod.number().int().nullish(),
+  assignedBrewName: zod.string().nullish(),
+  assignedRole: zod
+    .union([
+      zod
+        .enum(["fermenter", "reference"])
+        .describe(
+          "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
   connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
   alerts: zod.array(
     zod.object({
@@ -4907,6 +5044,16 @@ export const UnassignSensorDeviceResponse = zod.object({
     .optional(),
   assignedBrewSessionId: zod.number().int().nullish(),
   assignedBrewName: zod.string().nullish(),
+  assignedRole: zod
+    .union([
+      zod
+        .enum(["fermenter", "reference"])
+        .describe(
+          "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
   connectionStatus: zod.enum(["connected", "warning", "offline", "unknown"]),
   alerts: zod.array(
     zod.object({
@@ -5009,28 +5156,30 @@ export const GetBrewSensorTelemetryResponse = zod.object({
       zod.null(),
     ])
     .optional(),
-  readings: zod.array(
-    zod.object({
-      id: zod.number().int(),
-      deviceId: zod.number().int(),
-      brewSessionId: zod.number().int().nullish(),
-      gravity: zod.number().nullish(),
-      temperature: zod.number().nullish(),
-      temperatureUnit: zod.string().nullish(),
-      angle: zod.number().nullish(),
-      battery: zod.number().nullish(),
-      batteryPercentEstimate: zod
-        .number()
-        .nullish()
-        .describe(
-          "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
-        ),
-      rssi: zod.number().int().nullish(),
-      reportedInterval: zod.number().int().nullish(),
-      rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
-      receivedAt: zod.string().datetime({ offset: true }),
-    }),
-  ),
+  readings: zod
+    .array(
+      zod.object({
+        id: zod.number().int(),
+        deviceId: zod.number().int(),
+        brewSessionId: zod.number().int().nullish(),
+        gravity: zod.number().nullish(),
+        temperature: zod.number().nullish(),
+        temperatureUnit: zod.string().nullish(),
+        angle: zod.number().nullish(),
+        battery: zod.number().nullish(),
+        batteryPercentEstimate: zod
+          .number()
+          .nullish()
+          .describe(
+            "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+          ),
+        rssi: zod.number().int().nullish(),
+        reportedInterval: zod.number().int().nullish(),
+        rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
+        receivedAt: zod.string().datetime({ offset: true }),
+      }),
+    )
+    .describe("Readings from the brew's fermenter sensors only."),
   insights: zod
     .union([
       zod.object({
@@ -5064,6 +5213,94 @@ export const GetBrewSensorTelemetryResponse = zod.object({
       message: zod.string(),
       triggeredAt: zod.string().datetime({ offset: true }),
     }),
+  ),
+  tempRange: zod
+    .union([
+      zod
+        .object({
+          min: zod.number().nullable(),
+          max: zod.number().nullable(),
+          ideal: zod.number().nullable(),
+          unit: zod.enum(["F", "C"]),
+          phase: zod.enum(["fermenting", "conditioning"]),
+        })
+        .describe(
+          "The brew's temperature range for its current stage, in `unit`.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
+  isDeviceActive: zod.boolean().optional(),
+  referenceSensors: zod.array(
+    zod
+      .object({
+        device: zod.object({
+          id: zod.number().int(),
+          deviceType: zod.string(),
+          deviceName: zod.string(),
+          deviceKey: zod.string(),
+          enabled: zod.boolean(),
+          notes: zod.string().nullish(),
+          lastSeenAt: zod.string().datetime({ offset: true }).nullish(),
+          createdAt: zod.string().datetime({ offset: true }),
+          updatedAt: zod.string().datetime({ offset: true }),
+        }),
+        isActive: zod.boolean().describe("Still assigned to the brew."),
+        connectionStatus: zod.enum([
+          "connected",
+          "warning",
+          "offline",
+          "unknown",
+        ]),
+        latestReading: zod.union([
+          zod.object({
+            id: zod.number().int(),
+            deviceId: zod.number().int(),
+            brewSessionId: zod.number().int().nullish(),
+            gravity: zod.number().nullish(),
+            temperature: zod.number().nullish(),
+            temperatureUnit: zod.string().nullish(),
+            angle: zod.number().nullish(),
+            battery: zod.number().nullish(),
+            batteryPercentEstimate: zod
+              .number()
+              .nullish()
+              .describe(
+                "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+              ),
+            rssi: zod.number().int().nullish(),
+            reportedInterval: zod.number().int().nullish(),
+            rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
+            receivedAt: zod.string().datetime({ offset: true }),
+          }),
+          zod.null(),
+        ]),
+        readings: zod.array(
+          zod.object({
+            id: zod.number().int(),
+            deviceId: zod.number().int(),
+            brewSessionId: zod.number().int().nullish(),
+            gravity: zod.number().nullish(),
+            temperature: zod.number().nullish(),
+            temperatureUnit: zod.string().nullish(),
+            angle: zod.number().nullish(),
+            battery: zod.number().nullish(),
+            batteryPercentEstimate: zod
+              .number()
+              .nullish()
+              .describe(
+                "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+              ),
+            rssi: zod.number().int().nullish(),
+            reportedInterval: zod.number().int().nullish(),
+            rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
+            receivedAt: zod.string().datetime({ offset: true }),
+          }),
+        ),
+      })
+      .describe(
+        "A sensor on the brew with the reference role, with its own readings.",
+      ),
   ),
 });
 
@@ -5185,6 +5422,16 @@ export const GetISpindelStatusResponse = zod.object({
         .optional(),
       assignedBrewSessionId: zod.number().int().nullish(),
       assignedBrewName: zod.string().nullish(),
+      assignedRole: zod
+        .union([
+          zod
+            .enum(["fermenter", "reference"])
+            .describe(
+              "fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.",
+            ),
+          zod.null(),
+        ])
+        .optional(),
       connectionStatus: zod.enum([
         "connected",
         "warning",
@@ -5509,7 +5756,7 @@ export const ListOutputDevicesResponseItem = zod.object({
     .int()
     .nullable()
     .describe(
-      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
+      "The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -5646,7 +5893,7 @@ export const CreateOutputDeviceResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
+      "The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -5812,7 +6059,7 @@ export const GetOutputDeviceResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
+      "The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -5925,7 +6172,7 @@ export const UpdateOutputDeviceBody = zod.object({
     .min(updateOutputDeviceBodyControlProbeIdMin)
     .nullish()
     .describe(
-      "The probe (state.probes id) flows control on; null for the lowest-numbered one",
+      "The probe (state.probes id) flows control on. Null goes back to the lowest-numbered one",
     ),
 });
 
@@ -5960,7 +6207,7 @@ export const UpdateOutputDeviceResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
+      "The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -6118,7 +6365,7 @@ export const SetOutputDeviceRelayResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
+      "The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({
@@ -6245,7 +6492,7 @@ export const ApplyOutputDeviceSafeDefaultsResponse = zod.object({
     .int()
     .nullable()
     .describe(
-      "The probe (state.probes id) flows control on. Null means the lowest-numbered probe",
+      "The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that",
     ),
   lastSeenAt: zod.string().datetime({ offset: true }).nullable(),
   state: zod.object({

@@ -1368,6 +1368,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SensorDeviceWithStatus"
+    patch:
+      operationId: setSensorDeviceRole
+      tags: [sensors]
+      summary: Change the role of a sensor on its current brew
+      description: >-
+        Sets the role on every assignment of the device to its current brew.
+        Switching to reference also removes the device's mirrored rows from
+        that brew's fermentation readings; its own sensor readings are kept.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetSensorRoleBody"
+      responses:
+        "200":
+          description: Role changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorDeviceWithStatus"
+        "409":
+          description: The device isn't assigned to a brew
     delete:
       operationId: unassignSensorDevice
       tags: [sensors]
@@ -4069,6 +4094,10 @@ components:
         source:
           type: string
           enum: [manual, ispindel, shelly]
+        sensorDeviceId:
+          type: integer
+          nullable: true
+          description: The sensor a mirrored reading came from; null for manual readings.
       required: [id, brewSessionId, readingAt, source]
 
     CreateFermentationReadingBody:
@@ -4827,6 +4856,10 @@ components:
         assignedBrewName:
           type: string
           nullable: true
+        assignedRole:
+          allOf:
+            - $ref: "#/components/schemas/SensorAssignmentRole"
+          nullable: true
         connectionStatus:
           type: string
           enum: [connected, warning, offline, unknown]
@@ -4835,6 +4868,48 @@ components:
           items:
             $ref: "#/components/schemas/SensorAlert"
       required: [device, connectionStatus, alerts]
+
+    BrewTempRange:
+      type: object
+      description: The brew's temperature range for its current stage, in `unit`.
+      properties:
+        min:
+          type: number
+          nullable: true
+        max:
+          type: number
+          nullable: true
+        ideal:
+          type: number
+          nullable: true
+        unit:
+          type: string
+          enum: [F, C]
+        phase:
+          type: string
+          enum: [fermenting, conditioning]
+      required: [min, max, ideal, unit, phase]
+
+    BrewReferenceSensor:
+      type: object
+      description: A sensor on the brew with the reference role, with its own readings.
+      properties:
+        device:
+          $ref: "#/components/schemas/SensorDevice"
+        isActive:
+          type: boolean
+          description: Still assigned to the brew.
+        connectionStatus:
+          type: string
+          enum: [connected, warning, offline, unknown]
+        latestReading:
+          $ref: "#/components/schemas/SensorReading"
+          nullable: true
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SensorReading"
+      required: [device, isActive, connectionStatus, latestReading, readings]
 
     BrewSensorTelemetry:
       type: object
@@ -4851,6 +4926,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SensorReading"
+          description: Readings from the brew's fermenter sensors only.
         insights:
           $ref: "#/components/schemas/FermentationInsights"
           nullable: true
@@ -4858,7 +4934,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SensorAlert"
-      required: [brewSessionId, readings, alerts]
+        tempRange:
+          allOf:
+            - $ref: "#/components/schemas/BrewTempRange"
+          nullable: true
+        isDeviceActive:
+          type: boolean
+        referenceSensors:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrewReferenceSensor"
+      required: [brewSessionId, readings, alerts, referenceSensors]
 
     ISpindelPayload:
       type: object
@@ -4947,12 +5033,29 @@ components:
         notes:
           type: string
 
+    SensorAssignmentRole:
+      type: string
+      enum: [fermenter, reference]
+      description: >-
+        fermenter: the sensor's readings are the brew's fermentation data
+        (chart, alerts, insights). reference: a sensor measuring something else
+        (ice bath, room, chamber), charted on its own and kept out of all that.
+
     AssignDeviceBody:
       type: object
       properties:
         brewSessionId:
           type: integer
+        role:
+          $ref: "#/components/schemas/SensorAssignmentRole"
       required: [brewSessionId]
+
+    SetSensorRoleBody:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/SensorAssignmentRole"
+      required: [role]
 
     HaLatestReading:
       type: object

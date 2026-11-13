@@ -25,7 +25,19 @@ export function batteryClass(pct: number | null | undefined, fallback = ""): str
   return fallback;
 }
 
-/** "18.5°C" / "65.3°F" — anything other than "F" is shown as °C. */
-export function formatSensorTemp(temperature: number, unit: string | null | undefined): string {
-  return `${Number(temperature).toFixed(1)}${unit === "F" ? "°F" : "°C"}`;
+/**
+ * A sensor temperature converted to `displayUnit` (the user's temperature
+ * unit). `storedUnit` is the unit the reading was stored in; anything other
+ * than "F" is treated as °C, which is what Shelly probes and most iSpindels
+ * report. E.g. 18.5 stored in C shows as "65.3°F".
+ */
+export function sensorTempIn(temperature: number, storedUnit: string | null | undefined, displayUnit: "C" | "F"): number {
+  const t = Number(temperature);
+  const stored = storedUnit === "F" ? "F" : "C";
+  if (stored === displayUnit) return t;
+  return displayUnit === "F" ? t * 9 / 5 + 32 : (t - 32) * 5 / 9;
+}
+
+export function formatSensorTemp(temperature: number, storedUnit: string | null | undefined, displayUnit: "C" | "F"): string {
+  return `${sensorTempIn(temperature, storedUnit, displayUnit).toFixed(1)}°${displayUnit}`;
 }

@@ -310,7 +310,7 @@ export interface OutputDevice {
    */
   probeSensorDeviceId: number | null;
   /**
-   * The probe (state.probes id) flows control on. Null means the lowest-numbered probe
+   * The probe (state.probes id) flows control on. Set to the lowest-numbered probe when the first one is seen; null before that
    * @nullable
    */
   controlProbeId: number | null;
@@ -349,7 +349,7 @@ export interface UpdateOutputDeviceBody {
   password?: string | null;
   enabled?: boolean;
   /**
-   * The probe (state.probes id) flows control on; null for the lowest-numbered one
+   * The probe (state.probes id) flows control on. Null goes back to the lowest-numbered one
    * @minimum 0
    * @nullable
    */
@@ -1389,6 +1389,11 @@ export interface FermentationReading {
   /** @nullable */
   notes?: string | null;
   source: FermentationReadingSource;
+  /**
+   * The sensor a mirrored reading came from; null for manual readings.
+   * @nullable
+   */
+  sensorDeviceId?: number | null;
 }
 
 export type BrewSessionWithReadings = BrewSession & {
@@ -2108,6 +2113,17 @@ export const SensorDeviceWithStatusConnectionStatus = {
   unknown: "unknown",
 } as const;
 
+/**
+ * fermenter: the sensor's readings are the brew's fermentation data (chart, alerts, insights). reference: a sensor measuring something else (ice bath, room, chamber), charted on its own and kept out of all that.
+ */
+export type SensorAssignmentRole =
+  (typeof SensorAssignmentRole)[keyof typeof SensorAssignmentRole];
+
+export const SensorAssignmentRole = {
+  fermenter: "fermenter",
+  reference: "reference",
+} as const;
+
 export interface SensorDeviceWithStatus {
   device: SensorDevice;
   latestReading?: SensorReading | null;
@@ -2115,17 +2131,74 @@ export interface SensorDeviceWithStatus {
   assignedBrewSessionId?: number | null;
   /** @nullable */
   assignedBrewName?: string | null;
+  assignedRole?: SensorAssignmentRole | null;
   connectionStatus: SensorDeviceWithStatusConnectionStatus;
   alerts: SensorAlert[];
+}
+
+export type BrewTempRangeUnit =
+  (typeof BrewTempRangeUnit)[keyof typeof BrewTempRangeUnit];
+
+export const BrewTempRangeUnit = {
+  F: "F",
+  C: "C",
+} as const;
+
+export type BrewTempRangePhase =
+  (typeof BrewTempRangePhase)[keyof typeof BrewTempRangePhase];
+
+export const BrewTempRangePhase = {
+  fermenting: "fermenting",
+  conditioning: "conditioning",
+} as const;
+
+/**
+ * The brew's temperature range for its current stage, in `unit`.
+ */
+export interface BrewTempRange {
+  /** @nullable */
+  min: number | null;
+  /** @nullable */
+  max: number | null;
+  /** @nullable */
+  ideal: number | null;
+  unit: BrewTempRangeUnit;
+  phase: BrewTempRangePhase;
+}
+
+export type BrewReferenceSensorConnectionStatus =
+  (typeof BrewReferenceSensorConnectionStatus)[keyof typeof BrewReferenceSensorConnectionStatus];
+
+export const BrewReferenceSensorConnectionStatus = {
+  connected: "connected",
+  warning: "warning",
+  offline: "offline",
+  unknown: "unknown",
+} as const;
+
+/**
+ * A sensor on the brew with the reference role, with its own readings.
+ */
+export interface BrewReferenceSensor {
+  device: SensorDevice;
+  /** Still assigned to the brew. */
+  isActive: boolean;
+  connectionStatus: BrewReferenceSensorConnectionStatus;
+  latestReading: SensorReading | null;
+  readings: SensorReading[];
 }
 
 export interface BrewSensorTelemetry {
   brewSessionId: number;
   device?: SensorDevice | null;
   latestReading?: SensorReading | null;
+  /** Readings from the brew's fermenter sensors only. */
   readings: SensorReading[];
   insights?: FermentationInsights | null;
   alerts: SensorAlert[];
+  tempRange?: BrewTempRange | null;
+  isDeviceActive?: boolean;
+  referenceSensors: BrewReferenceSensor[];
 }
 
 export interface ISpindelPayload {
@@ -2183,6 +2256,11 @@ export interface UpdateSensorDeviceBody {
 
 export interface AssignDeviceBody {
   brewSessionId: number;
+  role?: SensorAssignmentRole;
+}
+
+export interface SetSensorRoleBody {
+  role: SensorAssignmentRole;
 }
 
 export interface HaLatestReading {

@@ -41,8 +41,10 @@ router.get("/status", async (req, res) => {
       // computation the brew page and the notifications use: the temperature
       // range for the brew's current stage and the 24-hour stall check.
       // Unassigned, there is no range to check, so only offline and battery.
+      // A reference sensor (ice bath, room) isn't the brew's temperature, so
+      // it gets the same device-only alerts.
       let alerts;
-      if (activeAssignment) {
+      if (activeAssignment && activeAssignment.role === "fermenter") {
         const telemetry = await computeBrewAlerts(activeAssignment.brewSessionId);
         const status = telemetry.status ?? null;
         alerts = alertsForBrew(telemetry.alerts, {

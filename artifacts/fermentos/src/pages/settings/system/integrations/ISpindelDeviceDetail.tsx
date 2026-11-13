@@ -4,12 +4,15 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useListISpindelDeviceReadings } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { batteryClass, connectionDotClass, formatShortDateTime } from "./ispindelFormat";
+import { formatSensorTemp, sensorTempIn } from "@/lib/sensorStatus";
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 
 export function ISpindelDeviceDetail({
   deviceId, device, onBack, brewSessions,
 }: {
   deviceId: number; device: any; onBack: () => void; brewSessions: any[];
 }) {
+  const tempUnit = useFermentTempUnit();
   const [filterPreset, setFilterPreset] = useState<"24h" | "7d" | "30d" | "all" | "brew">("24h");
   const [filterBrewId, setFilterBrewId] = useState<number | null>(null);
   const [sort, setSort] = useState<"desc" | "asc">("desc");
@@ -50,10 +53,10 @@ export function ISpindelDeviceDetail({
   const chartData = useMemo(() => (chartPage?.readings ?? []).map((r: any) => ({
     t: formatShortDateTime(r.receivedAt),
     gravity: r.gravity != null ? Number(r.gravity) : null,
-    temp: r.temperature != null ? Number(r.temperature) : null,
+    temp: r.temperature != null ? sensorTempIn(r.temperature, r.temperatureUnit, tempUnit) : null,
     battery: r.battery != null ? Number(r.battery) : null,
     batteryPct: r.batteryPercentEstimate != null ? Number(r.batteryPercentEstimate) : null,
-  })), [chartPage]);
+  })), [chartPage, tempUnit]);
 
   const brewName = (id: number | null) =>
     id ? (brewSessions as any[]).find((s: any) => s.id === id)?.recipeName ?? `Brew #${id}` : null;
@@ -93,7 +96,7 @@ export function ISpindelDeviceDetail({
           </p>
           <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
             {device.latestReading.gravity != null && <span>SG <strong className="text-blue-700 dark:text-blue-400">{Number(device.latestReading.gravity).toFixed(3)}</strong></span>}
-            {device.latestReading.temperature != null && <span>Temp <strong className="text-amber-700 dark:text-amber-400">{Number(device.latestReading.temperature).toFixed(1)}{device.latestReading.temperatureUnit === "F" ? "°F" : "°C"}</strong></span>}
+            {device.latestReading.temperature != null && <span>Temp <strong className="text-amber-700 dark:text-amber-400">{formatSensorTemp(device.latestReading.temperature, device.latestReading.temperatureUnit, tempUnit)}</strong></span>}
             {device.latestReading.battery != null && (
               <span className={batteryClass(device.latestReading.batteryPercentEstimate)}>
                 🔋 <strong>{Number(device.latestReading.battery).toFixed(2)}V</strong>
@@ -195,7 +198,7 @@ export function ISpindelDeviceDetail({
                       {formatShortDateTime(r.receivedAt)}
                     </td>
                     <td className="px-2 py-1.5 text-right font-mono">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>
-                    <td className="px-2 py-1.5 text-right whitespace-nowrap">{r.temperature != null ? `${Number(r.temperature).toFixed(1)}${r.temperatureUnit === "F" ? "°F" : "°C"}` : "—"}</td>
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap">{r.temperature != null ? formatSensorTemp(r.temperature, r.temperatureUnit, tempUnit) : "—"}</td>
                     <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>
                     <td className="px-2 py-1.5 text-right whitespace-nowrap">
                       {r.battery != null ? (

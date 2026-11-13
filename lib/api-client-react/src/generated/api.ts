@@ -22,6 +22,7 @@ import type {
   BackupAuditResult,
   BeerStyle,
   BoilControlBody,
+  BrewRelayRuns,
   BrewSensorTelemetry,
   BrewSession,
   BrewSessionRecipeSnapshot,
@@ -7811,6 +7812,94 @@ export function useGetBrewSensorTelemetry<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBrewSensorTelemetryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getGetBrewRelayRunsUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/relay-runs`;
+};
+
+/**
+ * One entry per stretch a relay was on while a flow was controlling the temperature of a sensor assigned to this brew. Recorded from the version that added it onwards. An open run (endedAt null) is still on.
+ * @summary How long each relay ran heating or cooling this brew, run by run
+ */
+export const getBrewRelayRuns = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<BrewRelayRuns> => {
+  return customFetch<BrewRelayRuns>(getGetBrewRelayRunsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBrewRelayRunsQueryKey = (id: number) => {
+  return [`/api/brew-sessions/${id}/relay-runs`] as const;
+};
+
+export const getGetBrewRelayRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBrewRelayRuns>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewRelayRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBrewRelayRunsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBrewRelayRuns>>
+  > = ({ signal }) => getBrewRelayRuns(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBrewRelayRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBrewRelayRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBrewRelayRuns>>
+>;
+export type GetBrewRelayRunsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary How long each relay ran heating or cooling this brew, run by run
+ */
+
+export function useGetBrewRelayRuns<
+  TData = Awaited<ReturnType<typeof getBrewRelayRuns>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrewRelayRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBrewRelayRunsQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

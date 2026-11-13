@@ -48,6 +48,7 @@ import { DryHopCard } from "@/components/DryHopCard";
 import { RecipeAsBrewedCard } from "@/components/RecipeAsBrewedCard";
 import { BrewSensorsCard } from "@/components/BrewSensorsCard";
 import { ReferenceSensorChart } from "@/components/ReferenceSensorChart";
+import { RelayUsageChart } from "@/components/RelayUsageChart";
 
 function StatusProgress({ status, onStatusChange, isPending }: { status: BrewStatus; onStatusChange: (s: BrewStatus) => void; isPending?: boolean }) {
   const idx = BREW_STATUSES.indexOf(status);
@@ -804,6 +805,7 @@ export default function BrewSessionDetail() {
       </div>
 
       {["brew_day", "fermenting", "conditioning"].includes(session.status) && <BrewTempControlCard session={session} />}
+      <RelayUsageChart brewSessionId={session.id} active={["brew_day", "fermenting", "conditioning"].includes(session.status)} />
 
       {/* Sensor Telemetry */}
       {telemetry && !telemetry.device ? (

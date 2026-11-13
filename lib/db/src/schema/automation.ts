@@ -1,6 +1,7 @@
-import { pgTable, serial, text, integer, timestamp, jsonb, boolean, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, jsonb, boolean, primaryKey, index } from "drizzle-orm/pg-core";
 import { sensorDevicesTable } from "./sensors";
 import { recipesTable } from "./recipes";
+import { brewSessionsTable } from "./brew_sessions";
 
 // Shelly devices FermentOS polls and switches, as opposed to sensor_devices,
 // which it only reads. Two drivers: the Gen1 REST API (SHSW-1) and the Gen2+
@@ -116,3 +117,32 @@ export const flowRecipesTable = pgTable(
   },
   (t) => [primaryKey({ columns: [t.flowId, t.recipeId] })],
 );
+
+// ── Relay run time ──────────────────────────────────────────────────────────
+// One row per stretch a relay was on, so a brew can show how long it heated or
+// cooled. The brew and mode are what the flow switching it on was doing at
+// the time; a relay switched by hand or seen on by the poller has neither.
+
+export const relayRunModeEnum = ["heat", "cool"] as const;
+export type RelayRunMode = (typeof relayRunModeEnum)[number];
+
+export const relayRunsTable = pgTable(
+  "relay_runs",
+  {
+    id: serial("id").primaryKey(),
+    outputDeviceId: integer("output_device_id")
+      .notNull()
+      .references(() => outputDevicesTable.id, { onDelete: "cascade" }),
+    brewSessionId: integer("brew_session_id").references(() => brewSessionsTable.id, { onDelete: "cascade" }),
+    mode: text("mode", { enum: relayRunModeEnum }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    // Null while the relay is still on.
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    // Last time FermentOS knew it was on, written every few minutes, so a run
+    // left open by a crash can be closed near when it really ended.
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("relay_runs_brew_started_idx").on(t.brewSessionId, t.startedAt)],
+);
+
+export type RelayRun = typeof relayRunsTable.$inferSelect;

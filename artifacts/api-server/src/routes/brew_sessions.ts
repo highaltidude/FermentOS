@@ -21,6 +21,7 @@ import { loadDryHopSchedule, scheduleForSession } from "../services/dryHops";
 import { getAutoConditioning } from "../services/autoConditioning";
 import { overrulesAutoAdvance } from "../lib/autoAdvance";
 import { diffRecipeSnapshots } from "../lib/recipeHistory";
+import { brewRelayRuns, anyRelays } from "../services/relayRuns";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -114,6 +115,16 @@ router.get("/brew-sessions/:id", async (req, res) => {
 });
 
 // The recipe as this batch was brewed, and what has changed in it since.
+// ── GET /brew-sessions/:id/relay-runs ─────────────────────────────────────
+router.get("/brew-sessions/:id/relay-runs", async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
+  const [session] = await db.select({ id: brewSessionsTable.id }).from(brewSessionsTable).where(eq(brewSessionsTable.id, id));
+  if (!session) return res.status(404).json({ error: "Brew session not found" });
+  const [runs, hasRelays] = await Promise.all([brewRelayRuns(id), anyRelays()]);
+  return res.json({ runs, hasRelays });
+});
+
 router.get("/brew-sessions/:id/recipe-snapshot", async (req, res) => {
   const id = parseIdParam(req, res);
   if (id === undefined) return;

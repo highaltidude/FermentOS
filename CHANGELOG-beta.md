@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.14.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.14.0-beta1...fermentos-v1.14.0-beta2) (2026-11-13)
+
+
+### Features
+
+* **automation:** track heat/cool relay run time per brew with an hourly/daily chart ([166c7b7](https://github.com/highaltidude/FermentOS/commit/166c7b7539c91a77c15b2828abce9eca66b164af))
+
+
+### Bug Fixes
+
+* **deps:** raise body-parser, fast-uri and postcss-selector-parser for their security advisories ([9462881](https://github.com/highaltidude/FermentOS/commit/9462881773e09e339fd21be99e5dbb026b880716))
+* **deps:** raise qs to 6.16.1 for its security advisory ([4f38434](https://github.com/highaltidude/FermentOS/commit/4f38434f0d3e022f5c27f67539b3a0f0d400fe95))
+* **deps:** raise undici to 7.30.1 for its security advisories ([377d670](https://github.com/highaltidude/FermentOS/commit/377d6702286cdd4cdb082c2456faf859dfefdf46))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

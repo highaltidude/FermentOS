@@ -122,6 +122,35 @@ export async function migrateLegacyStatuses(): Promise<void> {
   if (completeCount > 0) {
     logger.info({ rows: completeCount }, "Migrated legacy complete → packaged");
   }
+
+  // ── Sensor roles on a brew (fermenter / reference) ────────────────────
+  // Same self-healing rationale. Existing assignments are fermenter sensors.
+  await db.execute(
+    sql`ALTER TABLE sensor_device_brew_assignments ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'fermenter'`,
+  );
+  await db.execute(
+    sql`ALTER TABLE fermentation_readings ADD COLUMN IF NOT EXISTS sensor_device_id integer`,
+  );
+  // Mirrored rows from before sensor_device_id carry only the device's name
+  // (in notes). Link them where that name belongs to exactly one sensor of the
+  // matching kind, so switching a sensor to reference can find its rows even
+  // after it's renamed. Rows already linked are skipped, so this is idempotent.
+  const linked = await db.execute(sql`
+    UPDATE fermentation_readings fr
+    SET sensor_device_id = sd.id
+    FROM sensor_devices sd
+    WHERE fr.sensor_device_id IS NULL
+      AND fr.source IN ('ispindel', 'shelly')
+      AND fr.notes = sd.device_name
+      AND (CASE WHEN sd.device_type = 'shelly_probe' THEN 'shelly' ELSE 'ispindel' END) = fr.source
+      AND (SELECT count(*) FROM sensor_devices s2
+           WHERE s2.device_name = sd.device_name
+             AND (CASE WHEN s2.device_type = 'shelly_probe' THEN 'shelly' ELSE 'ispindel' END) = fr.source) = 1
+  `);
+  const linkedCount = (linked as { rowCount?: number }).rowCount ?? 0;
+  if (linkedCount > 0) {
+    logger.info({ rows: linkedCount }, "Linked mirrored fermentation_readings to their sensor");
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { db, sensorDevicesTable, sensorReadingsTable, fermentationReadingsTable, brewSessionsTable } from "@workspace/db";
+import { db, sensorDevicesTable, sensorReadingsTable, fermentationReadingsTable, brewSessionsTable, type SensorAssignmentRole } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { estimateBatteryPercent } from "../lib/batteryUtil";
 import { getActiveAssignment } from "./sensorDevices";
@@ -51,9 +51,11 @@ export async function ingestReading(opts: {
 
   // Resolve active brew assignment
   let brewSessionId = opts.brewSessionId ?? null;
+  let role: SensorAssignmentRole = "fermenter";
   if (brewSessionId == null) {
     const activeAssignment = await getActiveAssignment(device!.id);
     brewSessionId = activeAssignment?.brewSessionId ?? null;
+    role = activeAssignment?.role ?? "fermenter";
   }
 
   // Store sensor reading
@@ -89,7 +91,9 @@ export async function ingestReading(opts: {
     sessionIsPackaged = assignedSession?.status === "packaged";
   }
 
-  if (!sessionIsPackaged && brewSessionId && (opts.gravity != null || opts.temperature != null)) {
+  // A reference sensor (ice bath, room) is charted from its own readings and
+  // must not leak into the brew's fermentation data.
+  if (!sessionIsPackaged && brewSessionId && role === "fermenter" && (opts.gravity != null || opts.temperature != null)) {
     // Convert temperature to °F for the fermentation_readings table (stored in °F)
     let tempF: number | null = null;
     if (opts.temperature != null) {
@@ -106,6 +110,7 @@ export async function ingestReading(opts: {
       gravity: opts.gravity ?? null,
       notes: opts.deviceName ?? null,
       source: opts.source ?? "ispindel",
+      sensorDeviceId: device!.id,
     });
   }
 

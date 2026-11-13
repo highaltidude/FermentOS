@@ -61,6 +61,8 @@ async function runAlertCheck(): Promise<void> {
         .where(and(
           eq(sensorDeviceBrewAssignmentsTable.brewSessionId, session.id),
           isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
+          // Reference sensors (ice bath, room) aren't the beer's temperature.
+          eq(sensorDeviceBrewAssignmentsTable.role, "fermenter"),
         ));
 
       const telemetry = activeAssignment ? await computeBrewAlerts(session.id) : null;

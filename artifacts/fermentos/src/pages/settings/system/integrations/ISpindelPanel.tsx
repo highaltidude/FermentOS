@@ -41,9 +41,12 @@ import { useCopyToClipboard } from "../../useCopyToClipboard";
 import { plainHttpHost, plainHttpOrigin } from "../../shared";
 import { batteryClass, connectionDotClass, formatShortDateTime } from "./ispindelFormat";
 import { ISpindelDeviceDetail } from "./ISpindelDeviceDetail";
+import { formatSensorTemp } from "@/lib/sensorStatus";
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
 
 export function ISpindelPanel() {
   const { toast } = useToast();
+  const tempUnit = useFermentTempUnit();
   const qc = useQueryClient();
   const { copiedKey, copy } = useCopyToClipboard();
   const [showToken, setShowToken] = useState(false);
@@ -242,7 +245,7 @@ export function ISpindelPanel() {
                       {reading ? (
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                           {reading.gravity != null && <span>SG {Number(reading.gravity).toFixed(3)}</span>}
-                          {reading.temperature != null && <span>{Number(reading.temperature).toFixed(1)}{reading.temperatureUnit === "F" ? "°F" : "°C"}</span>}
+                          {reading.temperature != null && <span>{formatSensorTemp(reading.temperature, reading.temperatureUnit, tempUnit)}</span>}
                           {reading.battery != null && (
                             <span className={batteryClass(reading.batteryPercentEstimate)}>
                               🔋 {Number(reading.battery).toFixed(2)}V{reading.batteryPercentEstimate != null ? ` (~${Math.round(reading.batteryPercentEstimate)}%)` : ""}
@@ -260,7 +263,7 @@ export function ISpindelPanel() {
                       <div className="flex items-center gap-2 mt-2">
                         {d.assignedBrewSessionId ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-green-600 dark:text-green-400 font-medium">→ {d.assignedBrewName ?? "Active brew"}</span>
+                            <span className="text-xs text-green-600 dark:text-green-400 font-medium">→ {d.assignedBrewName ?? "Active brew"}{d.assignedRole === "reference" ? " (reference)" : ""}</span>
                             <button
                               type="button"
                               onClick={() => unassignDevice.mutate({ id: d.device.id })}

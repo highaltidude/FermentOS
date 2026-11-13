@@ -15,6 +15,8 @@ import { STATUS_LABELS } from "@/lib/brewStatus";
 import { formatDate } from "@/lib/format";
 import { estimateAbv } from "@/lib/brewMath";
 import { useNow } from "@/hooks/useNow";
+import { useFermentTempUnit } from "@/hooks/useFermentTempUnit";
+import { formatSensorTemp } from "@/lib/sensorStatus";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/ui/score-picker";
@@ -121,6 +123,7 @@ function FlowsCard() {
 }
 
 export default function Dashboard() {
+  const tempUnit = useFermentTempUnit();
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
   const { data: activeBrews, isLoading: brewsLoading } = useGetActiveBrews();
 
@@ -335,8 +338,7 @@ export default function Dashboard() {
                     {sensor.latestReading?.temperature != null && (
                       <span className="flex items-center gap-1">
                         <Thermometer className="w-3 h-3" />
-                        {sensor.latestReading.temperature}
-                        {sensor.latestReading.temperatureUnit ?? "°F"}
+                        {formatSensorTemp(sensor.latestReading.temperature, sensor.latestReading.temperatureUnit, tempUnit)}
                       </span>
                     )}
                     {sensor.latestReading?.batteryPercentEstimate != null && (

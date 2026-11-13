@@ -46,13 +46,15 @@ export async function runAutoAdvanceCheck(): Promise<void> {
   for (const session of sessions) {
     if (!effectiveAutoAdvance(session.autoAdvanceToConditioning, global)) continue;
     try {
-      // A probe that has been taken out says nothing about the beer any more.
+      // A probe that has been taken out says nothing about the beer any more,
+      // and a reference probe (ice bath, room) never did.
       const [activeAssignment] = await db
         .select({ id: sensorDeviceBrewAssignmentsTable.id })
         .from(sensorDeviceBrewAssignmentsTable)
         .where(and(
           eq(sensorDeviceBrewAssignmentsTable.brewSessionId, session.id),
           isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
+          eq(sensorDeviceBrewAssignmentsTable.role, "fermenter"),
         ));
       if (!activeAssignment) continue;
 

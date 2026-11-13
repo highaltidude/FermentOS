@@ -220,7 +220,9 @@ export function ShellyPanel() {
   const brewPicker = (sensor: SensorDeviceWithStatus, what: string) =>
     sensor.assignedBrewSessionId ? (
       <span className="flex items-center gap-1.5">
-        <span className="text-xs text-green-600 dark:text-green-400 font-medium">{what} → {sensor.assignedBrewName ?? "Active brew"}</span>
+        <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+          {what} → {sensor.assignedBrewName ?? "Active brew"}{sensor.assignedRole === "reference" ? " (reference)" : ""}
+        </span>
         <button
           type="button"
           onClick={() => unassignSensor.mutate({ id: sensor.device.id })}

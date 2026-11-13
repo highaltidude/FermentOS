@@ -41,6 +41,9 @@ export const sensorReadingsTable = pgTable("sensor_readings", {
 
 export type SensorReading = typeof sensorReadingsTable.$inferSelect;
 
+export const sensorAssignmentRoleEnum = ["fermenter", "reference"] as const;
+export type SensorAssignmentRole = (typeof sensorAssignmentRoleEnum)[number];
+
 // Tracks which device is currently assigned to which brew session.
 // unassignedAt is null for the currently active assignment.
 export const sensorDeviceBrewAssignmentsTable = pgTable("sensor_device_brew_assignments", {
@@ -53,6 +56,12 @@ export const sensorDeviceBrewAssignmentsTable = pgTable("sensor_device_brew_assi
     .references(() => brewSessionsTable.id, { onDelete: "cascade" }),
   assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
   unassignedAt: timestamp("unassigned_at", { withTimezone: true }),
+  /**
+   * "fermenter" readings are the brew's fermentation data (chart, alerts,
+   * insights). A "reference" sensor (ice bath, room, chamber) is charted on
+   * its own and kept out of all of that.
+   */
+  role: text("role", { enum: sensorAssignmentRoleEnum }).notNull().default("fermenter"),
 });
 
 export type SensorDeviceBrewAssignment = typeof sensorDeviceBrewAssignmentsTable.$inferSelect;

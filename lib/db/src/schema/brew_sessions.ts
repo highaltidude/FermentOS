@@ -150,6 +150,12 @@ export const fermentationReadingsTable = pgTable("fermentation_readings", {
   ph: real("ph"),
   notes: text("notes"),
   source: text("source", { enum: fermentationReadingSourceEnum }).notNull().default("manual"),
+  /**
+   * The sensor a mirrored reading came from (null for manual readings and
+   * rows from before this column). Not a foreign key: sensors.ts already
+   * imports this file, and a dangling id after a sensor is deleted is harmless.
+   */
+  sensorDeviceId: integer("sensor_device_id"),
 });
 
 export type FermentationReading = typeof fermentationReadingsTable.$inferSelect;

@@ -95,6 +95,7 @@ import type {
   SensorDeviceWithStatus,
   SensorReading,
   SetOutputDeviceRelayBody,
+  SetSensorRoleBody,
   SimulateISpindelReading200,
   SimulateReadingBody,
   SourceWater,
@@ -7408,6 +7409,125 @@ export const useAssignSensorDevice = <
   TContext
 > => {
   return useMutation(getAssignSensorDeviceMutationOptions(options));
+};
+
+export const getSetSensorDeviceRoleUrl = (id: number) => {
+  return `/api/sensors/devices/${id}/assign`;
+};
+
+/**
+ * Sets the role on every assignment of the device to its current brew. Switching to reference also removes the device's mirrored rows from that brew's fermentation readings; its own sensor readings are kept.
+ * @summary Change the role of a sensor on its current brew
+ */
+export const setSensorDeviceRole = async (
+  id: number,
+  setSensorRoleBody: SetSensorRoleBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<SensorDeviceWithStatus> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<SensorDeviceWithStatus>(getSetSensorDeviceRoleUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(setSensorRoleBody),
+  });
+};
+
+export const getSetSensorDeviceRoleMutationKey = () =>
+  ["setSensorDeviceRole"] as const;
+
+export const getSetSensorDeviceRoleMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSensorDeviceRole>>,
+    TError,
+    SetSensorDeviceRoleMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setSensorDeviceRole>>,
+  TError,
+  SetSensorDeviceRoleMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSetSensorDeviceRoleMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setSensorDeviceRole>>,
+    SetSensorDeviceRoleMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setSensorDeviceRole(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetSensorDeviceRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setSensorDeviceRole>>
+>;
+export type SetSensorDeviceRoleMutationBody = BodyType<SetSensorRoleBody>;
+export type SetSensorDeviceRoleMutationError = ErrorType<void>;
+export type SetSensorDeviceRoleMutationVariables = {
+  id: number;
+  data: BodyType<SetSensorRoleBody>;
+};
+
+/**
+ * @summary Change the role of a sensor on its current brew
+ */
+export const useSetSensorDeviceRole = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSensorDeviceRole>>,
+    TError,
+    SetSensorDeviceRoleMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setSensorDeviceRole>>,
+  TError,
+  SetSensorDeviceRoleMutationVariables,
+  TContext
+> => {
+  return useMutation(getSetSensorDeviceRoleMutationOptions(options));
 };
 
 export const getUnassignSensorDeviceUrl = (id: number) => {

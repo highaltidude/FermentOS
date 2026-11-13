@@ -1,4 +1,8 @@
-import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable, type brewStatusEnum } from "@workspace/db";
+import {
+  db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable, brewSessionsTable, recipesTable,
+  type brewStatusEnum,
+} from "@workspace/db";
+import { splitAssignmentsByRole } from "../lib/sensorRoles";
 import { eq, isNotNull, and, gte, lte, inArray } from "drizzle-orm";
 import { calcInsights } from "../lib/fermentationInsights";
 import { batteryWarningLevel } from "../lib/batteryUtil";
@@ -144,40 +148,28 @@ export type BrewTelemetry = {
   status?: BrewStatus | null;
   /** False when the brew has no assignment history at all. */
   hasAssignments: boolean;
+  /** Sensors on the brew with the reference role, each with its own readings. */
+  referenceSensors: ReferenceSensor[];
 };
 
+export type ReferenceSensor = {
+  device: typeof sensorDevicesTable.$inferSelect;
+  isActive: boolean;
+  connectionStatus: ConnectionStatus;
+  latestReading: Reading | null;
+  readings: Reading[];
+};
+
+type Assignment = typeof sensorDeviceBrewAssignmentsTable.$inferSelect;
+
 /**
- * Everything the telemetry endpoint and the alert monitor both need for one
- * brew: the reading window across every assignment, insights, and alerts.
+ * Readings inside the given assignment windows, oldest first. Filtering by
+ * (deviceId, receivedAt >= assignedAt [, <= unassignedAt]) keeps pre-assignment
+ * "test" readings and a prior brew's readings out.
  */
-export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> {
-  // Fetch ALL assignment windows for this brew, oldest first.
-  // A brew may have multiple windows if a device was un-assigned and re-assigned,
-  // or if different devices were used at different stages.
-  const assignments = await db
-    .select()
-    .from(sensorDeviceBrewAssignmentsTable)
-    .where(eq(sensorDeviceBrewAssignmentsTable.brewSessionId, brewId))
-    .orderBy(sensorDeviceBrewAssignmentsTable.assignedAt);
-
-  if (assignments.length === 0) {
-    return { brewSessionId: brewId, device: null, latestReading: null, readings: [], insights: null, alerts: [], hasAssignments: false };
-  }
-
-  // For device display / connection status use the most recent assignment's device.
-  const latestAssignment = assignments[assignments.length - 1]!;
-  const isDeviceActive = latestAssignment.unassignedAt == null;
-  const [device] = await db
-    .select()
-    .from(sensorDevicesTable)
-    .where(eq(sensorDevicesTable.id, latestAssignment.deviceId));
-
-  // Collect readings for every assignment window.
-  // Filter by (deviceId, receivedAt >= assignedAt [, receivedAt <= unassignedAt]).
-  // This means pre-assignment "test" readings are never included, and readings
-  // from a prior brew's window are correctly excluded from the current brew.
-  const windowResults = await Promise.all(
-    assignments.map((a) => {
+async function readingsInWindows(windows: Assignment[]): Promise<Reading[]> {
+  const results = await Promise.all(
+    windows.map((a) => {
       const conditions: ReturnType<typeof eq>[] = [
         eq(sensorReadingsTable.deviceId, a.deviceId),
         gte(sensorReadingsTable.receivedAt, a.assignedAt),
@@ -193,11 +185,69 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
         .orderBy(sensorReadingsTable.receivedAt);
     }),
   );
+  return results.flat().sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
+}
 
-  // Merge and sort all windows by time (handles the rare multi-device case).
-  const readings: Reading[] = windowResults
-    .flat()
-    .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
+async function buildReferenceSensors(groups: Map<number, Assignment[]>): Promise<ReferenceSensor[]> {
+  if (groups.size === 0) return [];
+  const devices = await db.select().from(sensorDevicesTable).where(inArray(sensorDevicesTable.id, [...groups.keys()]));
+  const out: ReferenceSensor[] = [];
+  for (const [deviceId, windows] of groups) {
+    const device = devices.find((d) => d.id === deviceId);
+    if (!device) continue;
+    const readings = await readingsInWindows(windows);
+    const latestReading = readings[readings.length - 1] ?? null;
+    out.push({
+      device,
+      isActive: windows.some((w) => w.unassignedAt == null),
+      connectionStatus: calcConnectionStatus(device.lastSeenAt, latestReading?.reportedInterval ?? null),
+      latestReading,
+      readings,
+    });
+  }
+  return out;
+}
+
+/**
+ * Everything the telemetry endpoint and the alert monitor both need for one
+ * brew: the fermenter sensors' readings across every assignment window,
+ * insights and alerts, plus each reference sensor's own readings.
+ */
+export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> {
+  // Fetch ALL assignment windows for this brew, oldest first.
+  // A brew may have multiple windows if a device was un-assigned and re-assigned,
+  // or if different devices were used at different stages.
+  const allAssignments = await db
+    .select()
+    .from(sensorDeviceBrewAssignmentsTable)
+    .where(eq(sensorDeviceBrewAssignmentsTable.brewSessionId, brewId))
+    .orderBy(sensorDeviceBrewAssignmentsTable.assignedAt);
+
+  if (allAssignments.length === 0) {
+    return { brewSessionId: brewId, device: null, latestReading: null, readings: [], insights: null, alerts: [], hasAssignments: false, referenceSensors: [] };
+  }
+
+  const { fermenter: assignments, reference } = splitAssignmentsByRole(allAssignments);
+  const referenceSensors = await buildReferenceSensors(reference);
+
+  // Only reference sensors on this brew: no fermentation data, nothing to alert on.
+  if (assignments.length === 0) {
+    const { status, range: tempRange } = await resolveTempRange(brewId);
+    return {
+      brewSessionId: brewId, device: null, latestReading: null, readings: [], insights: null, alerts: [],
+      tempRange, isDeviceActive: false, status, hasAssignments: true, referenceSensors,
+    };
+  }
+
+  // For device display / connection status use the most recent fermenter assignment's device.
+  const latestAssignment = assignments[assignments.length - 1]!;
+  const isDeviceActive = latestAssignment.unassignedAt == null;
+  const [device] = await db
+    .select()
+    .from(sensorDevicesTable)
+    .where(eq(sensorDevicesTable.id, latestAssignment.deviceId));
+
+  const readings = await readingsInWindows(assignments);
 
   const latestReading = readings[readings.length - 1] ?? null;
   const { status, range: tempRange, originalGravity } = await resolveTempRange(brewId);
@@ -223,5 +273,5 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
     alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });
   }
 
-  return { brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, status, hasAssignments: true };
+  return { brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, status, hasAssignments: true, referenceSensors };
 }

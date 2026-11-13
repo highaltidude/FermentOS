@@ -2,7 +2,8 @@ import { Router } from "express";
 import { db, sensorDevicesTable, sensorReadingsTable, sensorDeviceBrewAssignmentsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { computeBrewAlerts } from "../services/brewAlerts";
-import { buildDeviceSnapshot, closeActiveAssignment } from "../services/sensorDevices";
+import { buildDeviceSnapshot, closeActiveAssignment, setAssignmentRole } from "../services/sensorDevices";
+import { AssignSensorDeviceBody, SetSensorDeviceRoleBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -80,15 +81,34 @@ router.delete("/sensors/devices/:id", async (req, res) => {
 router.post("/sensors/devices/:id/assign", async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: "Invalid id" });
-  const brewSessionId = Number(req.body.brewSessionId);
-  if (!brewSessionId) return res.status(400).json({ error: "brewSessionId required" });
+  const body = AssignSensorDeviceBody.safeParse(req.body);
+  if (!body.success || !body.data.brewSessionId) return res.status(400).json({ error: "brewSessionId required" });
 
   // Close any existing active assignment for this device
   await closeActiveAssignment(id);
 
   // Create new assignment
-  await db.insert(sensorDeviceBrewAssignmentsTable).values({ deviceId: id, brewSessionId });
+  await db.insert(sensorDeviceBrewAssignmentsTable).values({
+    deviceId: id,
+    brewSessionId: body.data.brewSessionId,
+    role: body.data.role ?? "fermenter",
+  });
 
+  const status = await buildDeviceStatus(id);
+  if (!status) return res.status(404).json({ error: "Not found" });
+  return res.json(status);
+});
+
+// ── PATCH /sensors/devices/:id/assign ─────────────────────────────────────
+router.patch("/sensors/devices/:id/assign", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid id" });
+  const body = SetSensorDeviceRoleBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "role must be fermenter or reference" });
+
+  if (!(await setAssignmentRole(id, body.data.role))) {
+    return res.status(409).json({ error: "This sensor isn't assigned to a brew" });
+  }
   const status = await buildDeviceStatus(id);
   if (!status) return res.status(404).json({ error: "Not found" });
   return res.json(status);
@@ -127,7 +147,7 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
 
   const t = await computeBrewAlerts(brewId);
   if (!t.hasAssignments) {
-    return res.json({ brewSessionId: t.brewSessionId, device: null, latestReading: null, readings: [], insights: null, alerts: [] });
+    return res.json({ brewSessionId: t.brewSessionId, device: null, latestReading: null, readings: [], insights: null, alerts: [], referenceSensors: [] });
   }
   return res.json({
     brewSessionId: t.brewSessionId,
@@ -138,6 +158,7 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
     alerts: t.alerts,
     tempRange: t.tempRange,
     isDeviceActive: t.isDeviceActive,
+    referenceSensors: t.referenceSensors,
   });
 });
 

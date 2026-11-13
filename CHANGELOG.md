@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.13.0...fermentos-v1.14.0) (2026-11-13)
+
+
+### Features
+
+* **sensors:** reference probes with their own brew chart, kept out of fermentation data and alerts ([0e6520c](https://github.com/highaltidude/FermentOS/commit/0e6520c9a367525830b1b6324e97bbbbcd08e353))
+
 ## [1.13.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.12.0...fermentos-v1.13.0) (2026-11-12)
 
 

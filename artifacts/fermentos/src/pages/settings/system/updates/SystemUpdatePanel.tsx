@@ -23,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { BASE, RESTART_TIMEOUT_MS, type BackupBeforeUpdate, type VersionInfo } from "../../shared";
 import { renderReleaseMarkdown } from "./releaseMarkdown";
-import { parseLastStep, timeAgo, type HistoryEntry, type ReleaseNote, type UpdatePhase } from "./updateSteps";
+import { parseLastStep, updateFailure, timeAgo, type HistoryEntry, type ReleaseNote, type UpdatePhase } from "./updateSteps";
 import { copyText } from "@/lib/clipboard";
 
 export function SystemUpdatePanel() {
@@ -199,6 +199,16 @@ export function SystemUpdatePanel() {
               stopPolling();
             }
           })();
+          return;
+        }
+        // update.sh has exited (its lock is gone) after refusing or failing —
+        // an unsupported Node.js, say. Nothing will restart, so say why now
+        // rather than spin.
+        const failure = logRes.status === "fulfilled" && logRes.value.log ? updateFailure(logRes.value.log) : null;
+        if (failure && !v.lock) {
+          stopPolling();
+          setPhase("error");
+          setErrorMsg(failure);
           return;
         }
         // Server is reachable but still on the old hash/process — we're either
@@ -888,7 +898,7 @@ export function SystemUpdatePanel() {
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="flex-1">
             <div className="font-medium">Update failed</div>
-            {errorMsg && <div className="text-xs opacity-80 break-words mt-0.5">{errorMsg}</div>}
+            {errorMsg && <div className="text-xs opacity-80 break-words whitespace-pre-line mt-0.5">{errorMsg}</div>}
             <Button size="sm" variant="outline" className="mt-2" onClick={() => { setPhase("idle"); setErrorMsg(null); }}>
               Dismiss
             </Button>

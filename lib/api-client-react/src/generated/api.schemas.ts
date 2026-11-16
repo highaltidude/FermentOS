@@ -1239,6 +1239,7 @@ export const KitSheetParseErrorCode = {
   no_text: "no_text",
   unrecognized_sheet: "unrecognized_sheet",
   unreadable_pdf: "unreadable_pdf",
+  pdf_engine_unavailable: "pdf_engine_unavailable",
 } as const;
 
 export interface KitSheetParseError {

@@ -221,6 +221,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KitSheetParseError"
+        "503":
+          description: The server could not load its PDF reader (code pdf_engine_unavailable), e.g. a Node.js older than 22
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KitSheetParseError"
 
   /recipes/import/morebeer/parse:
     post:
@@ -252,6 +258,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "422":
           description: A PDF, but not one that could be read as a kit sheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KitSheetParseError"
+        "503":
+          description: The server could not load its PDF reader (code pdf_engine_unavailable), e.g. a Node.js older than 22
           content:
             application/json:
               schema:
@@ -3755,7 +3767,7 @@ components:
           type: string
         code:
           type: string
-          enum: [no_text, unrecognized_sheet, unreadable_pdf]
+          enum: [no_text, unrecognized_sheet, unreadable_pdf, pdf_engine_unavailable]
       required: [error, code]
 
     BrewSession:

@@ -878,7 +878,7 @@ This section is for bare-metal (systemd) installs. Docker installs update with `
 
 The easiest way to update is from the app itself: **Settings → System → Updates**. **Check for updates** looks for a newer commit; when there is one, **Update now** pulls it, runs migrations, rebuilds, and restarts the services automatically, with a live progress bar. Release notes are shown in-app, and every deploy is recorded in a history log with a one-click rollback if something goes wrong. If a build fails, the update rolls itself back.
 
-An update is refused while the [backup coverage audit](#backups--restore) is below 100%. If an update is interrupted and leaves the page stuck, the same panel offers **Force-clear lock** and **Repair install**.
+An update is refused while the [backup coverage audit](#backups--restore) is below 100%, and when the system's Node.js is older than 22: `install.sh` upgrades an older Node.js, but only on a fresh install, so an install that started on Node.js 20 stays there until you upgrade it (`curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -`, then `sudo apt-get install -y nodejs`). The update panel shows why it stopped, and nothing is changed. On an unsupported Node.js, kit-sheet PDF import reports that the server, not the file, is at fault. If an update is interrupted and leaves the page stuck, the same panel offers **Force-clear lock** and **Repair install**.
 
 **Channels.** An install follows whichever branch its checkout is on: `main` for stable releases, `beta` for prereleases. To switch, `git checkout beta` (or `main`) in the install directory, then update.
 
@@ -1436,7 +1436,9 @@ Draft ingredients may have a `null` `amount`, `unit` or `use` where the sheet
 does not state one; fill those in before posting to `/api/recipes/import`.
 `400` means the body is not a PDF or is too large. `422` means it is a PDF that
 could not be read as a kit sheet, with a `code` of `no_text` (a scan),
-`unrecognized_sheet` or `unreadable_pdf`.
+`unrecognized_sheet` or `unreadable_pdf`. `503` with `pdf_engine_unavailable` means the
+server could not load its PDF reader at all, most often because its Node.js is
+older than 22.
 
 ---
 

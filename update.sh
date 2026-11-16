@@ -21,6 +21,19 @@ echo "=== Update started at $(date) ==="
 
 cd "$INSTALL_DIR"
 
+# FermentOS needs Node.js 22 or newer (MIN_NODE_MAJOR in
+# artifacts/api-server/src/lib/nodeVersion.ts); on older versions kit-sheet PDF
+# import fails. install.sh upgrades an older Node, but only on a fresh install,
+# so check here too, before anything is pulled or rebuilt.
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  echo "ERROR: FermentOS needs Node.js 22 or newer, but this system has $(node --version 2>/dev/null || echo 'no Node.js')."
+  echo "  Nothing was changed. Upgrade Node.js, then update again:"
+  echo "    curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -"
+  echo "    sudo apt-get install -y nodejs"
+  exit 1
+fi
+
 # Ignore file permission changes so chmod never blocks a future pull.
 git config core.fileMode false
 echo "  Resetting local changes before pull..."

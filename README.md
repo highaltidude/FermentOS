@@ -54,7 +54,7 @@ install to a tracked first batch.
 ## Features
 
 - **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color. Ingredients and steps are editable in place, and a recipe starts its own brew session in one click
-- **Kit import** — Upload the recipe PDF from a MoreBeer kit and FermentOS reads the ingredients, hop schedule, stats and suggested yeasts into a recipe for you to check before it is saved. A sheet that covers the LME, DME and All-Grain kits becomes one recipe with three versions; you pick the version each time you brew, and only that version's ingredients are deducted from stock and called on the boil timer
+- **Kit import** — Upload the recipe PDF from a MoreBeer kit, or the instructions PDF from a Northern Brewer kit, and FermentOS reads the ingredients, hop schedule, stats and suggested yeasts into a recipe for you to check before it is saved. A sheet that covers the LME, DME and All-Grain kits becomes one recipe with three versions; you pick the version each time you brew, and only that version's ingredients are deducted from stock and called on the boil timer
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
 - **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
 - **Dry hop reminders** — Give each dry hop a day of conditioning and the recipe gets a Dry Hop Schedule. When a batch reaches that day, your phone is reminded every 6 hours (adjustable) until you mark the addition as added on the brew page. No sensor needed
@@ -186,12 +186,14 @@ are still entered in °F.
 size. Add the grain bill, hops, and yeast, and optionally the mash and boil
 steps.
 
-Brewing a MoreBeer kit? **Recipes → Import** reads the kit's recipe PDF
-instead. Download the PDF from the kit's product page (a scan of the printed
-sheet will not work — it has no text to read), upload it, and check what was
-read before saving:
+Brewing a MoreBeer or Northern Brewer kit? **Recipes → Import** reads the kit's
+PDF instead: MoreBeer's recipe sheet, or Northern Brewer's kit instructions.
+Download the PDF from the kit's product page (a scan of the printed sheet will
+not work — it has no text to read), upload it, and check what was read before
+saving. FermentOS works out which supplier the sheet is from.
 
-- **Style** is not printed on the sheet, so pick one.
+- **Style** is not printed on the sheet, so pick one. If a Northern Brewer
+  kit's description names one of your styles, it is picked for you.
 - Anything the sheet leaves out is flagged at the top — usually an amount, such
   as the clarifier's — and has to be filled in or removed before you can save.
 - The sheet suggests several yeasts. Pick the one you will use and it is added
@@ -205,6 +207,15 @@ When the sheet covers the LME, DME and All-Grain kits, all three are saved as
 that differ are marked with the versions they belong to. The recipe page shows
 one version at a time, and each ingredient's **Used in** setting can be changed
 when you edit it. MoreBeer kits are 5 gallons, which is what the import assumes.
+
+A Northern Brewer sheet is one version: extract and all-grain kits come with
+their own sheets. Its hop times, stats box and suggested yeasts are read from
+page one. The boil length, and when the other fermentables go in (corn syrup
+at flameout, say), come from the brew-day steps on page two. The
+sheet's schedule fills in the recipe's days per stage: primary as
+**Fermenting**, secondary as **Conditioning** and bottle conditioning as
+**Packaged**. The steep temperature and priming amounts go into the notes; the
+rest of the walkthrough is the same for every kit and is left out.
 
 Set the **fermentation temperature range** while you are here. It is optional,
 but it is what lets FermentOS tell you later that a batch is running hot — see
@@ -1297,7 +1308,8 @@ response shape, is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
 | GET | `/api/recipes` | List all recipes — optional query params `style`, `search` |
 | POST | `/api/recipes` | Create a recipe |
 | POST | `/api/recipes/import` | Create a recipe with its ingredients and steps in one call |
-| POST | `/api/recipes/import/morebeer/parse` | Read a MoreBeer kit-sheet PDF into a draft (saves nothing) |
+| POST | `/api/recipes/import/kit-sheet/parse` | Read a MoreBeer or Northern Brewer kit-sheet PDF into a draft (saves nothing) |
+| POST | `/api/recipes/import/morebeer/parse` | The same, for MoreBeer sheets only |
 | GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, batch rating summary, and fork lineage |
 | PUT | `/api/recipes/:id` | Update a recipe |
 | DELETE | `/api/recipes/:id` | Delete a recipe (its forks move up to its own parent) |
@@ -1410,13 +1422,15 @@ one way. It is set only by `POST /api/recipes/import`; `POST` and `PUT
 /api/recipes/:id/steps`. `variants` and `steps` are optional. Everything is
 saved in one transaction: if any part is rejected, nothing is created.
 
-**POST /api/recipes/import/morebeer/parse** takes the PDF itself as the request
-body, not a form upload, up to 10 MB:
+**POST /api/recipes/import/kit-sheet/parse** takes the PDF itself as the request
+body, not a form upload, up to 10 MB, and works out whether it is a MoreBeer or
+a Northern Brewer sheet (`/api/recipes/import/morebeer/parse` reads it as
+MoreBeer's regardless):
 ```bash
-curl -X POST http://localhost:8080/api/recipes/import/morebeer/parse \
+curl -X POST http://localhost:8080/api/recipes/import/kit-sheet/parse \
   -H "Content-Type: application/pdf" --data-binary @kit-sheet.pdf
 ```
-It returns a draft — `name`, `variants`, `batchSizeGallons`, `stats`, `hints`,
+It returns a draft — `source`, `name`, `description`, `variants`, `batchSizeGallons`, `stats`, `hints`,
 `suggestedYeasts`, `ingredients`, `tips` and `warnings` — and saves nothing.
 Draft ingredients may have a `null` `amount`, `unit` or `use` where the sheet
 does not state one; fill those in before posting to `/api/recipes/import`.

@@ -1118,6 +1118,7 @@ export const KitSheetWarningCode = {
   unparsed_line: "unparsed_line",
   use_from_tips: "use_from_tips",
   assumed_batch_size: "assumed_batch_size",
+  assumed_use: "assumed_use",
 } as const;
 
 export interface KitSheetWarning {
@@ -1163,6 +1164,7 @@ export type KitSheetDraftSource =
 
 export const KitSheetDraftSource = {
   morebeer: "morebeer",
+  northern_brewer: "northern_brewer",
 } as const;
 
 export type KitSheetDraftStats = {
@@ -1179,7 +1181,7 @@ export type KitSheetDraftStats = {
 };
 
 /**
- * Figures picked out of the free-text recipe tips. Fahrenheit, as printed.
+ * Figures picked out of the sheet's text. Fahrenheit, as printed.
  */
 export type KitSheetDraftHints = {
   /** @nullable */
@@ -1190,11 +1192,28 @@ export type KitSheetDraftHints = {
   fermentTempMinF: number | null;
   /** @nullable */
   fermentTempMaxF: number | null;
+  /**
+   * The sheet's suggested primary fermentation, in days.
+   * @nullable
+   */
+  primaryDays: number | null;
+  /** @nullable */
+  secondaryDays: number | null;
+  /**
+   * Bottle or keg conditioning, in days.
+   * @nullable
+   */
+  conditioningDays: number | null;
 };
 
 export interface KitSheetDraft {
   source: KitSheetDraftSource;
   name: string;
+  /**
+   * The sheet's blurb about the beer, when it has one.
+   * @nullable
+   */
+  description: string | null;
   /**
    * Null when the sheet describes a single version.
    * @nullable
@@ -1204,7 +1223,7 @@ export interface KitSheetDraft {
   /** True when the sheet prints no batch size and the kit default was used. */
   batchSizeAssumed: boolean;
   stats: KitSheetDraftStats;
-  /** Figures picked out of the free-text recipe tips. Fahrenheit, as printed. */
+  /** Figures picked out of the sheet's text. Fahrenheit, as printed. */
   hints: KitSheetDraftHints;
   suggestedYeasts: KitSheetYeast[];
   ingredients: KitSheetDraftIngredient[];

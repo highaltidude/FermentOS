@@ -872,6 +872,122 @@ export const useImportRecipe = <
   return useMutation(getImportRecipeMutationOptions(options));
 };
 
+export const getParseKitSheetUrl = () => {
+  return `/api/recipes/import/kit-sheet/parse`;
+};
+
+/**
+ * Send the PDF as the raw request body. The supplier is worked out from the sheet. Nothing is saved: the draft is returned for review and then posted to /recipes/import.
+ * @summary Read a MoreBeer or Northern Brewer kit-sheet PDF into a recipe draft
+ */
+export const parseKitSheet = async (
+  parseKitSheetBody: Blob,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<KitSheetDraft> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<KitSheetDraft>(getParseKitSheetUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+      ...getHeaders(options?.headers),
+    },
+    body: parseKitSheetBody,
+  });
+};
+
+export const getParseKitSheetMutationKey = () => ["parseKitSheet"] as const;
+
+export const getParseKitSheetMutationOptions = <
+  TError = ErrorType<ErrorResponse | KitSheetParseError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseKitSheet>>,
+    TError,
+    ParseKitSheetMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof parseKitSheet>>,
+  TError,
+  ParseKitSheetMutationVariables,
+  TContext
+> => {
+  const mutationKey = getParseKitSheetMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof parseKitSheet>>,
+    ParseKitSheetMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return parseKitSheet(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ParseKitSheetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseKitSheet>>
+>;
+export type ParseKitSheetMutationBody = BodyType<Blob>;
+export type ParseKitSheetMutationError = ErrorType<
+  ErrorResponse | KitSheetParseError
+>;
+export type ParseKitSheetMutationVariables = { data: BodyType<Blob> };
+
+/**
+ * @summary Read a MoreBeer or Northern Brewer kit-sheet PDF into a recipe draft
+ */
+export const useParseKitSheet = <
+  TError = ErrorType<ErrorResponse | KitSheetParseError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseKitSheet>>,
+    TError,
+    ParseKitSheetMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof parseKitSheet>>,
+  TError,
+  ParseKitSheetMutationVariables,
+  TContext
+> => {
+  return useMutation(getParseKitSheetMutationOptions(options));
+};
+
 export const getParseMorebeerKitSheetUrl = () => {
   return `/api/recipes/import/morebeer/parse`;
 };

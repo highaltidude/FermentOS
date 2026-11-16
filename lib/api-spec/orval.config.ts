@@ -56,9 +56,9 @@ export default defineConfig({
       formatter: "prettier",
       override: {
         zod: {
-          // The workspace is on zod 3 (catalog). Left on "auto", orval detects
-          // its own bundled zod 4 and emits v4-only calls like z.int().
-          version: 3,
+          // Pinned to the workspace's zod major (catalog) rather than "auto",
+          // which reads orval's own bundled zod instead.
+          version: 4,
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],

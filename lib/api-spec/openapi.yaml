@@ -186,6 +186,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /recipes/import/kit-sheet/parse:
+    post:
+      operationId: parseKitSheet
+      tags: [recipes]
+      summary: Read a MoreBeer or Northern Brewer kit-sheet PDF into a recipe draft
+      description: >-
+        Send the PDF as the raw request body. The supplier is worked out from
+        the sheet. Nothing is saved: the draft is returned for review and then
+        posted to /recipes/import.
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Parsed draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KitSheetDraft"
+        "400":
+          description: The body is not a PDF, or is too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: A PDF, but not one that could be read as a kit sheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KitSheetParseError"
+
   /recipes/import/morebeer/parse:
     post:
       operationId: parseMorebeerKitSheet
@@ -3569,7 +3605,7 @@ components:
       properties:
         code:
           type: string
-          enum: [missing_amount, unparsed_line, use_from_tips, assumed_batch_size]
+          enum: [missing_amount, unparsed_line, use_from_tips, assumed_batch_size, assumed_use]
         message:
           type: string
         ingredientIndex:
@@ -3630,9 +3666,13 @@ components:
       properties:
         source:
           type: string
-          enum: [morebeer]
+          enum: [morebeer, northern_brewer]
         name:
           type: string
+        description:
+          type: string
+          nullable: true
+          description: The sheet's blurb about the beer, when it has one.
         variants:
           type: array
           nullable: true
@@ -3665,7 +3705,7 @@ components:
           required: [originalGravityMin, originalGravityMax, ibu, colorSrm, abv]
         hints:
           type: object
-          description: Figures picked out of the free-text recipe tips. Fahrenheit, as printed.
+          description: Figures picked out of the sheet's text. Fahrenheit, as printed.
           properties:
             boilMinutes:
               type: integer
@@ -3679,7 +3719,18 @@ components:
             fermentTempMaxF:
               type: number
               nullable: true
-          required: [boilMinutes, mashTempF, fermentTempMinF, fermentTempMaxF]
+            primaryDays:
+              type: integer
+              nullable: true
+              description: The sheet's suggested primary fermentation, in days.
+            secondaryDays:
+              type: integer
+              nullable: true
+            conditioningDays:
+              type: integer
+              nullable: true
+              description: Bottle or keg conditioning, in days.
+          required: [boilMinutes, mashTempF, fermentTempMinF, fermentTempMaxF, primaryDays, secondaryDays, conditioningDays]
         suggestedYeasts:
           type: array
           items:
@@ -3695,7 +3746,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/KitSheetWarning"
-      required: [source, name, variants, batchSizeGallons, batchSizeAssumed, stats, hints, suggestedYeasts, ingredients, tips, warnings]
+      required: [source, name, description, variants, batchSizeGallons, batchSizeAssumed, stats, hints, suggestedYeasts, ingredients, tips, warnings]
 
     KitSheetParseError:
       type: object

@@ -691,12 +691,16 @@ export const ImportRecipeResponse = zod.object({
 });
 
 /**
- * Send the PDF as the raw request body. Nothing is saved: the draft is returned for review and then posted to /recipes/import.
- * @summary Read a MoreBeer kit-sheet PDF into a recipe draft
+ * Send the PDF as the raw request body. The supplier is worked out from the sheet. Nothing is saved: the draft is returned for review and then posted to /recipes/import.
+ * @summary Read a MoreBeer or Northern Brewer kit-sheet PDF into a recipe draft
  */
-export const ParseMorebeerKitSheetResponse = zod.object({
-  source: zod.enum(["morebeer"]),
+export const ParseKitSheetResponse = zod.object({
+  source: zod.enum(["morebeer", "northern_brewer"]),
   name: zod.string(),
+  description: zod
+    .string()
+    .nullable()
+    .describe("The sheet's blurb about the beer, when it has one."),
   variants: zod
     .array(
       zod
@@ -724,9 +728,20 @@ export const ParseMorebeerKitSheetResponse = zod.object({
       mashTempF: zod.number().nullable(),
       fermentTempMinF: zod.number().nullable(),
       fermentTempMaxF: zod.number().nullable(),
+      primaryDays: zod
+        .number()
+        .int()
+        .nullable()
+        .describe("The sheet's suggested primary fermentation, in days."),
+      secondaryDays: zod.number().int().nullable(),
+      conditioningDays: zod
+        .number()
+        .int()
+        .nullable()
+        .describe("Bottle or keg conditioning, in days."),
     })
     .describe(
-      "Figures picked out of the free-text recipe tips. Fahrenheit, as printed.",
+      "Figures picked out of the sheet's text. Fahrenheit, as printed.",
     ),
   suggestedYeasts: zod.array(
     zod.object({
@@ -787,6 +802,134 @@ export const ParseMorebeerKitSheetResponse = zod.object({
         "unparsed_line",
         "use_from_tips",
         "assumed_batch_size",
+        "assumed_use",
+      ]),
+      message: zod.string(),
+      ingredientIndex: zod
+        .number()
+        .int()
+        .nullish()
+        .describe(
+          "Index into the draft's ingredients, when the warning is about one.",
+        ),
+      sourceText: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * Send the PDF as the raw request body. Nothing is saved: the draft is returned for review and then posted to /recipes/import.
+ * @summary Read a MoreBeer kit-sheet PDF into a recipe draft
+ */
+export const ParseMorebeerKitSheetResponse = zod.object({
+  source: zod.enum(["morebeer", "northern_brewer"]),
+  name: zod.string(),
+  description: zod
+    .string()
+    .nullable()
+    .describe("The sheet's blurb about the beer, when it has one."),
+  variants: zod
+    .array(
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+    )
+    .nullable()
+    .describe("Null when the sheet describes a single version."),
+  batchSizeGallons: zod.number(),
+  batchSizeAssumed: zod
+    .boolean()
+    .describe(
+      "True when the sheet prints no batch size and the kit default was used.",
+    ),
+  stats: zod.object({
+    originalGravityMin: zod.number().nullable(),
+    originalGravityMax: zod.number().nullable(),
+    ibu: zod.number().nullable(),
+    colorSrm: zod.number().nullable(),
+    abv: zod.number().nullable(),
+  }),
+  hints: zod
+    .object({
+      boilMinutes: zod.number().int().nullable(),
+      mashTempF: zod.number().nullable(),
+      fermentTempMinF: zod.number().nullable(),
+      fermentTempMaxF: zod.number().nullable(),
+      primaryDays: zod
+        .number()
+        .int()
+        .nullable()
+        .describe("The sheet's suggested primary fermentation, in days."),
+      secondaryDays: zod.number().int().nullable(),
+      conditioningDays: zod
+        .number()
+        .int()
+        .nullable()
+        .describe("Bottle or keg conditioning, in days."),
+    })
+    .describe(
+      "Figures picked out of the sheet's text. Fahrenheit, as printed.",
+    ),
+  suggestedYeasts: zod.array(
+    zod.object({
+      lab: zod.string(),
+      name: zod.string(),
+    }),
+  ),
+  ingredients: zod.array(
+    zod
+      .object({
+        name: zod.string(),
+        type: zod.enum([
+          "malt",
+          "hop",
+          "yeast",
+          "adjunct",
+          "water_agent",
+          "other",
+        ]),
+        amount: zod.number().nullable(),
+        unit: zod.string().nullable(),
+        use: zod.union([
+          zod.enum([
+            "mash",
+            "steep",
+            "boil",
+            "dry_hop",
+            "whirlpool",
+            "primary",
+            "secondary",
+            "packaging",
+            "other",
+          ]),
+          zod.null(),
+        ]),
+        timingMinutes: zod.number().int().nullable(),
+        notes: zod.string().nullable(),
+        variants: zod
+          .array(
+            zod
+              .enum(["lme", "dme", "all_grain"])
+              .describe("A version a kit recipe can be brewed as."),
+          )
+          .nullable(),
+        sourceText: zod
+          .string()
+          .describe("The line on the sheet this row was read from."),
+      })
+      .describe(
+        "An ingredient as read from the sheet. Unlike a saved ingredient, amount, unit and use may be null when the sheet does not state them.",
+      ),
+  ),
+  tips: zod.string().nullable(),
+  warnings: zod.array(
+    zod.object({
+      code: zod.enum([
+        "missing_amount",
+        "unparsed_line",
+        "use_from_tips",
+        "assumed_batch_size",
+        "assumed_use",
       ]),
       message: zod.string(),
       ingredientIndex: zod

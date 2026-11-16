@@ -40,15 +40,17 @@ export type KitSheetDraftIngredient = {
 };
 
 export type KitSheetWarning = {
-  code: "missing_amount" | "unparsed_line" | "use_from_tips" | "assumed_batch_size";
+  code: "missing_amount" | "unparsed_line" | "use_from_tips" | "assumed_batch_size" | "assumed_use";
   message: string;
   ingredientIndex: number | null;
   sourceText: string | null;
 };
 
 export type KitSheetDraft = {
-  source: "morebeer";
+  source: "morebeer" | "northern_brewer";
   name: string;
+  /** The sheet's blurb about the beer, when it has one. */
+  description: string | null;
   variants: RecipeVariant[] | null;
   batchSizeGallons: number;
   batchSizeAssumed: boolean;
@@ -64,6 +66,10 @@ export type KitSheetDraft = {
     mashTempF: number | null;
     fermentTempMinF: number | null;
     fermentTempMaxF: number | null;
+    /** The sheet's suggested schedule, in days. */
+    primaryDays: number | null;
+    secondaryDays: number | null;
+    conditioningDays: number | null;
   };
   suggestedYeasts: { lab: string; name: string }[];
   ingredients: KitSheetDraftIngredient[];
@@ -76,11 +82,11 @@ export type KitSheetParseResult =
   | { ok: false; code: "no_text" | "unrecognized_sheet" };
 
 /** MoreBeer's kits are five gallons; the sheet never says so. */
-const DEFAULT_BATCH_GALLONS = 5;
+export const DEFAULT_BATCH_GALLONS = 5;
 
 // ── Text helpers ─────────────────────────────────────────────────────────────
 
-function clean(s: string): string {
+export function clean(s: string): string {
   return s
     .replace(/[®™]/g, "")
     .replace(/[‘’]/g, "'")
@@ -97,7 +103,7 @@ const SMALL_WORDS = new Set(["a", "an", "and", "de", "for", "in", "la", "of", "o
 const ACRONYMS = new Set(["ipa", "dipa", "neipa", "apa", "esb", "ipl", "xpa", "ii", "iii", "iv"]);
 
 /** Sheet titles are set in capitals; a recipe name shouldn't shout. */
-function titleCase(s: string): string {
+export function titleCase(s: string): string {
   if (/[a-z]/.test(s)) return s;
   return s
     .toLowerCase()
@@ -129,6 +135,7 @@ export function parseGravityRange(s: string): { min: number; max: number } | nul
 
 const UNIT_ALIASES: [RegExp, string][] = [
   [/^(lbs?|pounds?)$/i, "lbs"],
+  [/^fl\.?\s*oz$/i, "fl oz"],
   [/^(oz|ounces?)$/i, "oz"],
   [/^kg$/i, "kg"],
   [/^(g|grams?)$/i, "g"],
@@ -139,7 +146,7 @@ const UNIT_ALIASES: [RegExp, string][] = [
 ];
 
 const AMOUNT_UNIT =
-  /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|\.\d+)\s*(lbs?|pounds?|oz|ounces?|kg|grams?|g|tsp|tbsp|pkgs?|packs?|packets?|tablets?|tabs?|capsules?|each)\b\.?\s+(.+)$/i;
+  /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|\.\d+)\s*(fl\.?\s*oz|lbs?|pounds?|oz|ounces?|kg|grams?|g|tsp|tbsp|pkgs?|packs?|packets?|tablets?|tabs?|capsules?|each)\b\.?\s+(.+)$/i;
 
 function parseAmount(s: string): number {
   const mixed = /^(\d+)\s+(\d+)\/(\d+)$/.exec(s);
@@ -236,7 +243,7 @@ export function readUse(descriptor: string | null): UseReading {
 
 const EXTRACT_LIKE = /extract|syrup|\blme\b|\bdme\b|sugar|honey|maltodextrin/i;
 
-function additionType(name: string): KitIngredientType {
+export function additionType(name: string): KitIngredientType {
   if (/sugar|maltodextrin|lactose|honey|candi|molasses|syrup|dextrose|extract/i.test(name)) return "adjunct";
   if (/gypsum|calcium|chloride|sulfate|lactic|phosphoric|campden/i.test(name)) return "water_agent";
   return "other";
@@ -245,7 +252,7 @@ function additionType(name: string): KitIngredientType {
 // ── Page geometry ────────────────────────────────────────────────────────────
 
 /** Clean the text, drop exact repeats, and split a bullet fused to its line. */
-function prepare(page: PdfPage): PdfTextItem[] {
+export function prepare(page: PdfPage): PdfTextItem[] {
   const seen = new Set<string>();
   const out: PdfTextItem[] = [];
   for (const raw of page.items) {
@@ -268,7 +275,7 @@ function prepare(page: PdfPage): PdfTextItem[] {
 }
 
 /** Group items sharing a baseline, each row left to right, rows top to bottom. */
-function rowsOf(items: PdfTextItem[]): PdfTextItem[][] {
+export function rowsOf(items: PdfTextItem[]): PdfTextItem[][] {
   const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
   const rows: PdfTextItem[][] = [];
   for (const item of sorted) {
@@ -688,6 +695,9 @@ export function parseMorebeerKitSheet(rawPages: PdfPage[]): KitSheetParseResult 
     mashTempF: mashInTips ? Number(mashInTips[1]) : null,
     fermentTempMinF: fermentInTips ? Number(fermentInTips[1]) : null,
     fermentTempMaxF: fermentInTips ? Number(fermentInTips[2]) : null,
+    primaryDays: null,
+    secondaryDays: null,
+    conditioningDays: null,
   };
 
   // ── Batch size ──
@@ -713,6 +723,7 @@ export function parseMorebeerKitSheet(rawPages: PdfPage[]): KitSheetParseResult 
     draft: {
       source: "morebeer",
       name,
+      description: null,
       variants: sheetVariants,
       batchSizeGallons,
       batchSizeAssumed: !gallons,

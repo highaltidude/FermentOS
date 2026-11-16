@@ -14,7 +14,8 @@ import {
   ForkRecipeBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
-import { parseMorebeerKitSheet } from "../lib/morebeerKitSheet";
+import { parseMorebeerKitSheet, type KitSheetParseResult, type PdfPage } from "../lib/morebeerKitSheet";
+import { parseKitSheet } from "../lib/kitSheet";
 import { normalizeIngredientVariants, normalizeRecipeVariants } from "../lib/recipeVariants";
 import { extractPdfTextItems } from "../services/pdfText";
 import { reloadFlows } from "../services/flowEngine";
@@ -248,8 +249,8 @@ router.get("/recipes/:id/history", async (req, res) => {
 });
 
 const KIT_SHEET_ERRORS = {
-  no_text: "This PDF has no readable text — it looks like a scan. Download the kit sheet from MoreBeer rather than scanning the printed one.",
-  unrecognized_sheet: "This does not look like a MoreBeer kit sheet: no ingredient lists were found in it.",
+  no_text: "This PDF has no readable text — it looks like a scan. Download the kit sheet from the supplier's website rather than scanning the printed one.",
+  unrecognized_sheet: "This does not look like a MoreBeer or Northern Brewer kit sheet: no ingredient lists were found in it.",
   unreadable_pdf: "This PDF could not be opened. It may be damaged or password-protected.",
 } as const;
 
@@ -271,10 +272,11 @@ const readPdfBody: RequestHandler = (req, res, next) => {
 
 // Reads the sheet and returns a draft. Nothing is saved: the draft is reviewed
 // in the browser and comes back through POST /recipes/import.
-router.post("/recipes/import/morebeer/parse", readPdfBody, async (req, res) => {
+const kitSheetRoute = (parse: (pages: PdfPage[]) => KitSheetParseResult): RequestHandler => async (req, res) => {
   const pdf: unknown = req.body;
   if (!Buffer.isBuffer(pdf) || !pdf.subarray(0, 1024).includes("%PDF-")) {
-    return res.status(400).json({ error: "Upload a PDF file." });
+    res.status(400).json({ error: "Upload a PDF file." });
+    return;
   }
 
   let pages;
@@ -282,15 +284,21 @@ router.post("/recipes/import/morebeer/parse", readPdfBody, async (req, res) => {
     pages = await extractPdfTextItems(pdf);
   } catch (err) {
     req.log.warn({ err }, "Kit sheet PDF could not be read");
-    return res.status(422).json({ error: KIT_SHEET_ERRORS.unreadable_pdf, code: "unreadable_pdf" });
+    res.status(422).json({ error: KIT_SHEET_ERRORS.unreadable_pdf, code: "unreadable_pdf" });
+    return;
   }
 
-  const result = parseMorebeerKitSheet(pages);
+  const result = parse(pages);
   if (!result.ok) {
-    return res.status(422).json({ error: KIT_SHEET_ERRORS[result.code], code: result.code });
+    res.status(422).json({ error: KIT_SHEET_ERRORS[result.code], code: result.code });
+    return;
   }
-  return res.json(result.draft);
-});
+  res.json(result.draft);
+};
+
+// Works out which supplier the sheet is from.
+router.post("/recipes/import/kit-sheet/parse", readPdfBody, kitSheetRoute(parseKitSheet));
+router.post("/recipes/import/morebeer/parse", readPdfBody, kitSheetRoute(parseMorebeerKitSheet));
 
 router.get("/recipes/styles", async (req, res) => {
   const rows = await db.select().from(recipesTable);

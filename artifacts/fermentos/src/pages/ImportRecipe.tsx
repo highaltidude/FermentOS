@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, FileUp, Loader2, X } from "lucide-react";
 import {
-  useParseMorebeerKitSheet,
+  useParseKitSheet,
+  useListBeerStyles,
   useImportRecipe,
   useListInventory,
   getListRecipesQueryKey,
@@ -52,25 +53,47 @@ function fromFahrenheit(f: number, unit: "C" | "F"): number {
   return unit === "C" ? Math.round(((f - 32) * 5) / 9 * 10) / 10 : f;
 }
 
-const yeastLabel = (y: { lab: string; name: string }) => `${y.lab.replace(/\s+Dry$/i, "")} ${y.name}`;
+const yeastLabel = (y: { lab: string; name: string }) => `${y.lab.replace(/\s+Dry$/i, "")} ${y.name}`.trim();
+
+const SOURCE_LABELS: Record<KitSheetDraft["source"], string> = {
+  morebeer: "MoreBeer",
+  northern_brewer: "Northern Brewer",
+};
 
 /** Everything the sheet says that has no field of its own. */
 function composeNotes(draft: KitSheetDraft): string {
   const { stats, hints } = draft;
-  const lines = ["Imported from a MoreBeer kit sheet."];
+  const lines = [`Imported from a ${SOURCE_LABELS[draft.source]} kit sheet.`];
+  if (draft.description) lines.push("", draft.description, "");
   if (stats.originalGravityMin != null && stats.originalGravityMax != null && stats.originalGravityMax !== stats.originalGravityMin) {
     lines.push(`Estimated OG ${stats.originalGravityMin.toFixed(3)}–${stats.originalGravityMax.toFixed(3)}.`);
   }
   if (hints.boilMinutes != null) lines.push(`Boil: ${hints.boilMinutes} minutes.`);
   if (hints.mashTempF != null) lines.push(`Suggested mash temperature (all-grain): ${hints.mashTempF}°F.`);
+  const schedule = [
+    hints.primaryDays != null && `primary ${hints.primaryDays} days`,
+    hints.secondaryDays != null && `secondary ${hints.secondaryDays} days`,
+    hints.conditioningDays != null && `bottle conditioning ${hints.conditioningDays} days`,
+  ].filter(Boolean);
+  if (schedule.length > 0) lines.push(`Schedule: ${schedule.join(", ")}.`);
   if (draft.suggestedYeasts.length > 0) {
-    lines.push(`Suggested yeasts: ${draft.suggestedYeasts.map((y) => `${y.lab} ${y.name}`).join("; ")}.`);
+    lines.push(`Suggested yeasts: ${draft.suggestedYeasts.map(yeastLabel).join("; ")}.`);
   }
   if (draft.tips) lines.push("", `Recipe tips: ${draft.tips}`);
   return lines.join("\n");
 }
 
-function buildForm(draft: KitSheetDraft, tempUnit: "C" | "F") {
+/** A configured style the sheet's blurb names, longest first so "American IPA" beats "IPA". */
+function styleNamedIn(text: string | null, styles: string[]): string {
+  if (!text) return "";
+  const lower = text.toLowerCase();
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...styles]
+    .sort((a, b) => b.length - a.length)
+    .find((s) => new RegExp(`\\b${escape(s.toLowerCase())}\\b`).test(lower)) ?? "";
+}
+
+function buildForm(draft: KitSheetDraft, tempUnit: "C" | "F", styles: string[]) {
   const { stats, hints } = draft;
   const og = stats.originalGravityMin != null && stats.originalGravityMax != null
     ? ((stats.originalGravityMin + stats.originalGravityMax) / 2).toFixed(3)
@@ -79,9 +102,10 @@ function buildForm(draft: KitSheetDraft, tempUnit: "C" | "F") {
   const ideal = hints.fermentTempMinF != null && hints.fermentTempMaxF != null
     ? temp((hints.fermentTempMinF + hints.fermentTempMaxF) / 2)
     : "";
+  const days = (n: number | null) => (n == null ? "" : String(n));
   return {
     name: draft.name,
-    style: "",
+    style: styleNamedIn(draft.description, styles),
     batchSizeGallons: String(draft.batchSizeGallons),
     originalGravity: og,
     abv: stats.abv != null ? String(stats.abv) : "",
@@ -91,6 +115,11 @@ function buildForm(draft: KitSheetDraft, tempUnit: "C" | "F") {
     fermentTempMin: temp(hints.fermentTempMinF),
     fermentTempIdeal: ideal,
     fermentTempMax: temp(hints.fermentTempMaxF),
+    // Secondary is the sheet's conditioning in the fermentor; bottle
+    // conditioning happens once the beer is packaged.
+    daysFermenting: days(hints.primaryDays),
+    daysConditioning: days(hints.secondaryDays),
+    daysPackaged: days(hints.conditioningDays),
   };
 }
 
@@ -112,12 +141,13 @@ export default function ImportRecipe() {
   const [viewVariant, setViewVariant] = useState<RecipeVariant | null>(null);
 
   const { data: inventoryItems = [] } = useListInventory({});
+  const { data: styles } = useListBeerStyles();
 
-  const parseMutation = useParseMorebeerKitSheet({
+  const parseMutation = useParseKitSheet({
     mutation: {
       onSuccess: (parsed) => {
         setDraft(parsed);
-        setForm(buildForm(parsed, tempUnit));
+        setForm(buildForm(parsed, tempUnit, (styles ?? []).map((s) => s.name)));
         setRows(parsed.ingredients.map((ing) => ({
           key: nextKey.current++,
           name: ing.name,
@@ -220,6 +250,9 @@ export default function ImportRecipe() {
           fermentTempMin: num(form.fermentTempMin),
           fermentTempIdeal: num(form.fermentTempIdeal),
           fermentTempMax: num(form.fermentTempMax),
+          daysFermenting: num(form.daysFermenting),
+          daysConditioning: num(form.daysConditioning),
+          daysPackaged: num(form.daysPackaged),
         },
         variants: draft.variants,
         ingredients: rows.map((r) => ({
@@ -255,9 +288,10 @@ export default function ImportRecipe() {
         {header}
         <div className="bg-card border border-card-border rounded-lg p-6 space-y-4">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">MoreBeer kit sheet</h2>
+            <h2 className="text-sm font-semibold text-foreground">Kit sheet (MoreBeer or Northern Brewer)</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload the recipe PDF from a MoreBeer kit's product page. If the sheet covers the LME, DME and
+              Upload the recipe PDF from a MoreBeer kit's product page, or the instructions PDF from a Northern
+              Brewer kit. The supplier is worked out from the sheet. If a MoreBeer sheet covers the LME, DME and
               All-Grain kits, all three are imported as one recipe and you pick the version each time you brew.
             </p>
             <p className="text-sm text-muted-foreground mt-1">
@@ -324,6 +358,19 @@ export default function ImportRecipe() {
           <div>
             <div className="text-xs text-muted-foreground mb-2 font-medium">Fermentation Temperature</div>
             <TempRangeFields prefix="fermentTemp" values={form} unit={tempUnit} onChange={(p) => setField(p)} />
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground mb-2 font-medium">Days per stage</div>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { key: "daysFermenting", label: "Fermenting" },
+                { key: "daysConditioning", label: "Conditioning" },
+                { key: "daysPackaged", label: "Packaged" },
+              ] as const).map(({ key, label }) => (
+                <div key={key}><label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                  <Input type="number" min="0" step="1" value={form[key]} onChange={(e) => setField({ [key]: e.target.value })} /></div>
+              ))}
+            </div>
           </div>
           <div><label className="text-xs text-muted-foreground mb-1 block">Notes</label>
             <Textarea value={form.notes} onChange={(e) => setField({ notes: e.target.value })} rows={8} /></div>

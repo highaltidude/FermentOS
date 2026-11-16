@@ -121,7 +121,10 @@ describe("the Pliny the Elder kit sheet", () => {
     expect(draft.tips).toMatch(/allow 3–7 days of contact time before packaging\.$/);
     // The scorecard beside the tips shares baselines with it; none of it leaks in.
     expect(draft.tips).not.toMatch(/APPEARANCE|AROMA|TASTE/);
-    expect(draft.hints).toEqual({ boilMinutes: 90, mashTempF: 151, fermentTempMinF: 66, fermentTempMaxF: 68 });
+    expect(draft.hints).toEqual({
+      boilMinutes: 90, mashTempF: 151, fermentTempMinF: 66, fermentTempMaxF: 68,
+      primaryDays: null, secondaryDays: null, conditioningDays: null,
+    });
   });
 
   it("does not depend on the order text comes out of the PDF", () => {

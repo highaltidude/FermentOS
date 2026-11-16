@@ -48,6 +48,7 @@ import { apiErrorMessage, shortageLines } from "@/lib/inventoryShortage";
 import { ingredientsForVariant, isMultiVariant, VARIANT_LABELS, variantListLabel } from "@/lib/recipeVariants";
 import { RecipeFlowsCard } from "@/components/flows/RecipeFlowsCard";
 import { RecipeChangeList } from "@/components/RecipeChangeList";
+import { RecipeWaterCard } from "@/components/RecipeWaterCard";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const STEP_PHASE_COLORS: Record<string, string> = {
@@ -961,6 +962,8 @@ export default function RecipeDetail() {
           )}
         </div>
       </div>
+
+      <RecipeWaterCard recipe={recipe} />
 
       {/* Dry Hop Schedule — the day of conditioning each dry hop goes in */}
       <div className="bg-card border border-card-border rounded-lg">

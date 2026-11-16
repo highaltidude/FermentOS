@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { Recipe, RecipeIngredient, RecipeStep, RecipeSnapshot } from "@workspace/db";
+import type { Recipe, RecipeIngredient, RecipeStep, RecipeSnapshot, RecipeWater } from "@workspace/db";
 import {
   buildRecipeSnapshot,
   diffRecipeSnapshots,
@@ -15,7 +15,7 @@ const recipe = {
   fermentTempMin: 64, fermentTempMax: 70, fermentTempIdeal: 67,
   conditionTempMin: null, conditionTempMax: null, conditionTempIdeal: null,
   daysPlanned: null, daysBrewing: null, daysFermenting: null, daysConditioning: null, daysPackaged: null,
-  createdAt: new Date(), updatedAt: new Date(),
+  water: null, createdAt: new Date(), updatedAt: new Date(),
 } satisfies Recipe;
 
 let nextId = 100;
@@ -103,6 +103,57 @@ describe("diffRecipeSnapshots", () => {
 
     const after = snap([], [step({ position: 1, durationMinutes: 75 }), step({ position: 2, phase: "packaging", body: "Bottle" })]);
     expect(diffRecipeSnapshots(before, after).map((c) => c.kind)).toEqual(["step_changed", "step_added", "step_removed"]);
+  });
+});
+
+describe("water in version history", () => {
+  const burton: RecipeWater = {
+    target: { presetId: "burton", name: "Burton", profile: { calcium: 275, magnesium: 40, sodium: 25, sulfate: 610, chloride: 35, bicarbonate: 270 } },
+    salts: { gypsum: 4, calciumChloride: 1, epsom: 0, tableSalt: 0, bakingSoda: 0 },
+    volumeLitres: 30,
+  };
+  const withWater = (water: RecipeWater | null) => snap([], [], { water });
+
+  it("keeps the water on the snapshot", () => {
+    expect(withWater(burton).recipe.water).toEqual(burton);
+    expect(snap().recipe.water).toBeNull();
+  });
+
+  it("finds nothing when the water is the same", () => {
+    expect(diffRecipeSnapshots(withWater(burton), withWater(structuredClone(burton)))).toEqual([]);
+  });
+
+  it("reports water added and removed by its target", () => {
+    expect(diffRecipeSnapshots(withWater(null), withWater(burton))).toEqual([{ kind: "field", field: "water", from: null, to: "Burton" }]);
+    expect(diffRecipeSnapshots(withWater(burton), withWater(null))).toEqual([{ kind: "field", field: "water", from: "Burton", to: null }]);
+  });
+
+  it("reports each salt that changed, the volume and the target", () => {
+    const after: RecipeWater = {
+      ...burton,
+      target: { ...burton.target, name: "Burton (softer)", presetId: null, profile: { ...burton.target.profile, sulfate: 400 } },
+      salts: { ...burton.salts, gypsum: 6 },
+      volumeLitres: 32,
+    };
+    expect(diffRecipeSnapshots(withWater(burton), withWater(after))).toEqual([
+      { kind: "field", field: "water.target", from: "Burton", to: "Burton (softer)" },
+      { kind: "field", field: "water.volumeLitres", from: 30, to: 32 },
+      { kind: "field", field: "water.gypsum", from: 4, to: 6 },
+    ]);
+  });
+
+  it("notices a custom target's ions changing under the same name", () => {
+    const tweaked: RecipeWater = { ...burton, target: { ...burton.target, profile: { ...burton.target.profile, chloride: 60 } } };
+    expect(diffRecipeSnapshots(withWater(burton), withWater(tweaked))).toEqual([
+      { kind: "field", field: "water.target", from: "Burton", to: "Burton" },
+    ]);
+  });
+
+  it("reads a snapshot from before recipes kept water as having none", () => {
+    const old = withWater(null);
+    delete (old.recipe as Partial<RecipeSnapshot["recipe"]>).water;
+    expect(diffRecipeSnapshots(old, withWater(null))).toEqual([]);
+    expect(diffRecipeSnapshots(old, withWater(burton))).toEqual([{ kind: "field", field: "water", from: null, to: "Burton" }]);
   });
 });
 

@@ -1,5 +1,5 @@
 import { pgTable, serial, text, real, integer, boolean, timestamp, date, jsonb } from "drizzle-orm/pg-core";
-import { recipesTable, recipeVariantEnum, type ingredientTypeEnum, type ingredientUseEnum, type stepPhaseEnum } from "./recipes";
+import { recipesTable, recipeVariantEnum, type RecipeWater, type ingredientTypeEnum, type ingredientUseEnum, type stepPhaseEnum } from "./recipes";
 
 /**
  * The recipe as a batch was brewed: a frozen copy kept for the record, so
@@ -27,6 +27,8 @@ export interface RecipeSnapshot {
     conditionTempMax: number | null;
     conditionTempIdeal: number | null;
     notes: string | null;
+    /** Absent on batches recorded before recipes kept their water. */
+    water?: RecipeWater | null;
   };
   /** Only the ingredients of the version that was brewed. */
   ingredients: {

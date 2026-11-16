@@ -87,6 +87,11 @@ export async function migrateLegacyStatuses(): Promise<void> {
     sql`ALTER TABLE brew_sessions ADD COLUMN IF NOT EXISTS packaging_method text`,
   );
 
+  // ── Recipe water ──────────────────────────────────────────────────────
+  // Same self-healing rationale. Null is "no water saved", right for every
+  // existing recipe.
+  await db.execute(sql`ALTER TABLE recipes ADD COLUMN IF NOT EXISTS water jsonb`);
+
   // ── Lifecycle simplification (v2) ─────────────────────────────────────
   // Old stages: planned → scheduled → brewing → fermenting → conditioning
   //             → packaged → complete

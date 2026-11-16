@@ -1,8 +1,27 @@
-import { pgTable, serial, text, real, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, timestamp, jsonb, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 // The versions a kit recipe can be brewed as. Same values as inventory's
 // maltTypeEnum, declared here because inventory.ts already imports this file.
 export const recipeVariantEnum = ["lme", "dme", "all_grain"] as const;
+
+/** Water ions, in ppm. */
+export type RecipeWaterIons = {
+  calcium: number; magnesium: number; sodium: number; sulfate: number; chloride: number; bicarbonate: number;
+};
+
+/**
+ * A recipe's water: the profile it aims for and the salts that get there,
+ * as worked out in the water calculator. The target keeps its own ions, so a
+ * preset changing later doesn't change a saved recipe; presetId and name are
+ * for display.
+ */
+export type RecipeWater = {
+  target: { presetId: string | null; name: string; profile: RecipeWaterIons };
+  /** Grams, for volumeLitres of water. */
+  salts: { gypsum: number; calciumChloride: number; epsom: number; tableSalt: number; bakingSoda: number };
+  /** The total water (mash and sparge) the salts are for. */
+  volumeLitres: number;
+};
 
 export const recipesTable = pgTable("recipes", {
   id: serial("id").primaryKey(),
@@ -34,6 +53,8 @@ export const recipesTable = pgTable("recipes", {
   daysFermenting: integer("days_fermenting"),
   daysConditioning: integer("days_conditioning"),
   daysPackaged: integer("days_packaged"),
+  // Null until the brewer saves water for the recipe.
+  water: jsonb("water").$type<RecipeWater>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

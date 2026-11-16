@@ -45,6 +45,7 @@ import { BrewStatusBadge } from "@/components/BrewStatusBadge";
 import { TempRangeFields } from "@/components/TempRangeFields";
 import { BrewTempControlCard } from "@/components/BrewTempControlCard";
 import { DryHopCard } from "@/components/DryHopCard";
+import { BrewWaterCard } from "@/components/BrewWaterCard";
 import { RecipeAsBrewedCard } from "@/components/RecipeAsBrewedCard";
 import { BrewSensorsCard } from "@/components/BrewSensorsCard";
 import { ReferenceSensorChart } from "@/components/ReferenceSensorChart";
@@ -598,6 +599,10 @@ export default function BrewSessionDetail() {
           </div>
         );
       })()}
+
+      {session.status === "brew_day" && session.recipeId != null && (
+        <BrewWaterCard recipeId={session.recipeId} batchSizeGallons={session.batchSizeGallons} />
+      )}
 
       {session.status === "brew_day" && session.originalGravityActual == null && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">

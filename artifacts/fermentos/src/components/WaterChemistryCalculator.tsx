@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Droplets, Save, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,6 +7,7 @@ import {
   getGetSourceWaterQueryKey,
   useGetUnitSystem,
   getGetUnitSystemQueryKey,
+  type RecipeWater,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ import {
   type Salt,
   type SaltAmounts,
 } from "@/lib/waterChemistry";
+import { CUSTOM_TARGET, fromLitres, ionsOf, presetFor, saltsOf, waterFromCalculator } from "@/lib/recipeWater";
 
 type IonFields = Record<Ion, string>;
 type SaltFields = Record<Salt, string>;
@@ -42,6 +44,8 @@ const toProfile = (f: IonFields): Profile =>
   Object.fromEntries(IONS.map((ion) => [ion, Math.max(0, parseFloat(f[ion]) || 0)])) as Profile;
 const emptySalts = (): SaltFields =>
   Object.fromEntries(SALTS.map((s) => [s, ""])) as SaltFields;
+const toSaltFields = (a: SaltAmounts): SaltFields =>
+  Object.fromEntries(SALTS.map((s) => [s, a[s] ? String(a[s]) : ""])) as SaltFields;
 const toAmounts = (f: SaltFields): SaltAmounts =>
   Object.fromEntries(SALTS.map((s) => [s, Math.max(0, parseFloat(f[s]) || 0)])) as SaltAmounts;
 
@@ -76,7 +80,18 @@ function IonInputs({ values, onChange }: { values: IonFields; onChange: (v: IonF
   );
 }
 
-export function WaterChemistryCalculator() {
+type Props = {
+  /** A recipe's saved water to start from, instead of a blank calculator. */
+  initial?: RecipeWater | null;
+  /** The total water to start with when there is no saved water, in litres. */
+  defaultLitres?: number;
+  /** Told the water as it stands on every change; null until there is a volume. */
+  onChange?: (water: RecipeWater | null) => void;
+  /** Inside another card or dialog: no frame or heading of its own. */
+  embedded?: boolean;
+};
+
+export function WaterChemistryCalculator({ initial, defaultLitres, onChange, embedded }: Props = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -94,11 +109,13 @@ export function WaterChemistryCalculator() {
 
   const [source, setSource] = useState<IonFields>(() => toFields(RO_WATER));
   const [sourceEdited, setSourceEdited] = useState(false);
-  const [targetId, setTargetId] = useState("balanced");
-  const [custom, setCustom] = useState<IonFields>(() => toFields(TARGET_PROFILES.find((t) => t.id === "balanced")!.profile));
+  const [targetId, setTargetId] = useState(() => (initial ? presetFor(initial) : "balanced"));
+  const [custom, setCustom] = useState<IonFields>(() =>
+    toFields(initial ? ionsOf(initial) : TARGET_PROFILES.find((t) => t.id === "balanced")!.profile));
   const [volume, setVolume] = useState("");
+  const [volumeEdited, setVolumeEdited] = useState(false);
   const [unit, setUnit] = useState<"gal" | "L">("gal");
-  const [salts, setSalts] = useState<SaltFields>(emptySalts);
+  const [salts, setSalts] = useState<SaltFields>(() => (initial ? toSaltFields(saltsOf(initial)) : emptySalts()));
 
   // Prefill from the saved report once it arrives, unless the brewer has
   // already started typing.
@@ -112,8 +129,14 @@ export function WaterChemistryCalculator() {
     if (system === "imperial") setUnit("gal");
   }, [system]);
 
+  // A starting volume is shown in whichever unit the settings settle on.
+  const startLitres = initial?.volumeLitres ?? defaultLitres;
+  useEffect(() => {
+    if (!volumeEdited && startLitres) setVolume(String(fromLitres(startLitres, unit)));
+  }, [unit, startLitres, volumeEdited]);
+
   const sourceProfile = toProfile(source);
-  const target = targetId === "custom"
+  const target = targetId === CUSTOM_TARGET
     ? toProfile(custom)
     : TARGET_PROFILES.find((t) => t.id === targetId)?.profile ?? RO_WATER;
   const litres = toLitres(parseFloat(volume) || 0, unit);
@@ -125,6 +148,16 @@ export function WaterChemistryCalculator() {
 
   const editSource = (v: IonFields) => { setSource(v); setSourceEdited(true); };
 
+  // Report the water as it stands. Compared as JSON so a re-render with the
+  // same inputs doesn't report again.
+  const water = waterFromCalculator({ targetId, target, salts: amounts, litres });
+  const waterKey = JSON.stringify(water);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current?.(water);
+  }, [waterKey]);
+
   const handleSuggest = () => {
     const { grams } = suggestSalts(sourceProfile, target, litres);
     setSalts(Object.fromEntries(SALTS.map((s) => [s, grams[s] ? String(grams[s]) : ""])) as SaltFields);
@@ -135,11 +168,13 @@ export function WaterChemistryCalculator() {
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-5">
-      <div className="flex items-center gap-2">
-        <Droplets className="w-4 h-4 text-muted-foreground shrink-0" />
-        <span className="text-sm font-medium text-foreground">Water Chemistry</span>
-      </div>
+    <div className={embedded ? "space-y-5" : "rounded-lg border border-border bg-card p-4 space-y-5"}>
+      {!embedded && (
+        <div className="flex items-center gap-2">
+          <Droplets className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium text-foreground">Water Chemistry</span>
+        </div>
+      )}
 
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -174,11 +209,11 @@ export function WaterChemistryCalculator() {
             ))}
             <SelectGroup>
               <SelectLabel>Your own</SelectLabel>
-              <SelectItem value="custom">Custom</SelectItem>
+              <SelectItem value={CUSTOM_TARGET}>Custom</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
-        {targetId === "custom" && <IonInputs values={custom} onChange={setCustom} />}
+        {targetId === CUSTOM_TARGET && <IonInputs values={custom} onChange={setCustom} />}
       </section>
 
       <section className="space-y-2">
@@ -191,11 +226,11 @@ export function WaterChemistryCalculator() {
             inputMode="decimal"
             placeholder={unit === "gal" ? "e.g. 7.5" : "e.g. 28"}
             value={volume}
-            onChange={(e) => setVolume(e.target.value)}
+            onChange={(e) => { setVolume(e.target.value); setVolumeEdited(true); }}
             className="text-sm"
           />
           {system === "both" || system === undefined ? (
-            <Select value={unit} onValueChange={(v) => setUnit(v as "gal" | "L")}>
+            <Select value={unit} onValueChange={(v) => { setUnit(v as "gal" | "L"); setVolumeEdited(true); }}>
               <SelectTrigger className="text-sm w-24"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="gal">gal</SelectItem>

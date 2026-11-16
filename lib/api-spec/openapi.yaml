@@ -2972,6 +2972,9 @@ components:
         daysPackaged:
           type: integer
           nullable: true
+        water:
+          $ref: "#/components/schemas/RecipeWater"
+          nullable: true
         avgScore:
           type: number
           nullable: true
@@ -3150,6 +3153,10 @@ components:
             notes:
               type: string
               nullable: true
+            water:
+              $ref: "#/components/schemas/RecipeWater"
+              nullable: true
+              description: Absent on batches recorded before recipes kept their water.
           required: [name, style, batchSizeGallons]
         ingredients:
           type: array
@@ -3405,6 +3412,9 @@ components:
         daysPackaged:
           type: integer
           nullable: true
+        water:
+          $ref: "#/components/schemas/RecipeWater"
+          nullable: true
       required: [name, style, batchSizeGallons]
 
     UpdateRecipeBody:
@@ -3481,6 +3491,9 @@ components:
           nullable: true
         daysPackaged:
           type: integer
+          nullable: true
+        water:
+          $ref: "#/components/schemas/RecipeWater"
           nullable: true
 
     RecipeIngredient:
@@ -4259,6 +4272,51 @@ components:
           minimum: 0
           maximum: 2000
       required: [calcium, magnesium, sodium, sulfate, chloride, bicarbonate]
+
+    RecipeWaterSalts:
+      type: object
+      description: Salt additions in grams, for the recipe water's volumeLitres.
+      properties:
+        gypsum: { type: number, minimum: 0, maximum: 1000 }
+        calciumChloride: { type: number, minimum: 0, maximum: 1000 }
+        epsom: { type: number, minimum: 0, maximum: 1000 }
+        tableSalt: { type: number, minimum: 0, maximum: 1000 }
+        bakingSoda: { type: number, minimum: 0, maximum: 1000 }
+      required: [gypsum, calciumChloride, epsom, tableSalt, bakingSoda]
+
+    RecipeWaterTarget:
+      type: object
+      description: >-
+        The profile a recipe's water aims for. Its ions are kept with the
+        recipe; presetId (a water calculator preset, null for a custom target)
+        and name are for display.
+      properties:
+        presetId:
+          type: string
+          maxLength: 40
+          nullable: true
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        profile:
+          $ref: "#/components/schemas/WaterProfile"
+      required: [presetId, name, profile]
+
+    RecipeWater:
+      type: object
+      description: A recipe's water, as worked out in the water calculator.
+      properties:
+        target:
+          $ref: "#/components/schemas/RecipeWaterTarget"
+        salts:
+          $ref: "#/components/schemas/RecipeWaterSalts"
+        volumeLitres:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 2000
+          description: The total water (mash and sparge) the salts are for, in litres.
+      required: [target, salts, volumeLitres]
 
     SourceWater:
       type: object

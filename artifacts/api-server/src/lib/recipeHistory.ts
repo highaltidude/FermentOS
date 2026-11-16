@@ -5,15 +5,22 @@
  * Import-free apart from types, like recipeVariants.ts, so it can be unit
  * tested without a database.
  */
-import type { Recipe, RecipeIngredient, RecipeStep, RecipeSnapshot } from "@workspace/db";
+import type { Recipe, RecipeIngredient, RecipeStep, RecipeSnapshot, RecipeWater } from "@workspace/db";
 import { ingredientsForVariant } from "./recipeVariants";
 
 type SnapshotIngredient = RecipeSnapshot["ingredients"][number];
 type SnapshotStep = RecipeSnapshot["steps"][number];
-type SnapshotField = keyof RecipeSnapshot["recipe"];
+type SnapshotField = Exclude<keyof RecipeSnapshot["recipe"], "water">;
+type WaterSalt = keyof RecipeWater["salts"];
+/**
+ * Water is reported piece by piece: "water" when it is added or removed (from
+ * and to are the target's name, or null), otherwise "water.target",
+ * "water.volumeLitres" and one "water.<salt>" per salt whose grams changed.
+ */
+type WaterField = "water" | "water.target" | "water.volumeLitres" | `water.${WaterSalt}`;
 
 export type RecipeChange =
-  | { kind: "field"; field: SnapshotField; from: number | string | null; to: number | string | null }
+  | { kind: "field"; field: SnapshotField | WaterField; from: number | string | null; to: number | string | null }
   | { kind: "ingredient_added" | "ingredient_removed"; ingredient: SnapshotIngredient }
   | { kind: "ingredient_changed"; ingredient: SnapshotIngredient; previousIngredient: SnapshotIngredient }
   | { kind: "step_added" | "step_removed"; step: SnapshotStep }
@@ -54,6 +61,7 @@ export function buildRecipeSnapshot(
       conditionTempMax: recipe.conditionTempMax,
       conditionTempIdeal: recipe.conditionTempIdeal,
       notes: recipe.notes,
+      water: recipe.water ?? null,
     },
     ingredients: ingredientsForVariant(ingredients, variant).map((i) => ({
       name: i.name,
@@ -123,6 +131,31 @@ function pairByKey<T>(
 const byNullable = (a: number | null, b: number | null) =>
   (a ?? Number.POSITIVE_INFINITY) - (b ?? Number.POSITIVE_INFINITY) || 0;
 
+const WATER_SALTS: readonly WaterSalt[] = ["gypsum", "calciumChloride", "epsom", "tableSalt", "bakingSoda"];
+const WATER_IONS = ["calcium", "magnesium", "sodium", "sulfate", "chloride", "bicarbonate"] as const;
+
+/** What changed in a recipe's water: its target, its volume, and each salt's grams. */
+export function diffWater(before: RecipeWater | null, after: RecipeWater | null): RecipeChange[] {
+  if (!before && !after) return [];
+  if (!before || !after) {
+    return [{ kind: "field", field: "water", from: before?.target.name ?? null, to: after?.target.name ?? null }];
+  }
+  const changes: RecipeChange[] = [];
+  const targetMoved =
+    before.target.name !== after.target.name ||
+    WATER_IONS.some((ion) => before.target.profile[ion] !== after.target.profile[ion]);
+  if (targetMoved) changes.push({ kind: "field", field: "water.target", from: before.target.name, to: after.target.name });
+  if (before.volumeLitres !== after.volumeLitres) {
+    changes.push({ kind: "field", field: "water.volumeLitres", from: before.volumeLitres, to: after.volumeLitres });
+  }
+  for (const salt of WATER_SALTS) {
+    const from = before.salts[salt] ?? 0;
+    const to = after.salts[salt] ?? 0;
+    if (from !== to) changes.push({ kind: "field", field: `water.${salt}`, from, to });
+  }
+  return changes;
+}
+
 /** What changed going from one version of a recipe to another. Empty when nothing did. */
 export function diffRecipeSnapshots(before: RecipeSnapshot, after: RecipeSnapshot): RecipeChange[] {
   const changes: RecipeChange[] = [];
@@ -132,6 +165,7 @@ export function diffRecipeSnapshots(before: RecipeSnapshot, after: RecipeSnapsho
     const to = blankToNull(after.recipe[field]);
     if (from !== to) changes.push({ kind: "field", field, from, to });
   }
+  changes.push(...diffWater(before.recipe.water ?? null, after.recipe.water ?? null));
 
   const ing = pairByKey(
     before.ingredients,

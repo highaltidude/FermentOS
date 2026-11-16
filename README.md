@@ -76,7 +76,7 @@ install to a tracked first batch.
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
-- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). Recipe scaling and batch cost are planned
+- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). A recipe can keep its water: the target and salt additions show on the recipe, and brew day lists the additions scaled to the batch. Recipe scaling and batch cost are planned
 - **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
 - **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
 - **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
@@ -849,6 +849,17 @@ water salty with baking soda. Target values
 come from Brewer's Friend's published table; treat the historic city ones as a
 starting point, not a specification.
 
+**A recipe's water.** To keep the water with a recipe, use **Add water** on the
+recipe's **Water** card. It opens the same calculator, starting from your saved
+tap water and the recipe's batch size as the total water; pick the target, set
+the volume and salts, and **Save**. The card then shows the target, the salts
+and the volume they are for, and, with your tap water saved, the profile they
+give and the sulfate-to-chloride ratio. **Edit** reopens the calculator where
+you left it, and **Remove water** takes it off the recipe. On brew day, the
+batch's page lists the salts to add, scaled when the batch is bigger or smaller
+than the recipe. Forking a recipe copies its water, and changes to it show in
+version history, e.g. "Gypsum: 4 g → 6 g".
+
 Only Brew Day, Fermenting, and Conditioning batches with a sensor assigned are
 monitored for alerts. Once a batch is **Packaged** it is finished, and a stale
 probe reading will never wake you up about it.
@@ -1397,7 +1408,27 @@ previous recorded brew, `null` for the first) and `sinceLastBrew`.
 and `changesSinceBrew`. A change has a `kind` (`field`, `ingredient_added`,
 `ingredient_removed`, `ingredient_changed`, `step_added`, `step_removed`,
 `step_changed`) with `field`/`from`/`to` or the `ingredient`/`step` involved and
-its `previousIngredient`/`previousStep`.
+its `previousIngredient`/`previousStep`. Water changes are `field` changes: `water`
+when it was added or removed (values are the target's name), otherwise
+`water.target`, `water.volumeLitres` and one `water.<salt>` per salt whose
+grams changed.
+
+**Recipe water.** `water` on `POST`/`PUT /api/recipes` (and the `recipe` of
+`POST /api/recipes/import`) is `null` or the target profile in ppm, the salts in
+grams, and the total water they are for in litres; `PUT` with `"water": null`
+removes it:
+```json
+{
+  "water": {
+    "target": { "presetId": "burton", "name": "Burton on Trent",
+      "profile": { "calcium": 270, "magnesium": 41, "sodium": 113, "sulfate": 720, "chloride": 85, "bicarbonate": 270 } },
+    "salts": { "gypsum": 4, "calciumChloride": 1, "epsom": 0, "tableSalt": 0, "bakingSoda": 0 },
+    "volumeLitres": 28.4
+  }
+}
+```
+`presetId` names a water calculator preset (`null` for your own target); the
+ions are kept with the recipe either way.
 
 **Recipe versions.** A recipe's `variants` is `null` for an ordinary recipe, or
 a list drawn from `lme` | `dme` | `all_grain` when it can be brewed more than

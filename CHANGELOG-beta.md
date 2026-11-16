@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.15.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.15.0-beta1...fermentos-v1.15.0-beta2) (2026-11-16)
+
+
+### Features
+
+* **recipes:** import Northern Brewer kit sheet PDFs ([ffca554](https://github.com/highaltidude/FermentOS/commit/ffca554b3bcdeab7d78b6ad4e31d9361ad1684e7))
+
+
+### Bug Fixes
+
+* **deps:** upgrade zod to 4 for its security advisory ([1207d8b](https://github.com/highaltidude/FermentOS/commit/1207d8b7b2ce2dc3a88b051b8024c55fec645f90))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

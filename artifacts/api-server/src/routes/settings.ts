@@ -8,8 +8,10 @@ import {
   SetFermentTempUnitBody,
   SetBreweryNameBody,
   SetSourceWaterBody,
+  SetBrewLayoutBody,
 } from "@workspace/api-zod";
 import { parseIdParam } from "../lib/http";
+import { normalizeBrewLayout, parseBrewLayout } from "../lib/brewLayout";
 import {
   isInventoryEnforcementEnabled,
   setInventoryEnforcementEnabled,
@@ -153,6 +155,22 @@ router.put("/settings/default-readings-shown", async (req, res) => {
   }
   await setConfigValue(DEFAULT_READINGS_KEY, String(count));
   return res.json({ count });
+});
+
+const BREW_LAYOUT_KEY = "brew_layout";
+
+router.get("/settings/brew-layout", async (_req, res) => {
+  return res.json(parseBrewLayout(await getConfigValue(BREW_LAYOUT_KEY)));
+});
+
+router.put("/settings/brew-layout", async (req, res) => {
+  const body = SetBrewLayoutBody.safeParse(req.body);
+  if (!body.success) {
+    return res.status(400).json({ error: "order and hidden must be lists of brew page sections" });
+  }
+  const layout = normalizeBrewLayout(body.data);
+  await setConfigValue(BREW_LAYOUT_KEY, JSON.stringify(layout));
+  return res.json(layout);
 });
 
 const FERMENT_TEMP_UNIT_KEY = "ferment_temp_unit";

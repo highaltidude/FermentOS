@@ -1044,6 +1044,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/DefaultReadingsShownResponse"
 
+  /settings/brew-layout:
+    get:
+      operationId: getBrewLayout
+      tags: [settings]
+      summary: Get the order of the brew session page's cards and which are hidden
+      description: >-
+        Always lists every section. A section missing from the saved layout,
+        such as one added in a later release, appears in its default place.
+      responses:
+        "200":
+          description: The brew page layout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewLayout"
+    put:
+      operationId: setBrewLayout
+      tags: [settings]
+      summary: Set the order of the brew session page's cards and which are hidden
+      description: >-
+        Sections left out of `order` keep their default place; duplicates are
+        ignored. Returns the layout as saved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrewLayout"
+      responses:
+        "200":
+          description: The saved brew page layout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewLayout"
+        "400":
+          description: Unknown section or malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /settings/ferment-temp-unit:
     get:
       operationId: getFermentTempUnit
@@ -4355,6 +4397,41 @@ components:
         count:
           type: integer
       required: [count]
+
+    BrewLayoutSection:
+      type: string
+      description: A movable card on the brew session page.
+      enum:
+        - water
+        - dryHops
+        - tasting
+        - recipeAsBrewed
+        - stageHistory
+        - tempControl
+        - heatingCooling
+        - telemetry
+        - sensors
+        - sensorReadings
+        - fermentationChart
+        - referenceCharts
+        - readings
+
+    BrewLayout:
+      type: object
+      properties:
+        order:
+          type: array
+          description: The cards from top to bottom.
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/BrewLayoutSection"
+        hidden:
+          type: array
+          description: Cards left off the page.
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/BrewLayoutSection"
+      required: [order, hidden]
 
     BreweryNameResponse:
       type: object

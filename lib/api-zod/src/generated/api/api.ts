@@ -5430,6 +5430,167 @@ export const SetDefaultReadingsShownResponse = zod.object({
 });
 
 /**
+ * Always lists every section. A section missing from the saved layout, such as one added in a later release, appears in its default place.
+ * @summary Get the order of the brew session page's cards and which are hidden
+ */
+export const getBrewLayoutResponseOrderMax = 50;
+
+export const getBrewLayoutResponseHiddenMax = 50;
+
+export const GetBrewLayoutResponse = zod.object({
+  order: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(getBrewLayoutResponseOrderMax)
+    .describe("The cards from top to bottom."),
+  hidden: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(getBrewLayoutResponseHiddenMax)
+    .describe("Cards left off the page."),
+});
+
+/**
+ * Sections left out of `order` keep their default place; duplicates are ignored. Returns the layout as saved.
+ * @summary Set the order of the brew session page's cards and which are hidden
+ */
+export const setBrewLayoutBodyOrderMax = 50;
+
+export const setBrewLayoutBodyHiddenMax = 50;
+
+export const SetBrewLayoutBody = zod.object({
+  order: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutBodyOrderMax)
+    .describe("The cards from top to bottom."),
+  hidden: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutBodyHiddenMax)
+    .describe("Cards left off the page."),
+});
+
+export const setBrewLayoutResponseOrderMax = 50;
+
+export const setBrewLayoutResponseHiddenMax = 50;
+
+export const SetBrewLayoutResponse = zod.object({
+  order: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutResponseOrderMax)
+    .describe("The cards from top to bottom."),
+  hidden: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutResponseHiddenMax)
+    .describe("Cards left off the page."),
+});
+
+/**
  * @summary Get the fermentation temperature unit preference
  */
 export const GetFermentTempUnitResponse = zod.object({

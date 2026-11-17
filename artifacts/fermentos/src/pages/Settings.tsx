@@ -19,6 +19,7 @@ import {
   Thermometer,
   Bell,
   ShieldCheck,
+  LayoutList,
 } from "lucide-react";
 import { SystemHealthPanel } from "@/components/SystemHealthPanel";
 import { BreweryNamePanel } from "./settings/brewing/BreweryNamePanel";
@@ -26,6 +27,7 @@ import { BeerStylesCard } from "./settings/brewing/BeerStylesCard";
 import { UnitSystemPanel } from "./settings/brewing/UnitSystemPanel";
 import { InventoryEnforcementPanel } from "./settings/brewing/InventoryEnforcementPanel";
 import { DefaultReadingsShownPanel } from "./settings/brewing/DefaultReadingsShownPanel";
+import { BrewLayoutPanel } from "./settings/brewing/BrewLayoutPanel";
 import { ReadingRetentionPanel } from "./settings/brewing/ReadingRetentionPanel";
 import { FermentTempPanel } from "./settings/brewing/FermentTempPanel";
 import { NotificationsPanel } from "./settings/brewing/NotificationsPanel";
@@ -143,6 +145,21 @@ export default function Settings() {
             </div>
             <div className="p-4">
               <DefaultReadingsShownPanel />
+            </div>
+          </div>
+
+          <div className="bg-card border border-card-border rounded-lg">
+            <div className="px-4 py-3 border-b border-card-border">
+              <div className="flex items-center gap-2">
+                <LayoutList className="w-4 h-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Brew Page Layout</h2>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                The order of the cards on a brew session page, top to bottom. Hide the ones you don't use. The stage prompts at the top, like the boil timer and Enter OG, always show.
+              </p>
+            </div>
+            <div className="p-4">
+              <BrewLayoutPanel />
             </div>
           </div>
 

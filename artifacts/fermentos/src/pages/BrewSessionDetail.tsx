@@ -15,14 +15,17 @@ import {
   getListSensorDevicesQueryKey,
   useAssignSensorDevice,
   useGetDefaultReadingsShown,
+  useGetBrewLayout,
   useGetTempAlertReadings,
   getGetTempAlertReadingsQueryKey,
   getGetBrewSessionDryHopsQueryKey,
   getGetBrewSessionRecipeSnapshotQueryKey,
   type BrewStatus,
   type PackagingMethod,
+  type BrewLayoutSection,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_BREW_LAYOUT } from "@/lib/brewLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -132,6 +135,8 @@ export default function BrewSessionDetail() {
 
   const { data: defaultReadingsData } = useGetDefaultReadingsShown();
   const defaultCount = defaultReadingsData?.count ?? 5;
+  const { data: savedLayout } = useGetBrewLayout();
+  const layout = savedLayout ?? DEFAULT_BREW_LAYOUT;
 
   // Polled so a page left open picks up the server moving the batch on to
   // Conditioning, rather than showing Fermenting until reloaded.
@@ -600,10 +605,6 @@ export default function BrewSessionDetail() {
         );
       })()}
 
-      {session.status === "brew_day" && session.recipeId != null && (
-        <BrewWaterCard recipeId={session.recipeId} batchSizeGallons={session.batchSizeGallons} />
-      )}
-
       {session.status === "brew_day" && session.originalGravityActual == null && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
           <span className="text-amber-500 shrink-0">🧪</span>
@@ -660,780 +661,832 @@ export default function BrewSessionDetail() {
         </div>
       )}
 
-      <DryHopCard brewSessionId={id} />
-
-      {/* Tasting & Rating */}
-      <div className="bg-card border border-card-border rounded-lg">
-        <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <NotebookPen className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">Tasting &amp; Rating</h2>
-            <ScoreBadge value={session.overallScore} />
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handlePhotoUpload}
-          />
-          {/* Photo */}
-          {session.photoPath ? (
-            <div className="relative group w-full max-w-sm">
-              <button
-                type="button"
-                onClick={() => setPhotoLightboxOpen(true)}
-                className="block w-full rounded-lg overflow-hidden border border-border focus:outline-none focus:ring-2 focus:ring-ring"
-                title="Click to view full size"
-              >
-                <img
-                  src={`/api/uploads/sessions/${session.photoPath}`}
-                  alt="Brew session photo"
-                  className="w-full object-cover max-h-64 cursor-zoom-in"
-                />
-              </button>
-              <button
-                onClick={handlePhotoDelete}
-                className="absolute top-2 right-2 p-1.5 bg-background/80 backdrop-blur-sm rounded-full text-destructive hover:bg-destructive hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-                title="Remove photo"
-              >
-                <ImageOff className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={photoUploading}
-                onClick={() => photoInputRef.current?.click()}
-              >
-                <Camera className="w-3.5 h-3.5 mr-1.5" />
-                {photoUploading ? "Uploading…" : "Add Photo"}
-              </Button>
-            </div>
-          )}
-          {session.photoPath && (
-            <div>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={photoUploading}
-                onClick={() => photoInputRef.current?.click()}
-              >
-                <Camera className="w-3.5 h-3.5 mr-1.5" />
-                {photoUploading ? "Uploading…" : "Replace Photo"}
-              </Button>
-            </div>
-          )}
-          {/* Scorecard */}
-          <div className="space-y-3 border-t border-border pt-4">
-            {session.ratedAt ? (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <ScoreReadout label="Appearance & aroma" value={session.appearanceAromaScore} outOf={5} />
-                  <ScoreReadout label="Flavor & balance" value={session.flavorBalanceScore} outOf={5} />
-                  <ScoreReadout label="Mouthfeel & carb" value={session.mouthfeelScore} outOf={5} />
-                  <ScoreReadout label="Overall" value={session.overallScore} outOf={10} />
+      {/* The cards below, in the order Settings › Brew Page Layout gives, less the hidden ones. */}
+      {(() => {
+        const sections: Record<BrewLayoutSection, React.ReactNode> = {
+          water: (
+            <>
+              {session.status === "brew_day" && session.recipeId != null && (
+                <BrewWaterCard recipeId={session.recipeId} batchSizeGallons={session.batchSizeGallons} />
+              )}
+            </>
+          ),
+          dryHops: (
+            <>
+              <DryHopCard brewSessionId={id} />
+            </>
+          ),
+          tasting: (
+            <>
+              {/* Tasting & Rating */}
+              <div className="bg-card border border-card-border rounded-lg">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <NotebookPen className="w-4 h-4 text-muted-foreground" />
+                    <h2 className="text-sm font-semibold text-foreground">Tasting &amp; Rating</h2>
+                    <ScoreBadge value={session.overallScore} />
+                  </div>
                 </div>
-                {session.offFlavors && session.offFlavors.length > 0 && (
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Off-flavors</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {session.offFlavors.map((tag) => (
-                        <span key={tag} className="text-xs px-2 py-0.5 rounded-full border bg-destructive/15 text-destructive border-destructive/30">
-                          {OFF_FLAVOR_LABELS[tag] ?? tag}
-                        </span>
+                <div className="p-4 space-y-4">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                  {/* Photo */}
+                  {session.photoPath ? (
+                    <div className="relative group w-full max-w-sm">
+                      <button
+                        type="button"
+                        onClick={() => setPhotoLightboxOpen(true)}
+                        className="block w-full rounded-lg overflow-hidden border border-border focus:outline-none focus:ring-2 focus:ring-ring"
+                        title="Click to view full size"
+                      >
+                        <img
+                          src={`/api/uploads/sessions/${session.photoPath}`}
+                          alt="Brew session photo"
+                          className="w-full object-cover max-h-64 cursor-zoom-in"
+                        />
+                      </button>
+                      <button
+                        onClick={handlePhotoDelete}
+                        className="absolute top-2 right-2 p-1.5 bg-background/80 backdrop-blur-sm rounded-full text-destructive hover:bg-destructive hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                        title="Remove photo"
+                      >
+                        <ImageOff className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={photoUploading}
+                        onClick={() => photoInputRef.current?.click()}
+                      >
+                        <Camera className="w-3.5 h-3.5 mr-1.5" />
+                        {photoUploading ? "Uploading…" : "Add Photo"}
+                      </Button>
+                    </div>
+                  )}
+                  {session.photoPath && (
+                    <div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={photoUploading}
+                        onClick={() => photoInputRef.current?.click()}
+                      >
+                        <Camera className="w-3.5 h-3.5 mr-1.5" />
+                        {photoUploading ? "Uploading…" : "Replace Photo"}
+                      </Button>
+                    </div>
+                  )}
+                  {/* Scorecard */}
+                  <div className="space-y-3 border-t border-border pt-4">
+                    {session.ratedAt ? (
+                      <>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <ScoreReadout label="Appearance & aroma" value={session.appearanceAromaScore} outOf={5} />
+                          <ScoreReadout label="Flavor & balance" value={session.flavorBalanceScore} outOf={5} />
+                          <ScoreReadout label="Mouthfeel & carb" value={session.mouthfeelScore} outOf={5} />
+                          <ScoreReadout label="Overall" value={session.overallScore} outOf={10} />
+                        </div>
+                        {session.offFlavors && session.offFlavors.length > 0 && (
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1">Off-flavors</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {session.offFlavors.map((tag) => (
+                                <span key={tag} className="text-xs px-2 py-0.5 rounded-full border bg-destructive/15 text-destructive border-destructive/30">
+                                  {OFF_FLAVOR_LABELS[tag] ?? tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {session.brewAgain && (
+                          <div>
+                            <span className="text-xs text-muted-foreground">Brew again? </span>
+                            <span className="text-sm font-medium text-foreground">{BREW_AGAIN_LABELS[session.brewAgain] ?? session.brewAgain}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Not rated yet.</p>
+                    )}
+                    {session.tastingNotes ? (
+                      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{session.tastingNotes}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No tasting notes yet.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ),
+          recipeAsBrewed: (
+            <>
+              <RecipeAsBrewedCard brewSessionId={id} />
+            </>
+          ),
+          stageHistory: (
+            <>
+              {/* Response — Stage History */}
+              <div className="bg-card border border-card-border rounded-lg">
+                <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
+                  <History className="w-3.5 h-3.5 text-muted-foreground" />
+                  <h2 className="text-sm font-semibold text-foreground">Response</h2>
+                  <span className="text-xs text-muted-foreground ml-1">— Stage History</span>
+                </div>
+                <div className="p-4">
+                  {!session.statusLog || session.statusLog.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No stage changes recorded yet. Use the status bar above to move this session through its stages.</p>
+                  ) : (
+                    <div className="relative">
+                      <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
+                      <div className="space-y-3">
+                        {[...session.statusLog].reverse().map((entry) => (
+                          <div key={entry.id} className="flex items-start gap-3 pl-1 group">
+                            <div className="w-3.5 h-3.5 rounded-full bg-primary border-2 border-background ring-1 ring-primary shrink-0 mt-0.5 z-10" />
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <BrewStatusBadge status={entry.status} className="shrink-0" />
+                              <span className="text-xs text-muted-foreground">
+                                {formatDateTime(entry.changedAt)}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => deleteStatusLogMutation.mutate({ id: entry.id })}
+                              disabled={deleteStatusLogMutation.isPending}
+                              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ),
+          tempControl: (
+            <>
+              {["brew_day", "fermenting", "conditioning"].includes(session.status) && <BrewTempControlCard session={session} />}
+            </>
+          ),
+          heatingCooling: (
+            <>
+              <RelayUsageChart brewSessionId={session.id} active={["brew_day", "fermenting", "conditioning"].includes(session.status)} />
+            </>
+          ),
+          telemetry: (
+            <>
+              {/* Sensor Telemetry */}
+              {telemetry && !telemetry.device ? (
+                <div className="bg-card border border-card-border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <WifiOff className="w-4 h-4 text-muted-foreground" />
+                    <h2 className="text-sm font-semibold text-foreground">iSpindel</h2>
+                  </div>
+
+                  {!showAssignPanel ? (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">No iSpindel assigned to this batch.</p>
+                      <Button size="sm" variant="outline" onClick={() => setShowAssignPanel(true)}>
+                        <Wifi className="w-3.5 h-3.5 mr-1.5" />
+                        Assign iSpindel
+                      </Button>
+                      <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                        Assign the iSpindel after the device is floating in the fermenter and sending stable readings.
+                        Previous test readings will remain in device history but will not be added to this batch.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Assign the iSpindel after the device is floating in the fermenter and sending stable readings.
+                        Previous test readings will remain in device history but will not be added to this batch.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={assignDeviceId}
+                          onChange={(e) => setAssignDeviceId(e.target.value)}
+                          className="flex-1 text-xs bg-background border border-input rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                          <option value="">Select a device…</option>
+                          {(sensorDevices ?? []).map((d) => (
+                            <option key={d.device.id} value={String(d.device.id)}>
+                              {d.device.deviceName}
+                              {d.assignedBrewName ? ` (→ ${d.assignedBrewName})` : d.connectionStatus === "connected" ? " · live" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          disabled={!assignDeviceId || assignMutation.isPending}
+                          onClick={() => {
+                            if (!assignDeviceId) return;
+                            assignMutation.mutate({ id: Number(assignDeviceId), data: { brewSessionId: id } });
+                          }}
+                        >
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                          Assign
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setShowAssignPanel(false); setAssignDeviceId(""); }}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      {(sensorDevices ?? []).length === 0 && (
+                        <p className="text-xs text-muted-foreground">No iSpindel devices registered yet. Add one in Settings → Integrations.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : telemetry?.device && telemetry.isDeviceActive ? (
+                <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${connectionDotClass(sensorConnStatus)}`} />
+                      <h2 className="text-sm font-semibold text-foreground">{telemetry.device.deviceName}</h2>
+                      <span className="text-xs text-muted-foreground font-mono">· {telemetry.device.deviceKey}</span>
+                      <span className={`text-xs capitalize ${connectionTextClass(sensorConnStatus)}`}>{sensorConnStatus}</span>
+                    </div>
+                    {telemetry.latestReading && (
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTimeShort(telemetry.latestReading.receivedAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Current readings */}
+                  {telemetry.latestReading && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {telemetry.latestReading.gravity != null && (
+                        <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                          <p className="text-xs text-muted-foreground">Gravity</p>
+                          <p className="text-base font-semibold text-blue-700 dark:text-blue-400">{Number(telemetry.latestReading.gravity).toFixed(3)}</p>
+                        </div>
+                      )}
+                      {telemetry.latestReading.temperature != null && (
+                        <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                          <p className="text-xs text-muted-foreground">Temperature</p>
+                          <p className="text-base font-semibold text-amber-700 dark:text-amber-400">
+                            {formatSensorTemp(telemetry.latestReading.temperature, telemetry.latestReading.temperatureUnit, tempUnit)}
+                          </p>
+                        </div>
+                      )}
+                      {telemetry.latestReading.battery != null && (
+                        <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                          <p className="text-xs text-muted-foreground">Battery</p>
+                          <p className={`text-base font-semibold ${batteryClass(telemetry.latestReading.batteryPercentEstimate, "text-foreground")}`}>
+                            {Number(telemetry.latestReading.battery).toFixed(2)}V
+                          </p>
+                          {telemetry.latestReading.batteryPercentEstimate != null && (
+                            <p className="text-xs text-muted-foreground">~{Math.round(telemetry.latestReading.batteryPercentEstimate)}%</p>
+                          )}
+                        </div>
+                      )}
+                      {telemetry.latestReading.angle != null && (
+                        <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                          <p className="text-xs text-muted-foreground">Angle</p>
+                          <p className="text-base font-semibold text-foreground">{Number(telemetry.latestReading.angle).toFixed(1)}°</p>
+                        </div>
+                      )}
+                      {session.originalGravityActual != null && telemetry.latestReading.gravity != null && (
+                        <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                          <p className="text-xs text-muted-foreground">Est. ABV</p>
+                          <p className="text-base font-semibold text-emerald-700 dark:text-emerald-400">
+                            {estimateAbv(session.originalGravityActual, Number(telemetry.latestReading.gravity)).toFixed(1)}%
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {session.status === "fermenting" && telemetry.insights?.fermentationStatus === "possibly_complete" && !quickStatusMutation.isPending && (
+                    <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 mb-3">
+                      <span className="text-amber-500 mt-0.5 shrink-0">⚗️</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">Fermentation may be complete</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Gravity has been stable for 24+ hours. Ready to move to conditioning?</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                        onClick={() => handleStatusClick("conditioning")}
+                        disabled={quickStatusMutation.isPending}
+                      >
+                        Move to Conditioning
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Fermentation insights */}
+                  {telemetry.insights && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground border-t border-border pt-2">
+                      {telemetry.insights.fermentationStatus && (
+                        <span>Status: <span className="text-foreground font-medium capitalize">{String(telemetry.insights.fermentationStatus).replace(/_/g, " ")}</span></span>
+                      )}
+                      {telemetry.insights.attenuationPercent != null && (
+                        <span>Attenuation: <span className="text-foreground font-medium">{Number(telemetry.insights.attenuationPercent).toFixed(1)}%</span></span>
+                      )}
+                      {telemetry.insights.velocityLast24h != null && (
+                        <span>Δ 24h: <span className="text-foreground font-medium">{Number(telemetry.insights.velocityLast24h).toFixed(4)} SG/day</span></span>
+                      )}
+                      {telemetry.insights.gravityDrop != null && (
+                        <span>Drop: <span className="text-foreground font-medium">{Number(telemetry.insights.gravityDrop).toFixed(3)} SG</span></span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Alerts */}
+                  {telemetry.alerts && telemetry.alerts.length > 0 && (
+                    <div className="space-y-1">
+                      {telemetry.alerts.map((a: any, i: number) => (
+                        <div key={i} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded ${
+                          a.severity === "critical" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        }`}>
+                          <Thermometer className="w-3.5 h-3.5 shrink-0" />
+                          {a.message}
+                        </div>
                       ))}
                     </div>
-                  </div>
-                )}
-                {session.brewAgain && (
-                  <div>
-                    <span className="text-xs text-muted-foreground">Brew again? </span>
-                    <span className="text-sm font-medium text-foreground">{BREW_AGAIN_LABELS[session.brewAgain] ?? session.brewAgain}</span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">Not rated yet.</p>
-            )}
-            {session.tastingNotes ? (
-              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{session.tastingNotes}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">No tasting notes yet.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <RecipeAsBrewedCard brewSessionId={id} />
-
-      {/* Response — Stage History */}
-      <div className="bg-card border border-card-border rounded-lg">
-        <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
-          <History className="w-3.5 h-3.5 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Response</h2>
-          <span className="text-xs text-muted-foreground ml-1">— Stage History</span>
-        </div>
-        <div className="p-4">
-          {!session.statusLog || session.statusLog.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No stage changes recorded yet. Use the status bar above to move this session through its stages.</p>
-          ) : (
-            <div className="relative">
-              <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
-              <div className="space-y-3">
-                {[...session.statusLog].reverse().map((entry) => (
-                  <div key={entry.id} className="flex items-start gap-3 pl-1 group">
-                    <div className="w-3.5 h-3.5 rounded-full bg-primary border-2 border-background ring-1 ring-primary shrink-0 mt-0.5 z-10" />
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <BrewStatusBadge status={entry.status} className="shrink-0" />
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateTime(entry.changedAt)}
-                      </span>
+                  )}
+                </div>
+              ) : null}
+            </>
+          ),
+          sensors: (
+            <>
+              {sensorDevices && <BrewSensorsCard brewSessionId={id} sensors={sensorDevices} unit={tempUnit} />}
+            </>
+          ),
+          sensorReadings: (
+            <>
+              {/* Sensor Readings History (fermenter sensors only) */}
+              {telemetry?.device && telemetry.readings && telemetry.readings.length > 0 && (() => {
+                const rows = telemetry.readings;
+                // Only the columns some reading fills: a Shelly probe has no gravity, angle or battery.
+                const has = {
+                  gravity: rows.some((r) => r.gravity != null),
+                  temp: rows.some((r) => r.temperature != null),
+                  angle: rows.some((r) => r.angle != null),
+                  battery: rows.some((r) => r.battery != null),
+                  rssi: rows.some((r) => r.rssi != null),
+                };
+                const deviceIds = new Set(rows.map((r) => r.deviceId));
+                const showSensor = deviceIds.size > 1;
+                const sensorName = (deviceId: number) => sensorDevices?.find((d) => d.device.id === deviceId)?.device.deviceName ?? `Sensor ${deviceId}`;
+                const colSpan = 2 + (showSensor ? 1 : 0) + Object.values(has).filter(Boolean).length;
+                return (
+                <div className="bg-card border border-card-border rounded-lg">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 flex items-center justify-between text-sm font-semibold text-foreground hover:bg-muted/20 transition-colors"
+                    onClick={() => setShowSensorHistory((v) => !v)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-muted-foreground" />
+                      Sensor Readings
+                      <span className="text-xs text-muted-foreground font-normal">({rows.length} for this brew)</span>
                     </div>
-                    <button
-                      onClick={() => deleteStatusLogMutation.mutate({ id: entry.id })}
-                      disabled={deleteStatusLogMutation.isPending}
-                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {["brew_day", "fermenting", "conditioning"].includes(session.status) && <BrewTempControlCard session={session} />}
-      <RelayUsageChart brewSessionId={session.id} active={["brew_day", "fermenting", "conditioning"].includes(session.status)} />
-
-      {/* Sensor Telemetry */}
-      {telemetry && !telemetry.device ? (
-        <div className="bg-card border border-card-border rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <WifiOff className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">iSpindel</h2>
-          </div>
-
-          {!showAssignPanel ? (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">No iSpindel assigned to this batch.</p>
-              <Button size="sm" variant="outline" onClick={() => setShowAssignPanel(true)}>
-                <Wifi className="w-3.5 h-3.5 mr-1.5" />
-                Assign iSpindel
-              </Button>
-              <p className="text-xs text-muted-foreground/70 leading-relaxed">
-                Assign the iSpindel after the device is floating in the fermenter and sending stable readings.
-                Previous test readings will remain in device history but will not be added to this batch.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Assign the iSpindel after the device is floating in the fermenter and sending stable readings.
-                Previous test readings will remain in device history but will not be added to this batch.
-              </p>
-              <div className="flex items-center gap-2">
-                <select
-                  value={assignDeviceId}
-                  onChange={(e) => setAssignDeviceId(e.target.value)}
-                  className="flex-1 text-xs bg-background border border-input rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="">Select a device…</option>
-                  {(sensorDevices ?? []).map((d) => (
-                    <option key={d.device.id} value={String(d.device.id)}>
-                      {d.device.deviceName}
-                      {d.assignedBrewName ? ` (→ ${d.assignedBrewName})` : d.connectionStatus === "connected" ? " · live" : ""}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  size="sm"
-                  disabled={!assignDeviceId || assignMutation.isPending}
-                  onClick={() => {
-                    if (!assignDeviceId) return;
-                    assignMutation.mutate({ id: Number(assignDeviceId), data: { brewSessionId: id } });
-                  }}
-                >
-                  <Check className="w-3.5 h-3.5 mr-1" />
-                  Assign
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => { setShowAssignPanel(false); setAssignDeviceId(""); }}>
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-              {(sensorDevices ?? []).length === 0 && (
-                <p className="text-xs text-muted-foreground">No iSpindel devices registered yet. Add one in Settings → Integrations.</p>
-              )}
-            </div>
-          )}
-        </div>
-      ) : telemetry?.device && telemetry.isDeviceActive ? (
-        <div className="bg-card border border-card-border rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${connectionDotClass(sensorConnStatus)}`} />
-              <h2 className="text-sm font-semibold text-foreground">{telemetry.device.deviceName}</h2>
-              <span className="text-xs text-muted-foreground font-mono">· {telemetry.device.deviceKey}</span>
-              <span className={`text-xs capitalize ${connectionTextClass(sensorConnStatus)}`}>{sensorConnStatus}</span>
-            </div>
-            {telemetry.latestReading && (
-              <span className="text-xs text-muted-foreground">
-                {formatDateTimeShort(telemetry.latestReading.receivedAt)}
-              </span>
-            )}
-          </div>
-
-          {/* Current readings */}
-          {telemetry.latestReading && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {telemetry.latestReading.gravity != null && (
-                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
-                  <p className="text-xs text-muted-foreground">Gravity</p>
-                  <p className="text-base font-semibold text-blue-700 dark:text-blue-400">{Number(telemetry.latestReading.gravity).toFixed(3)}</p>
-                </div>
-              )}
-              {telemetry.latestReading.temperature != null && (
-                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
-                  <p className="text-xs text-muted-foreground">Temperature</p>
-                  <p className="text-base font-semibold text-amber-700 dark:text-amber-400">
-                    {formatSensorTemp(telemetry.latestReading.temperature, telemetry.latestReading.temperatureUnit, tempUnit)}
-                  </p>
-                </div>
-              )}
-              {telemetry.latestReading.battery != null && (
-                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
-                  <p className="text-xs text-muted-foreground">Battery</p>
-                  <p className={`text-base font-semibold ${batteryClass(telemetry.latestReading.batteryPercentEstimate, "text-foreground")}`}>
-                    {Number(telemetry.latestReading.battery).toFixed(2)}V
-                  </p>
-                  {telemetry.latestReading.batteryPercentEstimate != null && (
-                    <p className="text-xs text-muted-foreground">~{Math.round(telemetry.latestReading.batteryPercentEstimate)}%</p>
+                    {showSensorHistory ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                  {showSensorHistory && (
+                    <div className="border-t border-card-border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/30 border-b border-border">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap">Received</th>
+                            {showSensor && <th className="text-left px-2 py-2 font-medium text-muted-foreground">Sensor</th>}
+                            {has.gravity && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Gravity</th>}
+                            {has.temp && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Temp</th>}
+                            {has.angle && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Angle</th>}
+                            {has.battery && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Battery</th>}
+                            {has.rssi && <th className="text-right px-2 py-2 font-medium text-muted-foreground">RSSI</th>}
+                            <th className="w-6 px-2 py-2" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {[...rows].reverse().map((r) => (
+                            <Fragment key={r.id}>
+                              <tr key={r.id} className="hover:bg-muted/20 transition-colors">
+                                <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
+                                  {formatDateTimeShort(r.receivedAt)}
+                                </td>
+                                {showSensor && <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{sensorName(r.deviceId)}</td>}
+                                {has.gravity && <td className="px-2 py-1.5 text-right font-mono text-blue-700 dark:text-blue-400">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>}
+                                {has.temp && <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? formatSensorTemp(r.temperature, r.temperatureUnit, tempUnit) : "—"}</td>}
+                                {has.angle && <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>}
+                                {has.battery && (
+                                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                                    {r.battery != null ? (
+                                      <span className={batteryClass(r.batteryPercentEstimate)}>
+                                        {Number(r.battery).toFixed(2)}V{r.batteryPercentEstimate != null ? ` (~${Math.round(r.batteryPercentEstimate)}%)` : ""}
+                                      </span>
+                                    ) : "—"}
+                                  </td>
+                                )}
+                                {has.rssi && <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rssi != null ? `${r.rssi} dBm` : "—"}</td>}
+                                <td className="px-2 py-1.5">
+                                  {r.rawPayload && (
+                                    <button type="button" onClick={() => setExpandedRawId(expandedRawId === r.id ? null : r.id)}
+                                      className="text-muted-foreground hover:text-foreground transition-colors" title="Raw payload">
+                                      {expandedRawId === r.id ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                              {expandedRawId === r.id && r.rawPayload && (
+                                <tr key={`${r.id}-raw`}>
+                                  <td colSpan={colSpan} className="px-3 pb-2 bg-muted/10">
+                                    <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(r.rawPayload, null, 2)}</pre>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
-              )}
-              {telemetry.latestReading.angle != null && (
-                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
-                  <p className="text-xs text-muted-foreground">Angle</p>
-                  <p className="text-base font-semibold text-foreground">{Number(telemetry.latestReading.angle).toFixed(1)}°</p>
-                </div>
-              )}
-              {session.originalGravityActual != null && telemetry.latestReading.gravity != null && (
-                <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
-                  <p className="text-xs text-muted-foreground">Est. ABV</p>
-                  <p className="text-base font-semibold text-emerald-700 dark:text-emerald-400">
-                    {estimateAbv(session.originalGravityActual, Number(telemetry.latestReading.gravity)).toFixed(1)}%
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+                );
+              })()}
+            </>
+          ),
+          fermentationChart: (
+            <>
+              {/* Fermentation Chart */}
+              {chartData.length > 1 && (() => {
+                const sortedLog = [...(session.statusLog ?? [])].sort(
+                  (a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime()
+                );
+                const fermStartEntry = sortedLog.find((e) => e.status === "fermenting");
+                const fermEndEntry = (() => {
+                  if (!fermStartEntry) return undefined;
+                  return sortedLog.find(
+                    (e) =>
+                      e.status !== "fermenting" &&
+                      new Date(e.changedAt).getTime() > new Date(fermStartEntry.changedAt).getTime()
+                  );
+                })();
 
-          {session.status === "fermenting" && telemetry.insights?.fermentationStatus === "possibly_complete" && !quickStatusMutation.isPending && (
-            <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 mb-3">
-              <span className="text-amber-500 mt-0.5 shrink-0">⚗️</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">Fermentation may be complete</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Gravity has been stable for 24+ hours. Ready to move to conditioning?</p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="shrink-0 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-                onClick={() => handleStatusClick("conditioning")}
-                disabled={quickStatusMutation.isPending}
-              >
-                Move to Conditioning
-              </Button>
-            </div>
-          )}
+                const fermStartLabel = fermStartEntry ? formatDateTimeShort(fermStartEntry.changedAt) : null;
+                const fermEndLabel = fermEndEntry ? formatDateTimeShort(fermEndEntry.changedAt) : null;
+                const tempRange = telemetry?.tempRange;
+                // The server sends the range for the current stage; say which one in the labels.
+                const rangeTag = tempRange?.phase === "conditioning" ? "Cond. " : "";
 
-          {/* Fermentation insights */}
-          {telemetry.insights && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground border-t border-border pt-2">
-              {telemetry.insights.fermentationStatus && (
-                <span>Status: <span className="text-foreground font-medium capitalize">{String(telemetry.insights.fermentationStatus).replace(/_/g, " ")}</span></span>
-              )}
-              {telemetry.insights.attenuationPercent != null && (
-                <span>Attenuation: <span className="text-foreground font-medium">{Number(telemetry.insights.attenuationPercent).toFixed(1)}%</span></span>
-              )}
-              {telemetry.insights.velocityLast24h != null && (
-                <span>Δ 24h: <span className="text-foreground font-medium">{Number(telemetry.insights.velocityLast24h).toFixed(4)} SG/day</span></span>
-              )}
-              {telemetry.insights.gravityDrop != null && (
-                <span>Drop: <span className="text-foreground font-medium">{Number(telemetry.insights.gravityDrop).toFixed(3)} SG</span></span>
-              )}
-            </div>
-          )}
+                const showTemp = chartSeries === "both" || chartSeries === "temp";
+                const showGravity = chartSeries === "both" || chartSeries === "gravity";
+                const isDense = chartData.length > 40;
 
-          {/* Alerts */}
-          {telemetry.alerts && telemetry.alerts.length > 0 && (
-            <div className="space-y-1">
-              {telemetry.alerts.map((a: any, i: number) => (
-                <div key={i} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded ${
-                  a.severity === "critical" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                }`}>
-                  <Thermometer className="w-3.5 h-3.5 shrink-0" />
-                  {a.message}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : null}
+                return (
+                  <div className="bg-card border border-card-border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                      <h2 className="text-sm font-semibold text-foreground">Fermentation Chart</h2>
+                      <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5 text-xs">
+                        {(["both", "temp", "gravity"] as const).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setChartSeries(s)}
+                            className={`px-2.5 py-1 rounded transition-colors ${
+                              chartSeries === s
+                                ? "bg-background text-foreground shadow-sm font-medium"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {s === "both" ? "Both" : s === "temp" ? "🌡 Temp" : "💧 Gravity"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-      {sensorDevices && <BrewSensorsCard brewSessionId={id} sensors={sensorDevices} unit={tempUnit} />}
-
-      {/* Sensor Readings History (fermenter sensors only) */}
-      {telemetry?.device && telemetry.readings && telemetry.readings.length > 0 && (() => {
-        const rows = telemetry.readings;
-        // Only the columns some reading fills: a Shelly probe has no gravity, angle or battery.
-        const has = {
-          gravity: rows.some((r) => r.gravity != null),
-          temp: rows.some((r) => r.temperature != null),
-          angle: rows.some((r) => r.angle != null),
-          battery: rows.some((r) => r.battery != null),
-          rssi: rows.some((r) => r.rssi != null),
-        };
-        const deviceIds = new Set(rows.map((r) => r.deviceId));
-        const showSensor = deviceIds.size > 1;
-        const sensorName = (deviceId: number) => sensorDevices?.find((d) => d.device.id === deviceId)?.device.deviceName ?? `Sensor ${deviceId}`;
-        const colSpan = 2 + (showSensor ? 1 : 0) + Object.values(has).filter(Boolean).length;
-        return (
-        <div className="bg-card border border-card-border rounded-lg">
-          <button
-            type="button"
-            className="w-full px-4 py-3 flex items-center justify-between text-sm font-semibold text-foreground hover:bg-muted/20 transition-colors"
-            onClick={() => setShowSensorHistory((v) => !v)}
-          >
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-muted-foreground" />
-              Sensor Readings
-              <span className="text-xs text-muted-foreground font-normal">({rows.length} for this brew)</span>
-            </div>
-            {showSensorHistory ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {showSensorHistory && (
-            <div className="border-t border-card-border overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/30 border-b border-border">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap">Received</th>
-                    {showSensor && <th className="text-left px-2 py-2 font-medium text-muted-foreground">Sensor</th>}
-                    {has.gravity && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Gravity</th>}
-                    {has.temp && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Temp</th>}
-                    {has.angle && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Angle</th>}
-                    {has.battery && <th className="text-right px-2 py-2 font-medium text-muted-foreground">Battery</th>}
-                    {has.rssi && <th className="text-right px-2 py-2 font-medium text-muted-foreground">RSSI</th>}
-                    <th className="w-6 px-2 py-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {[...rows].reverse().map((r) => (
-                    <Fragment key={r.id}>
-                      <tr key={r.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
-                          {formatDateTimeShort(r.receivedAt)}
-                        </td>
-                        {showSensor && <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{sensorName(r.deviceId)}</td>}
-                        {has.gravity && <td className="px-2 py-1.5 text-right font-mono text-blue-700 dark:text-blue-400">{r.gravity != null ? Number(r.gravity).toFixed(3) : "—"}</td>}
-                        {has.temp && <td className="px-2 py-1.5 text-right whitespace-nowrap text-amber-700 dark:text-amber-400">{r.temperature != null ? formatSensorTemp(r.temperature, r.temperatureUnit, tempUnit) : "—"}</td>}
-                        {has.angle && <td className="px-2 py-1.5 text-right">{r.angle != null ? `${Number(r.angle).toFixed(1)}°` : "—"}</td>}
-                        {has.battery && (
-                          <td className="px-2 py-1.5 text-right whitespace-nowrap">
-                            {r.battery != null ? (
-                              <span className={batteryClass(r.batteryPercentEstimate)}>
-                                {Number(r.battery).toFixed(2)}V{r.batteryPercentEstimate != null ? ` (~${Math.round(r.batteryPercentEstimate)}%)` : ""}
-                              </span>
-                            ) : "—"}
-                          </td>
-                        )}
-                        {has.rssi && <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rssi != null ? `${r.rssi} dBm` : "—"}</td>}
-                        <td className="px-2 py-1.5">
-                          {r.rawPayload && (
-                            <button type="button" onClick={() => setExpandedRawId(expandedRawId === r.id ? null : r.id)}
-                              className="text-muted-foreground hover:text-foreground transition-colors" title="Raw payload">
-                              {expandedRawId === r.id ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                      {expandedRawId === r.id && r.rawPayload && (
-                        <tr key={`${r.id}-raw`}>
-                          <td colSpan={colSpan} className="px-3 pb-2 bg-muted/10">
-                            <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto text-muted-foreground">{JSON.stringify(r.rawPayload, null, 2)}</pre>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        );
-      })()}
-
-      {/* Fermentation Chart */}
-      {chartData.length > 1 && (() => {
-        const sortedLog = [...(session.statusLog ?? [])].sort(
-          (a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime()
-        );
-        const fermStartEntry = sortedLog.find((e) => e.status === "fermenting");
-        const fermEndEntry = (() => {
-          if (!fermStartEntry) return undefined;
-          return sortedLog.find(
-            (e) =>
-              e.status !== "fermenting" &&
-              new Date(e.changedAt).getTime() > new Date(fermStartEntry.changedAt).getTime()
-          );
-        })();
-
-        const fermStartLabel = fermStartEntry ? formatDateTimeShort(fermStartEntry.changedAt) : null;
-        const fermEndLabel = fermEndEntry ? formatDateTimeShort(fermEndEntry.changedAt) : null;
-        const tempRange = telemetry?.tempRange;
-        // The server sends the range for the current stage; say which one in the labels.
-        const rangeTag = tempRange?.phase === "conditioning" ? "Cond. " : "";
-
-        const showTemp = chartSeries === "both" || chartSeries === "temp";
-        const showGravity = chartSeries === "both" || chartSeries === "gravity";
-        const isDense = chartData.length > 40;
-
-        return (
-          <div className="bg-card border border-card-border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h2 className="text-sm font-semibold text-foreground">Fermentation Chart</h2>
-              <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5 text-xs">
-                {(["both", "temp", "gravity"] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setChartSeries(s)}
-                    className={`px-2.5 py-1 rounded transition-colors ${
-                      chartSeries === s
-                        ? "bg-background text-foreground shadow-sm font-medium"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {s === "both" ? "Both" : s === "temp" ? "🌡 Temp" : "💧 Gravity"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {(fermStartLabel || fermEndLabel) && (
-              <div className="flex items-center gap-4 mb-3 flex-wrap">
-                {fermStartLabel && (
-                  <span className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
-                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                    Fermentation started · {fermStartLabel}
-                  </span>
-                )}
-                {fermEndLabel && (
-                  <span className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-400">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-                    Fermentation ended · {fermEndLabel}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid yAxisId={showTemp ? "temp" : "gravity"} strokeDasharray="3 3" className="opacity-20" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                  tickLine={false}
-                  axisLine={false}
-                  interval="preserveStartEnd"
-                />
-                {showTemp && (
-                  <YAxis
-                    yAxisId="temp"
-                    orientation="left"
-                    domain={["auto", "auto"]}
-                    tick={{ fontSize: 10, fill: "#d97706" }}
-                    tickLine={false}
-                    axisLine={false}
-                    unit="°F"
-                    width={42}
-                  />
-                )}
-                {showGravity && (
-                  <YAxis
-                    yAxisId="gravity"
-                    orientation="right"
-                    domain={["auto", "auto"]}
-                    tick={{ fontSize: 10, fill: "#2563eb" }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => v.toFixed(3)}
-                    width={52}
-                  />
-                )}
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--color-card)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    padding: "8px 12px",
-                  }}
-                  labelStyle={{ color: "var(--color-muted-foreground)", marginBottom: 4 }}
-                  itemSorter={(item) => (item.dataKey === "temp" ? 0 : 1)}
-                  formatter={(value: number, name: string) =>
-                    name === "temp"
-                      ? [`${value.toFixed(1)}°F`, "Temperature"]
-                      : [value?.toFixed(3), "Gravity"]
-                  }
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-                  itemSorter={(item) => (item.value === "temp" ? 0 : 1)}
-                  formatter={(v) => (
-                    <span style={{ color: v === "temp" ? "#d97706" : "#2563eb" }}>
-                      {v === "temp" ? "Temperature" : "Gravity"}
-                    </span>
-                  )}
-                />
-                {fermStartLabel && (
-                  <ReferenceLine
-                    x={fermStartLabel}
-                    yAxisId={showTemp ? "temp" : "gravity"}
-                    stroke="#22c55e"
-                    strokeDasharray="4 3"
-                    strokeWidth={1.5}
-                    label={{ value: "▶ Ferm start", position: "insideTopLeft", fontSize: 9, fill: "#22c55e", dy: -2 }}
-                  />
-                )}
-                {fermEndLabel && (
-                  <ReferenceLine
-                    x={fermEndLabel}
-                    yAxisId={showTemp ? "temp" : "gravity"}
-                    stroke="#3b82f6"
-                    strokeDasharray="4 3"
-                    strokeWidth={1.5}
-                    label={{ value: "■ Ferm end", position: "insideTopRight", fontSize: 9, fill: "#3b82f6", dy: -2 }}
-                  />
-                )}
-                {showTemp && tempRange?.ideal != null && (
-                  <ReferenceLine
-                    yAxisId="temp"
-                    y={tempRangeToF(tempRange.ideal, tempRange.unit)}
-                    stroke="#22c55e"
-                    strokeDasharray="5 3"
-                    strokeWidth={1.5}
-                    label={{ value: `${rangeTag}Ideal`, position: "insideTopRight", fontSize: 9, fill: "#22c55e" }}
-                  />
-                )}
-                {showTemp && tempRange?.min != null && (
-                  <ReferenceLine
-                    yAxisId="temp"
-                    y={tempRangeToF(tempRange.min, tempRange.unit)}
-                    stroke="#ef4444"
-                    strokeDasharray="3 3"
-                    strokeWidth={1}
-                    label={{ value: `${rangeTag}Min`, position: "insideBottomRight", fontSize: 9, fill: "#ef4444" }}
-                  />
-                )}
-                {showTemp && tempRange?.max != null && (
-                  <ReferenceLine
-                    yAxisId="temp"
-                    y={tempRangeToF(tempRange.max, tempRange.unit)}
-                    stroke="#ef4444"
-                    strokeDasharray="3 3"
-                    strokeWidth={1}
-                    label={{ value: `${rangeTag}Max`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
-                  />
-                )}
-                {showTemp && (
-                  <Line
-                    yAxisId="temp"
-                    type="monotone"
-                    dataKey="temp"
-                    stroke="#d97706"
-                    strokeWidth={2}
-                    dot={isDense ? false : { r: 2, fill: "#d97706", strokeWidth: 0 }}
-                    activeDot={{ r: 4 }}
-                    connectNulls
-                  />
-                )}
-                {showGravity && (
-                  <Line
-                    yAxisId="gravity"
-                    type="monotone"
-                    dataKey="gravity"
-                    stroke="#2563eb"
-                    strokeWidth={2}
-                    dot={isDense ? false : { r: 2, fill: "#2563eb", strokeWidth: 0 }}
-                    activeDot={{ r: 4 }}
-                    connectNulls
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        );
-      })()}
-
-      {/* Reference sensors (ice bath, room…): each on its own chart */}
-      {(telemetry?.referenceSensors ?? []).map((s) => (
-        <ReferenceSensorChart key={s.device.id} sensor={s} unit={tempUnit} />
-      ))}
-
-      {/* Fermentation Readings */}
-      <div className="bg-card border border-card-border rounded-lg">
-        <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Fermentation Readings</h2>
-            {session.readings && session.readings.length > 0 && (
-              <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
-                {(["all", "sensor", "manual"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setReadingFilter(f)}
-                    className={`text-xs px-2 py-0.5 rounded transition-colors ${
-                      readingFilter === f
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {f === "all" ? "All" : f === "sensor" ? "📡 Sensor" : "✍️ Manual"}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <Button size="sm" variant="outline" onClick={() => { setReadingForm((f) => ({ ...f, readingAt: toDatetimeLocalValue(new Date()) })); setShowReadingForm(!showReadingForm); }}>
-            <Plus className="w-3.5 h-3.5 mr-1" />Log Reading
-          </Button>
-        </div>
-        <div className="p-4 space-y-3">
-          {showReadingForm && (
-            <form onSubmit={handleAddReading} className="bg-muted/50 rounded-lg p-3 space-y-2 border border-border">
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="text-xs text-muted-foreground mb-1 block">Date & Time</label>
-                  <Input type="datetime-local" value={readingForm.readingAt} onChange={(e) => setReadingForm({ ...readingForm, readingAt: e.target.value })} className="text-sm" /></div>
-                <div><label className="text-xs text-muted-foreground mb-1 block">Temperature (°F)</label>
-                  <Input type="number" step="0.1" value={readingForm.temperatureFahrenheit} onChange={(e) => setReadingForm({ ...readingForm, temperatureFahrenheit: e.target.value })} placeholder="68.0" className="text-sm" /></div>
-                <div><label className="text-xs text-muted-foreground mb-1 block">Gravity (SG)</label>
-                  <Input type="number" step="0.001" value={readingForm.gravity} onChange={(e) => setReadingForm({ ...readingForm, gravity: e.target.value })} placeholder="1.038" className="text-sm" /></div>
-                <div><label className="text-xs text-muted-foreground mb-1 block">pH (optional)</label>
-                  <Input type="number" step="0.01" value={readingForm.ph} onChange={(e) => setReadingForm({ ...readingForm, ph: e.target.value })} placeholder="4.2" className="text-sm" /></div>
-              </div>
-              <Input placeholder="Notes (optional)" value={readingForm.notes} onChange={(e) => setReadingForm({ ...readingForm, notes: e.target.value })} className="text-sm" />
-              <div className="flex gap-2 justify-end">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setShowReadingForm(false)}><X className="w-3.5 h-3.5" /></Button>
-                <Button type="submit" size="sm" disabled={addReadingMutation.isPending}><Check className="w-3.5 h-3.5 mr-1" />Log</Button>
-              </div>
-            </form>
-          )}
-
-          {(() => {
-            const allReadings = session.readings ?? [];
-            const filtered = readingFilter === "all"
-              ? allReadings
-              : allReadings.filter((r) => (readingFilter === "sensor") === (r.source !== "manual"));
-            const reversed = [...filtered].reverse();
-
-            if (reversed.length === 0) {
-              return !showReadingForm ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  {readingFilter === "all" ? "No readings logged yet" : `No ${readingFilter === "sensor" ? "sensor" : "manual"} readings`}
-                </p>
-              ) : null;
-            }
-
-            const hasMore = reversed.length > defaultCount;
-            const visible = showAllReadings ? reversed : reversed.slice(0, defaultCount);
-
-            return (
-              <>
-                <div className="space-y-1">
-                  {visible.map((reading) => {
-                    const src = reading.source;
-                    return (
-                      <div key={reading.id} className="flex items-start gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
-                        <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
-                          <span className="text-xs text-muted-foreground">{formatDateTime(reading.readingAt)}</span>
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
-                            src !== "manual"
-                              ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                              : "bg-muted text-muted-foreground"
-                          }`}>
-                            {src === "ispindel" ? "📡 iSpindel" : src === "shelly" ? "🌡️ Shelly probe" : "✍️ Manual"}
+                    {(fermStartLabel || fermEndLabel) && (
+                      <div className="flex items-center gap-4 mb-3 flex-wrap">
+                        {fermStartLabel && (
+                          <span className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                            Fermentation started · {fermStartLabel}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-3 flex-1 flex-wrap">
-                          {reading.temperatureFahrenheit != null && (() => {
-                            const tr = telemetry?.tempRange;
-                            const tempF = reading.temperatureFahrenheit;
-                            let devEl: React.ReactNode = null;
-                            if (tr?.ideal != null) {
-                              const idealF = tempRangeToF(tr.ideal, tr.unit);
-                              const dev = tempF - idealF;
-                              const minF = tr.min != null ? tempRangeToF(tr.min, tr.unit) : null;
-                              const maxF = tr.max != null ? tempRangeToF(tr.max, tr.unit) : null;
-                              const outOfRange = (minF != null && tempF < minF) || (maxF != null && tempF > maxF);
-                              const nearLimit = !outOfRange && ((minF != null && tempF - minF < 2) || (maxF != null && maxF - tempF < 2));
-                              const color = outOfRange ? "text-red-600 dark:text-red-400" : nearLimit ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400";
-                              devEl = <span className={`text-xs ${color}`}>{dev >= 0 ? "+" : ""}{dev.toFixed(1)}°F</span>;
-                            }
-                            return (
-                              <>
-                                <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                                  <Thermometer className="w-3.5 h-3.5" />{tempF.toFixed(1)}°F
-                                </span>
-                                {devEl}
-                              </>
-                            );
-                          })()}
-                          {reading.gravity != null && (
-                            <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
-                              <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}
+                        )}
+                        {fermEndLabel && (
+                          <span className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-400">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                            Fermentation ended · {fermEndLabel}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <ResponsiveContainer width="100%" height={220}>
+                      <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid yAxisId={showTemp ? "temp" : "gravity"} strokeDasharray="3 3" className="opacity-20" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                          tickLine={false}
+                          axisLine={false}
+                          interval="preserveStartEnd"
+                        />
+                        {showTemp && (
+                          <YAxis
+                            yAxisId="temp"
+                            orientation="left"
+                            domain={["auto", "auto"]}
+                            tick={{ fontSize: 10, fill: "#d97706" }}
+                            tickLine={false}
+                            axisLine={false}
+                            unit="°F"
+                            width={42}
+                          />
+                        )}
+                        {showGravity && (
+                          <YAxis
+                            yAxisId="gravity"
+                            orientation="right"
+                            domain={["auto", "auto"]}
+                            tick={{ fontSize: 10, fill: "#2563eb" }}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(v) => v.toFixed(3)}
+                            width={52}
+                          />
+                        )}
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "var(--color-card)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                            padding: "8px 12px",
+                          }}
+                          labelStyle={{ color: "var(--color-muted-foreground)", marginBottom: 4 }}
+                          itemSorter={(item) => (item.dataKey === "temp" ? 0 : 1)}
+                          formatter={(value: number, name: string) =>
+                            name === "temp"
+                              ? [`${value.toFixed(1)}°F`, "Temperature"]
+                              : [value?.toFixed(3), "Gravity"]
+                          }
+                        />
+                        <Legend
+                          wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                          itemSorter={(item) => (item.value === "temp" ? 0 : 1)}
+                          formatter={(v) => (
+                            <span style={{ color: v === "temp" ? "#d97706" : "#2563eb" }}>
+                              {v === "temp" ? "Temperature" : "Gravity"}
                             </span>
                           )}
-                          {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
-                          {reading.notes && (
-                            <span className={cn("text-muted-foreground text-xs truncate", src !== "manual" && "font-mono")}>{reading.notes}</span>
-                          )}
-                        </div>
-                        <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        />
+                        {fermStartLabel && (
+                          <ReferenceLine
+                            x={fermStartLabel}
+                            yAxisId={showTemp ? "temp" : "gravity"}
+                            stroke="#22c55e"
+                            strokeDasharray="4 3"
+                            strokeWidth={1.5}
+                            label={{ value: "▶ Ferm start", position: "insideTopLeft", fontSize: 9, fill: "#22c55e", dy: -2 }}
+                          />
+                        )}
+                        {fermEndLabel && (
+                          <ReferenceLine
+                            x={fermEndLabel}
+                            yAxisId={showTemp ? "temp" : "gravity"}
+                            stroke="#3b82f6"
+                            strokeDasharray="4 3"
+                            strokeWidth={1.5}
+                            label={{ value: "■ Ferm end", position: "insideTopRight", fontSize: 9, fill: "#3b82f6", dy: -2 }}
+                          />
+                        )}
+                        {showTemp && tempRange?.ideal != null && (
+                          <ReferenceLine
+                            yAxisId="temp"
+                            y={tempRangeToF(tempRange.ideal, tempRange.unit)}
+                            stroke="#22c55e"
+                            strokeDasharray="5 3"
+                            strokeWidth={1.5}
+                            label={{ value: `${rangeTag}Ideal`, position: "insideTopRight", fontSize: 9, fill: "#22c55e" }}
+                          />
+                        )}
+                        {showTemp && tempRange?.min != null && (
+                          <ReferenceLine
+                            yAxisId="temp"
+                            y={tempRangeToF(tempRange.min, tempRange.unit)}
+                            stroke="#ef4444"
+                            strokeDasharray="3 3"
+                            strokeWidth={1}
+                            label={{ value: `${rangeTag}Min`, position: "insideBottomRight", fontSize: 9, fill: "#ef4444" }}
+                          />
+                        )}
+                        {showTemp && tempRange?.max != null && (
+                          <ReferenceLine
+                            yAxisId="temp"
+                            y={tempRangeToF(tempRange.max, tempRange.unit)}
+                            stroke="#ef4444"
+                            strokeDasharray="3 3"
+                            strokeWidth={1}
+                            label={{ value: `${rangeTag}Max`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
+                          />
+                        )}
+                        {showTemp && (
+                          <Line
+                            yAxisId="temp"
+                            type="monotone"
+                            dataKey="temp"
+                            stroke="#d97706"
+                            strokeWidth={2}
+                            dot={isDense ? false : { r: 2, fill: "#d97706", strokeWidth: 0 }}
+                            activeDot={{ r: 4 }}
+                            connectNulls
+                          />
+                        )}
+                        {showGravity && (
+                          <Line
+                            yAxisId="gravity"
+                            type="monotone"
+                            dataKey="gravity"
+                            stroke="#2563eb"
+                            strokeWidth={2}
+                            dot={isDense ? false : { r: 2, fill: "#2563eb", strokeWidth: 0 }}
+                            activeDot={{ r: 4 }}
+                            connectNulls
+                          />
+                        )}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })()}
+            </>
+          ),
+          referenceCharts: (
+            <>
+              {/* Reference sensors (ice bath, room…): each on its own chart */}
+              {(telemetry?.referenceSensors ?? []).map((s) => (
+                <ReferenceSensorChart key={s.device.id} sensor={s} unit={tempUnit} />
+              ))}
+            </>
+          ),
+          readings: (
+            <>
+              {/* Fermentation Readings */}
+              <div className="bg-card border border-card-border rounded-lg">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-semibold text-foreground">Fermentation Readings</h2>
+                    {session.readings && session.readings.length > 0 && (
+                      <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+                        {(["all", "sensor", "manual"] as const).map((f) => (
+                          <button
+                            key={f}
+                            onClick={() => setReadingFilter(f)}
+                            className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                              readingFilter === f
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {f === "all" ? "All" : f === "sensor" ? "📡 Sensor" : "✍️ Manual"}
+                          </button>
+                        ))}
                       </div>
-                    );
-                  })}
+                    )}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => { setReadingForm((f) => ({ ...f, readingAt: toDatetimeLocalValue(new Date()) })); setShowReadingForm(!showReadingForm); }}>
+                    <Plus className="w-3.5 h-3.5 mr-1" />Log Reading
+                  </Button>
                 </div>
-                {!showAllReadings && hasMore && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllReadings(true)}
-                    className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2 border border-dashed border-border rounded-md hover:border-primary/50"
-                  >
-                    Show all {reversed.length} readings
-                  </button>
-                )}
-                {showAllReadings && hasMore && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllReadings(false)}
-                    className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2 border border-dashed border-border rounded-md hover:border-primary/50"
-                  >
-                    Show less
-                  </button>
-                )}
-              </>
-            );
-          })()}
-        </div>
-      </div>
+                <div className="p-4 space-y-3">
+                  {showReadingForm && (
+                    <form onSubmit={handleAddReading} className="bg-muted/50 rounded-lg p-3 space-y-2 border border-border">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><label className="text-xs text-muted-foreground mb-1 block">Date & Time</label>
+                          <Input type="datetime-local" value={readingForm.readingAt} onChange={(e) => setReadingForm({ ...readingForm, readingAt: e.target.value })} className="text-sm" /></div>
+                        <div><label className="text-xs text-muted-foreground mb-1 block">Temperature (°F)</label>
+                          <Input type="number" step="0.1" value={readingForm.temperatureFahrenheit} onChange={(e) => setReadingForm({ ...readingForm, temperatureFahrenheit: e.target.value })} placeholder="68.0" className="text-sm" /></div>
+                        <div><label className="text-xs text-muted-foreground mb-1 block">Gravity (SG)</label>
+                          <Input type="number" step="0.001" value={readingForm.gravity} onChange={(e) => setReadingForm({ ...readingForm, gravity: e.target.value })} placeholder="1.038" className="text-sm" /></div>
+                        <div><label className="text-xs text-muted-foreground mb-1 block">pH (optional)</label>
+                          <Input type="number" step="0.01" value={readingForm.ph} onChange={(e) => setReadingForm({ ...readingForm, ph: e.target.value })} placeholder="4.2" className="text-sm" /></div>
+                      </div>
+                      <Input placeholder="Notes (optional)" value={readingForm.notes} onChange={(e) => setReadingForm({ ...readingForm, notes: e.target.value })} className="text-sm" />
+                      <div className="flex gap-2 justify-end">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setShowReadingForm(false)}><X className="w-3.5 h-3.5" /></Button>
+                        <Button type="submit" size="sm" disabled={addReadingMutation.isPending}><Check className="w-3.5 h-3.5 mr-1" />Log</Button>
+                      </div>
+                    </form>
+                  )}
+
+                  {(() => {
+                    const allReadings = session.readings ?? [];
+                    const filtered = readingFilter === "all"
+                      ? allReadings
+                      : allReadings.filter((r) => (readingFilter === "sensor") === (r.source !== "manual"));
+                    const reversed = [...filtered].reverse();
+
+                    if (reversed.length === 0) {
+                      return !showReadingForm ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          {readingFilter === "all" ? "No readings logged yet" : `No ${readingFilter === "sensor" ? "sensor" : "manual"} readings`}
+                        </p>
+                      ) : null;
+                    }
+
+                    const hasMore = reversed.length > defaultCount;
+                    const visible = showAllReadings ? reversed : reversed.slice(0, defaultCount);
+
+                    return (
+                      <>
+                        <div className="space-y-1">
+                          {visible.map((reading) => {
+                            const src = reading.source;
+                            return (
+                              <div key={reading.id} className="flex items-start gap-3 text-sm py-2 px-2 rounded hover:bg-muted group">
+                                <div className="flex flex-col gap-0.5 shrink-0 min-w-[120px]">
+                                  <span className="text-xs text-muted-foreground">{formatDateTime(reading.readingAt)}</span>
+                                  <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded w-fit ${
+                                    src !== "manual"
+                                      ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                                      : "bg-muted text-muted-foreground"
+                                  }`}>
+                                    {src === "ispindel" ? "📡 iSpindel" : src === "shelly" ? "🌡️ Shelly probe" : "✍️ Manual"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 flex-1 flex-wrap">
+                                  {reading.temperatureFahrenheit != null && (() => {
+                                    const tr = telemetry?.tempRange;
+                                    const tempF = reading.temperatureFahrenheit;
+                                    let devEl: React.ReactNode = null;
+                                    if (tr?.ideal != null) {
+                                      const idealF = tempRangeToF(tr.ideal, tr.unit);
+                                      const dev = tempF - idealF;
+                                      const minF = tr.min != null ? tempRangeToF(tr.min, tr.unit) : null;
+                                      const maxF = tr.max != null ? tempRangeToF(tr.max, tr.unit) : null;
+                                      const outOfRange = (minF != null && tempF < minF) || (maxF != null && tempF > maxF);
+                                      const nearLimit = !outOfRange && ((minF != null && tempF - minF < 2) || (maxF != null && maxF - tempF < 2));
+                                      const color = outOfRange ? "text-red-600 dark:text-red-400" : nearLimit ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400";
+                                      devEl = <span className={`text-xs ${color}`}>{dev >= 0 ? "+" : ""}{dev.toFixed(1)}°F</span>;
+                                    }
+                                    return (
+                                      <>
+                                        <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                                          <Thermometer className="w-3.5 h-3.5" />{tempF.toFixed(1)}°F
+                                        </span>
+                                        {devEl}
+                                      </>
+                                    );
+                                  })()}
+                                  {reading.gravity != null && (
+                                    <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
+                                      <Droplets className="w-3.5 h-3.5" />{reading.gravity.toFixed(3)}
+                                    </span>
+                                  )}
+                                  {reading.ph != null && <span className="text-muted-foreground">pH {reading.ph.toFixed(2)}</span>}
+                                  {reading.notes && (
+                                    <span className={cn("text-muted-foreground text-xs truncate", src !== "manual" && "font-mono")}>{reading.notes}</span>
+                                  )}
+                                </div>
+                                <button onClick={() => deleteReadingMutation.mutate({ id: reading.id })} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity mt-0.5">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {!showAllReadings && hasMore && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllReadings(true)}
+                            className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2 border border-dashed border-border rounded-md hover:border-primary/50"
+                          >
+                            Show all {reversed.length} readings
+                          </button>
+                        )}
+                        {showAllReadings && hasMore && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllReadings(false)}
+                            className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2 border border-dashed border-border rounded-md hover:border-primary/50"
+                          >
+                            Show less
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </>
+          ),
+        };
+        const hidden = new Set(layout.hidden);
+        return layout.order.filter((s) => !hidden.has(s)).map((s) => <Fragment key={s}>{sections[s]}</Fragment>);
+      })()}
 
       {photoLightboxOpen && session.photoPath && (
         <div

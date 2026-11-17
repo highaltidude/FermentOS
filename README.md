@@ -78,6 +78,7 @@ install to a tracked first batch.
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
 - **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). A recipe can keep its water: the target and salt additions show on the recipe, and brew day lists the additions scaled to the batch. Recipe scaling and batch cost are planned
 - **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
+- **Brew page layout** — Choose the order of the cards on a brew's page and hide the ones you don't use, such as the Heating & cooling chart if you have no relays. Set once in Settings, the same on every device
 - **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
 - **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
 - **Updates and rollback** — Update from inside the app with a live progress bar, read the release notes in place, and roll back to a previous deploy in one click (bare-metal installs; Docker updates by rebuilding the image)
@@ -869,6 +870,13 @@ deletes readings older than the age you choose from packaged batches, along
 with old sensor readings that belong to no batch, every night. It is off until
 you turn it on, and what it deletes is gone. The default
 number of readings shown on a session page is set there too.
+
+**Settings → Brewing → Brew Page Layout** sets the order of the cards on a brew's
+page, top to bottom: move a card with its arrows, or switch it off to hide it.
+Changes save straight away and apply on every device. The stage prompts at the
+top of the page, like the boil timer and Enter OG, always show. Hiding a card
+hides everything in it: hide Telemetry and the "fermentation may be complete"
+prompt goes with it. **Reset to default** puts everything back.
 
 **Settings → System → Power** has **Restart App** and, on a bare-metal install,
 **Reboot Host**.
@@ -1754,6 +1762,7 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | `/api/settings/reading-retention` | `{ "days": 0 \| 90 \| 180 \| 365 \| 730 \| null }` | Nightly, deletes readings older than N days that belong to packaged sessions, and sensor readings not tied to any session; `0`/`null` keeps forever |
 | `/api/settings/brewery-name` | `{ "name": string \| null }` | Shown in the UI header |
 | `/api/settings/default-readings-shown` | `{ "count": 5 \| 10 \| 25 \| 50 \| 100 }` | Default number of readings shown on a fresh fermentation chart |
+| `/api/settings/brew-layout` | `{ "order": ["water", "dryHops", "tasting", …], "hidden": ["heatingCooling"] }` | The brew page's cards top to bottom, and the ones hidden. Sections: `water`, `dryHops`, `tasting`, `recipeAsBrewed`, `stageHistory`, `tempControl`, `heatingCooling`, `telemetry`, `sensors`, `sensorReadings`, `fermentationChart`, `referenceCharts`, `readings`. An unknown section is a `400`; one left out of `order` keeps its default place, so `GET` always lists all of them |
 | `/api/settings/ferment-temp-unit` | `{ "unit": "F" \| "C" }` | Unit used for fermentation temperature thresholds/readings |
 | `/api/settings/temp-alert-readings` | `{ "count": 2..10 }` | Consecutive out-of-range readings required before a temperature alert fires |
 | `/api/settings/source-water` | `{ "profile": { "calcium": 30, "magnesium": 8, "sodium": 12, "sulfate": 25, "chloride": 20, "bicarbonate": 90, "name": "Tap" } \| null }` | Your tap water in ppm, used to prefill the water calculator. Each ion is 0–2000; `name` is optional. `null` clears it, and `GET` returns `null` until one is saved |

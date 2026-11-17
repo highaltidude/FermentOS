@@ -22,6 +22,7 @@ import type {
   BackupAuditResult,
   BeerStyle,
   BoilControlBody,
+  BrewLayout,
   BrewRelayRuns,
   BrewSensorTelemetry,
   BrewSession,
@@ -5360,6 +5361,196 @@ export const useSetDefaultReadingsShown = <
   TContext
 > => {
   return useMutation(getSetDefaultReadingsShownMutationOptions(options));
+};
+
+export const getGetBrewLayoutUrl = () => {
+  return `/api/settings/brew-layout`;
+};
+
+/**
+ * Always lists every section. A section missing from the saved layout, such as one added in a later release, appears in its default place.
+ * @summary Get the order of the brew session page's cards and which are hidden
+ */
+export const getBrewLayout = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<BrewLayout> => {
+  return customFetch<BrewLayout>(getGetBrewLayoutUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBrewLayoutQueryKey = () => {
+  return [`/api/settings/brew-layout`] as const;
+};
+
+export const getGetBrewLayoutQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBrewLayout>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBrewLayout>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBrewLayoutQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBrewLayout>>> = ({
+    signal,
+  }) => getBrewLayout({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBrewLayout>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBrewLayoutQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBrewLayout>>
+>;
+export type GetBrewLayoutQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the order of the brew session page's cards and which are hidden
+ */
+
+export function useGetBrewLayout<
+  TData = Awaited<ReturnType<typeof getBrewLayout>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBrewLayout>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBrewLayoutQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getSetBrewLayoutUrl = () => {
+  return `/api/settings/brew-layout`;
+};
+
+/**
+ * Sections left out of `order` keep their default place; duplicates are ignored. Returns the layout as saved.
+ * @summary Set the order of the brew session page's cards and which are hidden
+ */
+export const setBrewLayout = async (
+  brewLayout: BrewLayout,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<BrewLayout> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<BrewLayout>(getSetBrewLayoutUrl(), {
+    ...options,
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(brewLayout),
+  });
+};
+
+export const getSetBrewLayoutMutationKey = () => ["setBrewLayout"] as const;
+
+export const getSetBrewLayoutMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setBrewLayout>>,
+    TError,
+    SetBrewLayoutMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setBrewLayout>>,
+  TError,
+  SetBrewLayoutMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSetBrewLayoutMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setBrewLayout>>,
+    SetBrewLayoutMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setBrewLayout(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetBrewLayoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setBrewLayout>>
+>;
+export type SetBrewLayoutMutationBody = BodyType<BrewLayout>;
+export type SetBrewLayoutMutationError = ErrorType<ErrorResponse>;
+export type SetBrewLayoutMutationVariables = { data: BodyType<BrewLayout> };
+
+/**
+ * @summary Set the order of the brew session page's cards and which are hidden
+ */
+export const useSetBrewLayout = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setBrewLayout>>,
+    TError,
+    SetBrewLayoutMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setBrewLayout>>,
+  TError,
+  SetBrewLayoutMutationVariables,
+  TContext
+> => {
+  return useMutation(getSetBrewLayoutMutationOptions(options));
 };
 
 export const getGetFermentTempUnitUrl = () => {

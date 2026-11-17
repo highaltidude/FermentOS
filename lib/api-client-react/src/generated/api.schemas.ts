@@ -1754,6 +1754,41 @@ export interface DefaultReadingsShownBody {
   count: number;
 }
 
+/**
+ * A movable card on the brew session page.
+ */
+export type BrewLayoutSection =
+  (typeof BrewLayoutSection)[keyof typeof BrewLayoutSection];
+
+export const BrewLayoutSection = {
+  water: "water",
+  dryHops: "dryHops",
+  tasting: "tasting",
+  recipeAsBrewed: "recipeAsBrewed",
+  stageHistory: "stageHistory",
+  tempControl: "tempControl",
+  heatingCooling: "heatingCooling",
+  telemetry: "telemetry",
+  sensors: "sensors",
+  sensorReadings: "sensorReadings",
+  fermentationChart: "fermentationChart",
+  referenceCharts: "referenceCharts",
+  readings: "readings",
+} as const;
+
+export interface BrewLayout {
+  /**
+   * The cards from top to bottom.
+   * @maxItems 50
+   */
+  order: BrewLayoutSection[];
+  /**
+   * Cards left off the page.
+   * @maxItems 50
+   */
+  hidden: BrewLayoutSection[];
+}
+
 export interface BreweryNameResponse {
   /** @nullable */
   name: string | null;

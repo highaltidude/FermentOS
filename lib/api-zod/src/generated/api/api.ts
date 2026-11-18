@@ -158,6 +158,12 @@ export const GetDashboardSummaryResponse = zod.object({
         .describe(
           "null = use global setting, true = always auto-advance, false = always manual",
         ),
+      tempSensorId: zod
+        .int()
+        .nullish()
+        .describe(
+          "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+        ),
       tastingNotes: zod.string().nullish(),
       photoPath: zod.string().nullish(),
       boilMinutes: zod
@@ -253,6 +259,48 @@ export const ListRecipesQueryParams = zod.object({
   search: zod.coerce.string().optional(),
 });
 
+export const listRecipesResponseWaterOneTargetPresetIdMax = 40;
+
+export const listRecipesResponseWaterOneTargetNameMax = 80;
+
+export const listRecipesResponseWaterOneTargetProfileNameMax = 80;
+
+export const listRecipesResponseWaterOneTargetProfileCalciumMin = 0;
+export const listRecipesResponseWaterOneTargetProfileCalciumMax = 2000;
+
+export const listRecipesResponseWaterOneTargetProfileMagnesiumMin = 0;
+export const listRecipesResponseWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const listRecipesResponseWaterOneTargetProfileSodiumMin = 0;
+export const listRecipesResponseWaterOneTargetProfileSodiumMax = 2000;
+
+export const listRecipesResponseWaterOneTargetProfileSulfateMin = 0;
+export const listRecipesResponseWaterOneTargetProfileSulfateMax = 2000;
+
+export const listRecipesResponseWaterOneTargetProfileChlorideMin = 0;
+export const listRecipesResponseWaterOneTargetProfileChlorideMax = 2000;
+
+export const listRecipesResponseWaterOneTargetProfileBicarbonateMin = 0;
+export const listRecipesResponseWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const listRecipesResponseWaterOneSaltsGypsumMin = 0;
+export const listRecipesResponseWaterOneSaltsGypsumMax = 1000;
+
+export const listRecipesResponseWaterOneSaltsCalciumChlorideMin = 0;
+export const listRecipesResponseWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const listRecipesResponseWaterOneSaltsEpsomMin = 0;
+export const listRecipesResponseWaterOneSaltsEpsomMax = 1000;
+
+export const listRecipesResponseWaterOneSaltsTableSaltMin = 0;
+export const listRecipesResponseWaterOneSaltsTableSaltMax = 1000;
+
+export const listRecipesResponseWaterOneSaltsBakingSodaMin = 0;
+export const listRecipesResponseWaterOneSaltsBakingSodaMax = 1000;
+
+export const listRecipesResponseWaterOneVolumeLitresExclusiveMin = 0;
+export const listRecipesResponseWaterOneVolumeLitresMax = 2000;
+
 export const ListRecipesResponseItem = zod.object({
   id: zod.int(),
   name: zod.string(),
@@ -312,6 +360,96 @@ export const ListRecipesResponseItem = zod.object({
   daysFermenting: zod.int().nullish(),
   daysConditioning: zod.int().nullish(),
   daysPackaged: zod.int().nullish(),
+  water: zod
+    .union([
+      zod
+        .object({
+          target: zod
+            .object({
+              presetId: zod
+                .string()
+                .max(listRecipesResponseWaterOneTargetPresetIdMax)
+                .nullable(),
+              name: zod
+                .string()
+                .min(1)
+                .max(listRecipesResponseWaterOneTargetNameMax),
+              profile: zod
+                .object({
+                  name: zod
+                    .string()
+                    .max(listRecipesResponseWaterOneTargetProfileNameMax)
+                    .nullish(),
+                  calcium: zod
+                    .number()
+                    .min(listRecipesResponseWaterOneTargetProfileCalciumMin)
+                    .max(listRecipesResponseWaterOneTargetProfileCalciumMax),
+                  magnesium: zod
+                    .number()
+                    .min(listRecipesResponseWaterOneTargetProfileMagnesiumMin)
+                    .max(listRecipesResponseWaterOneTargetProfileMagnesiumMax),
+                  sodium: zod
+                    .number()
+                    .min(listRecipesResponseWaterOneTargetProfileSodiumMin)
+                    .max(listRecipesResponseWaterOneTargetProfileSodiumMax),
+                  sulfate: zod
+                    .number()
+                    .min(listRecipesResponseWaterOneTargetProfileSulfateMin)
+                    .max(listRecipesResponseWaterOneTargetProfileSulfateMax),
+                  chloride: zod
+                    .number()
+                    .min(listRecipesResponseWaterOneTargetProfileChlorideMin)
+                    .max(listRecipesResponseWaterOneTargetProfileChlorideMax),
+                  bicarbonate: zod
+                    .number()
+                    .min(listRecipesResponseWaterOneTargetProfileBicarbonateMin)
+                    .max(
+                      listRecipesResponseWaterOneTargetProfileBicarbonateMax,
+                    ),
+                })
+                .describe("Ion concentrations in ppm (mg/L)."),
+            })
+            .describe(
+              "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+            ),
+          salts: zod
+            .object({
+              gypsum: zod
+                .number()
+                .min(listRecipesResponseWaterOneSaltsGypsumMin)
+                .max(listRecipesResponseWaterOneSaltsGypsumMax),
+              calciumChloride: zod
+                .number()
+                .min(listRecipesResponseWaterOneSaltsCalciumChlorideMin)
+                .max(listRecipesResponseWaterOneSaltsCalciumChlorideMax),
+              epsom: zod
+                .number()
+                .min(listRecipesResponseWaterOneSaltsEpsomMin)
+                .max(listRecipesResponseWaterOneSaltsEpsomMax),
+              tableSalt: zod
+                .number()
+                .min(listRecipesResponseWaterOneSaltsTableSaltMin)
+                .max(listRecipesResponseWaterOneSaltsTableSaltMax),
+              bakingSoda: zod
+                .number()
+                .min(listRecipesResponseWaterOneSaltsBakingSodaMin)
+                .max(listRecipesResponseWaterOneSaltsBakingSodaMax),
+            })
+            .describe(
+              "Salt additions in grams, for the recipe water's volumeLitres.",
+            ),
+          volumeLitres: zod
+            .number()
+            .gt(listRecipesResponseWaterOneVolumeLitresExclusiveMin)
+            .max(listRecipesResponseWaterOneVolumeLitresMax)
+            .describe(
+              "The total water (mash and sparge) the salts are for, in litres.",
+            ),
+        })
+        .describe("A recipe's water, as worked out in the water calculator."),
+      zod.null(),
+    ])
+    .optional(),
   avgScore: zod
     .number()
     .nullish()
@@ -330,6 +468,48 @@ export const ListRecipesResponse = zod.array(ListRecipesResponseItem);
 /**
  * @summary Create a new recipe
  */
+export const createRecipeBodyWaterOneTargetPresetIdMax = 40;
+
+export const createRecipeBodyWaterOneTargetNameMax = 80;
+
+export const createRecipeBodyWaterOneTargetProfileNameMax = 80;
+
+export const createRecipeBodyWaterOneTargetProfileCalciumMin = 0;
+export const createRecipeBodyWaterOneTargetProfileCalciumMax = 2000;
+
+export const createRecipeBodyWaterOneTargetProfileMagnesiumMin = 0;
+export const createRecipeBodyWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const createRecipeBodyWaterOneTargetProfileSodiumMin = 0;
+export const createRecipeBodyWaterOneTargetProfileSodiumMax = 2000;
+
+export const createRecipeBodyWaterOneTargetProfileSulfateMin = 0;
+export const createRecipeBodyWaterOneTargetProfileSulfateMax = 2000;
+
+export const createRecipeBodyWaterOneTargetProfileChlorideMin = 0;
+export const createRecipeBodyWaterOneTargetProfileChlorideMax = 2000;
+
+export const createRecipeBodyWaterOneTargetProfileBicarbonateMin = 0;
+export const createRecipeBodyWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const createRecipeBodyWaterOneSaltsGypsumMin = 0;
+export const createRecipeBodyWaterOneSaltsGypsumMax = 1000;
+
+export const createRecipeBodyWaterOneSaltsCalciumChlorideMin = 0;
+export const createRecipeBodyWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const createRecipeBodyWaterOneSaltsEpsomMin = 0;
+export const createRecipeBodyWaterOneSaltsEpsomMax = 1000;
+
+export const createRecipeBodyWaterOneSaltsTableSaltMin = 0;
+export const createRecipeBodyWaterOneSaltsTableSaltMax = 1000;
+
+export const createRecipeBodyWaterOneSaltsBakingSodaMin = 0;
+export const createRecipeBodyWaterOneSaltsBakingSodaMax = 1000;
+
+export const createRecipeBodyWaterOneVolumeLitresExclusiveMin = 0;
+export const createRecipeBodyWaterOneVolumeLitresMax = 2000;
+
 export const CreateRecipeBody = zod.object({
   name: zod.string(),
   style: zod.string(),
@@ -374,7 +554,137 @@ export const CreateRecipeBody = zod.object({
   daysFermenting: zod.int().nullish(),
   daysConditioning: zod.int().nullish(),
   daysPackaged: zod.int().nullish(),
+  water: zod
+    .union([
+      zod
+        .object({
+          target: zod
+            .object({
+              presetId: zod
+                .string()
+                .max(createRecipeBodyWaterOneTargetPresetIdMax)
+                .nullable(),
+              name: zod
+                .string()
+                .min(1)
+                .max(createRecipeBodyWaterOneTargetNameMax),
+              profile: zod
+                .object({
+                  name: zod
+                    .string()
+                    .max(createRecipeBodyWaterOneTargetProfileNameMax)
+                    .nullish(),
+                  calcium: zod
+                    .number()
+                    .min(createRecipeBodyWaterOneTargetProfileCalciumMin)
+                    .max(createRecipeBodyWaterOneTargetProfileCalciumMax),
+                  magnesium: zod
+                    .number()
+                    .min(createRecipeBodyWaterOneTargetProfileMagnesiumMin)
+                    .max(createRecipeBodyWaterOneTargetProfileMagnesiumMax),
+                  sodium: zod
+                    .number()
+                    .min(createRecipeBodyWaterOneTargetProfileSodiumMin)
+                    .max(createRecipeBodyWaterOneTargetProfileSodiumMax),
+                  sulfate: zod
+                    .number()
+                    .min(createRecipeBodyWaterOneTargetProfileSulfateMin)
+                    .max(createRecipeBodyWaterOneTargetProfileSulfateMax),
+                  chloride: zod
+                    .number()
+                    .min(createRecipeBodyWaterOneTargetProfileChlorideMin)
+                    .max(createRecipeBodyWaterOneTargetProfileChlorideMax),
+                  bicarbonate: zod
+                    .number()
+                    .min(createRecipeBodyWaterOneTargetProfileBicarbonateMin)
+                    .max(createRecipeBodyWaterOneTargetProfileBicarbonateMax),
+                })
+                .describe("Ion concentrations in ppm (mg/L)."),
+            })
+            .describe(
+              "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+            ),
+          salts: zod
+            .object({
+              gypsum: zod
+                .number()
+                .min(createRecipeBodyWaterOneSaltsGypsumMin)
+                .max(createRecipeBodyWaterOneSaltsGypsumMax),
+              calciumChloride: zod
+                .number()
+                .min(createRecipeBodyWaterOneSaltsCalciumChlorideMin)
+                .max(createRecipeBodyWaterOneSaltsCalciumChlorideMax),
+              epsom: zod
+                .number()
+                .min(createRecipeBodyWaterOneSaltsEpsomMin)
+                .max(createRecipeBodyWaterOneSaltsEpsomMax),
+              tableSalt: zod
+                .number()
+                .min(createRecipeBodyWaterOneSaltsTableSaltMin)
+                .max(createRecipeBodyWaterOneSaltsTableSaltMax),
+              bakingSoda: zod
+                .number()
+                .min(createRecipeBodyWaterOneSaltsBakingSodaMin)
+                .max(createRecipeBodyWaterOneSaltsBakingSodaMax),
+            })
+            .describe(
+              "Salt additions in grams, for the recipe water's volumeLitres.",
+            ),
+          volumeLitres: zod
+            .number()
+            .gt(createRecipeBodyWaterOneVolumeLitresExclusiveMin)
+            .max(createRecipeBodyWaterOneVolumeLitresMax)
+            .describe(
+              "The total water (mash and sparge) the salts are for, in litres.",
+            ),
+        })
+        .describe("A recipe's water, as worked out in the water calculator."),
+      zod.null(),
+    ])
+    .optional(),
 });
+
+export const createRecipeResponseWaterOneTargetPresetIdMax = 40;
+
+export const createRecipeResponseWaterOneTargetNameMax = 80;
+
+export const createRecipeResponseWaterOneTargetProfileNameMax = 80;
+
+export const createRecipeResponseWaterOneTargetProfileCalciumMin = 0;
+export const createRecipeResponseWaterOneTargetProfileCalciumMax = 2000;
+
+export const createRecipeResponseWaterOneTargetProfileMagnesiumMin = 0;
+export const createRecipeResponseWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const createRecipeResponseWaterOneTargetProfileSodiumMin = 0;
+export const createRecipeResponseWaterOneTargetProfileSodiumMax = 2000;
+
+export const createRecipeResponseWaterOneTargetProfileSulfateMin = 0;
+export const createRecipeResponseWaterOneTargetProfileSulfateMax = 2000;
+
+export const createRecipeResponseWaterOneTargetProfileChlorideMin = 0;
+export const createRecipeResponseWaterOneTargetProfileChlorideMax = 2000;
+
+export const createRecipeResponseWaterOneTargetProfileBicarbonateMin = 0;
+export const createRecipeResponseWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const createRecipeResponseWaterOneSaltsGypsumMin = 0;
+export const createRecipeResponseWaterOneSaltsGypsumMax = 1000;
+
+export const createRecipeResponseWaterOneSaltsCalciumChlorideMin = 0;
+export const createRecipeResponseWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const createRecipeResponseWaterOneSaltsEpsomMin = 0;
+export const createRecipeResponseWaterOneSaltsEpsomMax = 1000;
+
+export const createRecipeResponseWaterOneSaltsTableSaltMin = 0;
+export const createRecipeResponseWaterOneSaltsTableSaltMax = 1000;
+
+export const createRecipeResponseWaterOneSaltsBakingSodaMin = 0;
+export const createRecipeResponseWaterOneSaltsBakingSodaMax = 1000;
+
+export const createRecipeResponseWaterOneVolumeLitresExclusiveMin = 0;
+export const createRecipeResponseWaterOneVolumeLitresMax = 2000;
 
 export const CreateRecipeResponse = zod.object({
   id: zod.int(),
@@ -435,6 +745,98 @@ export const CreateRecipeResponse = zod.object({
   daysFermenting: zod.int().nullish(),
   daysConditioning: zod.int().nullish(),
   daysPackaged: zod.int().nullish(),
+  water: zod
+    .union([
+      zod
+        .object({
+          target: zod
+            .object({
+              presetId: zod
+                .string()
+                .max(createRecipeResponseWaterOneTargetPresetIdMax)
+                .nullable(),
+              name: zod
+                .string()
+                .min(1)
+                .max(createRecipeResponseWaterOneTargetNameMax),
+              profile: zod
+                .object({
+                  name: zod
+                    .string()
+                    .max(createRecipeResponseWaterOneTargetProfileNameMax)
+                    .nullish(),
+                  calcium: zod
+                    .number()
+                    .min(createRecipeResponseWaterOneTargetProfileCalciumMin)
+                    .max(createRecipeResponseWaterOneTargetProfileCalciumMax),
+                  magnesium: zod
+                    .number()
+                    .min(createRecipeResponseWaterOneTargetProfileMagnesiumMin)
+                    .max(createRecipeResponseWaterOneTargetProfileMagnesiumMax),
+                  sodium: zod
+                    .number()
+                    .min(createRecipeResponseWaterOneTargetProfileSodiumMin)
+                    .max(createRecipeResponseWaterOneTargetProfileSodiumMax),
+                  sulfate: zod
+                    .number()
+                    .min(createRecipeResponseWaterOneTargetProfileSulfateMin)
+                    .max(createRecipeResponseWaterOneTargetProfileSulfateMax),
+                  chloride: zod
+                    .number()
+                    .min(createRecipeResponseWaterOneTargetProfileChlorideMin)
+                    .max(createRecipeResponseWaterOneTargetProfileChlorideMax),
+                  bicarbonate: zod
+                    .number()
+                    .min(
+                      createRecipeResponseWaterOneTargetProfileBicarbonateMin,
+                    )
+                    .max(
+                      createRecipeResponseWaterOneTargetProfileBicarbonateMax,
+                    ),
+                })
+                .describe("Ion concentrations in ppm (mg/L)."),
+            })
+            .describe(
+              "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+            ),
+          salts: zod
+            .object({
+              gypsum: zod
+                .number()
+                .min(createRecipeResponseWaterOneSaltsGypsumMin)
+                .max(createRecipeResponseWaterOneSaltsGypsumMax),
+              calciumChloride: zod
+                .number()
+                .min(createRecipeResponseWaterOneSaltsCalciumChlorideMin)
+                .max(createRecipeResponseWaterOneSaltsCalciumChlorideMax),
+              epsom: zod
+                .number()
+                .min(createRecipeResponseWaterOneSaltsEpsomMin)
+                .max(createRecipeResponseWaterOneSaltsEpsomMax),
+              tableSalt: zod
+                .number()
+                .min(createRecipeResponseWaterOneSaltsTableSaltMin)
+                .max(createRecipeResponseWaterOneSaltsTableSaltMax),
+              bakingSoda: zod
+                .number()
+                .min(createRecipeResponseWaterOneSaltsBakingSodaMin)
+                .max(createRecipeResponseWaterOneSaltsBakingSodaMax),
+            })
+            .describe(
+              "Salt additions in grams, for the recipe water's volumeLitres.",
+            ),
+          volumeLitres: zod
+            .number()
+            .gt(createRecipeResponseWaterOneVolumeLitresExclusiveMin)
+            .max(createRecipeResponseWaterOneVolumeLitresMax)
+            .describe(
+              "The total water (mash and sparge) the salts are for, in litres.",
+            ),
+        })
+        .describe("A recipe's water, as worked out in the water calculator."),
+      zod.null(),
+    ])
+    .optional(),
   avgScore: zod
     .number()
     .nullish()
@@ -462,6 +864,48 @@ export const GetRecipeStylesResponse = zod.array(GetRecipeStylesResponseItem);
  * Everything is inserted in one transaction, so a rejected ingredient leaves no half-built recipe behind. This is also the only way to create a recipe with several versions (LME / DME / all-grain).
  * @summary Create a recipe together with its ingredients and steps
  */
+export const importRecipeBodyRecipeWaterOneTargetPresetIdMax = 40;
+
+export const importRecipeBodyRecipeWaterOneTargetNameMax = 80;
+
+export const importRecipeBodyRecipeWaterOneTargetProfileNameMax = 80;
+
+export const importRecipeBodyRecipeWaterOneTargetProfileCalciumMin = 0;
+export const importRecipeBodyRecipeWaterOneTargetProfileCalciumMax = 2000;
+
+export const importRecipeBodyRecipeWaterOneTargetProfileMagnesiumMin = 0;
+export const importRecipeBodyRecipeWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const importRecipeBodyRecipeWaterOneTargetProfileSodiumMin = 0;
+export const importRecipeBodyRecipeWaterOneTargetProfileSodiumMax = 2000;
+
+export const importRecipeBodyRecipeWaterOneTargetProfileSulfateMin = 0;
+export const importRecipeBodyRecipeWaterOneTargetProfileSulfateMax = 2000;
+
+export const importRecipeBodyRecipeWaterOneTargetProfileChlorideMin = 0;
+export const importRecipeBodyRecipeWaterOneTargetProfileChlorideMax = 2000;
+
+export const importRecipeBodyRecipeWaterOneTargetProfileBicarbonateMin = 0;
+export const importRecipeBodyRecipeWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const importRecipeBodyRecipeWaterOneSaltsGypsumMin = 0;
+export const importRecipeBodyRecipeWaterOneSaltsGypsumMax = 1000;
+
+export const importRecipeBodyRecipeWaterOneSaltsCalciumChlorideMin = 0;
+export const importRecipeBodyRecipeWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const importRecipeBodyRecipeWaterOneSaltsEpsomMin = 0;
+export const importRecipeBodyRecipeWaterOneSaltsEpsomMax = 1000;
+
+export const importRecipeBodyRecipeWaterOneSaltsTableSaltMin = 0;
+export const importRecipeBodyRecipeWaterOneSaltsTableSaltMax = 1000;
+
+export const importRecipeBodyRecipeWaterOneSaltsBakingSodaMin = 0;
+export const importRecipeBodyRecipeWaterOneSaltsBakingSodaMax = 1000;
+
+export const importRecipeBodyRecipeWaterOneVolumeLitresExclusiveMin = 0;
+export const importRecipeBodyRecipeWaterOneVolumeLitresMax = 2000;
+
 export const importRecipeBodyIngredientsItemDryHopDayMin = 0;
 
 export const ImportRecipeBody = zod.object({
@@ -509,6 +953,116 @@ export const ImportRecipeBody = zod.object({
     daysFermenting: zod.int().nullish(),
     daysConditioning: zod.int().nullish(),
     daysPackaged: zod.int().nullish(),
+    water: zod
+      .union([
+        zod
+          .object({
+            target: zod
+              .object({
+                presetId: zod
+                  .string()
+                  .max(importRecipeBodyRecipeWaterOneTargetPresetIdMax)
+                  .nullable(),
+                name: zod
+                  .string()
+                  .min(1)
+                  .max(importRecipeBodyRecipeWaterOneTargetNameMax),
+                profile: zod
+                  .object({
+                    name: zod
+                      .string()
+                      .max(importRecipeBodyRecipeWaterOneTargetProfileNameMax)
+                      .nullish(),
+                    calcium: zod
+                      .number()
+                      .min(
+                        importRecipeBodyRecipeWaterOneTargetProfileCalciumMin,
+                      )
+                      .max(
+                        importRecipeBodyRecipeWaterOneTargetProfileCalciumMax,
+                      ),
+                    magnesium: zod
+                      .number()
+                      .min(
+                        importRecipeBodyRecipeWaterOneTargetProfileMagnesiumMin,
+                      )
+                      .max(
+                        importRecipeBodyRecipeWaterOneTargetProfileMagnesiumMax,
+                      ),
+                    sodium: zod
+                      .number()
+                      .min(importRecipeBodyRecipeWaterOneTargetProfileSodiumMin)
+                      .max(
+                        importRecipeBodyRecipeWaterOneTargetProfileSodiumMax,
+                      ),
+                    sulfate: zod
+                      .number()
+                      .min(
+                        importRecipeBodyRecipeWaterOneTargetProfileSulfateMin,
+                      )
+                      .max(
+                        importRecipeBodyRecipeWaterOneTargetProfileSulfateMax,
+                      ),
+                    chloride: zod
+                      .number()
+                      .min(
+                        importRecipeBodyRecipeWaterOneTargetProfileChlorideMin,
+                      )
+                      .max(
+                        importRecipeBodyRecipeWaterOneTargetProfileChlorideMax,
+                      ),
+                    bicarbonate: zod
+                      .number()
+                      .min(
+                        importRecipeBodyRecipeWaterOneTargetProfileBicarbonateMin,
+                      )
+                      .max(
+                        importRecipeBodyRecipeWaterOneTargetProfileBicarbonateMax,
+                      ),
+                  })
+                  .describe("Ion concentrations in ppm (mg/L)."),
+              })
+              .describe(
+                "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+              ),
+            salts: zod
+              .object({
+                gypsum: zod
+                  .number()
+                  .min(importRecipeBodyRecipeWaterOneSaltsGypsumMin)
+                  .max(importRecipeBodyRecipeWaterOneSaltsGypsumMax),
+                calciumChloride: zod
+                  .number()
+                  .min(importRecipeBodyRecipeWaterOneSaltsCalciumChlorideMin)
+                  .max(importRecipeBodyRecipeWaterOneSaltsCalciumChlorideMax),
+                epsom: zod
+                  .number()
+                  .min(importRecipeBodyRecipeWaterOneSaltsEpsomMin)
+                  .max(importRecipeBodyRecipeWaterOneSaltsEpsomMax),
+                tableSalt: zod
+                  .number()
+                  .min(importRecipeBodyRecipeWaterOneSaltsTableSaltMin)
+                  .max(importRecipeBodyRecipeWaterOneSaltsTableSaltMax),
+                bakingSoda: zod
+                  .number()
+                  .min(importRecipeBodyRecipeWaterOneSaltsBakingSodaMin)
+                  .max(importRecipeBodyRecipeWaterOneSaltsBakingSodaMax),
+              })
+              .describe(
+                "Salt additions in grams, for the recipe water's volumeLitres.",
+              ),
+            volumeLitres: zod
+              .number()
+              .gt(importRecipeBodyRecipeWaterOneVolumeLitresExclusiveMin)
+              .max(importRecipeBodyRecipeWaterOneVolumeLitresMax)
+              .describe(
+                "The total water (mash and sparge) the salts are for, in litres.",
+              ),
+          })
+          .describe("A recipe's water, as worked out in the water calculator."),
+        zod.null(),
+      ])
+      .optional(),
   }),
   variants: zod
     .array(
@@ -599,6 +1153,48 @@ export const ImportRecipeBody = zod.object({
     .optional(),
 });
 
+export const importRecipeResponseWaterOneTargetPresetIdMax = 40;
+
+export const importRecipeResponseWaterOneTargetNameMax = 80;
+
+export const importRecipeResponseWaterOneTargetProfileNameMax = 80;
+
+export const importRecipeResponseWaterOneTargetProfileCalciumMin = 0;
+export const importRecipeResponseWaterOneTargetProfileCalciumMax = 2000;
+
+export const importRecipeResponseWaterOneTargetProfileMagnesiumMin = 0;
+export const importRecipeResponseWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const importRecipeResponseWaterOneTargetProfileSodiumMin = 0;
+export const importRecipeResponseWaterOneTargetProfileSodiumMax = 2000;
+
+export const importRecipeResponseWaterOneTargetProfileSulfateMin = 0;
+export const importRecipeResponseWaterOneTargetProfileSulfateMax = 2000;
+
+export const importRecipeResponseWaterOneTargetProfileChlorideMin = 0;
+export const importRecipeResponseWaterOneTargetProfileChlorideMax = 2000;
+
+export const importRecipeResponseWaterOneTargetProfileBicarbonateMin = 0;
+export const importRecipeResponseWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const importRecipeResponseWaterOneSaltsGypsumMin = 0;
+export const importRecipeResponseWaterOneSaltsGypsumMax = 1000;
+
+export const importRecipeResponseWaterOneSaltsCalciumChlorideMin = 0;
+export const importRecipeResponseWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const importRecipeResponseWaterOneSaltsEpsomMin = 0;
+export const importRecipeResponseWaterOneSaltsEpsomMax = 1000;
+
+export const importRecipeResponseWaterOneSaltsTableSaltMin = 0;
+export const importRecipeResponseWaterOneSaltsTableSaltMax = 1000;
+
+export const importRecipeResponseWaterOneSaltsBakingSodaMin = 0;
+export const importRecipeResponseWaterOneSaltsBakingSodaMax = 1000;
+
+export const importRecipeResponseWaterOneVolumeLitresExclusiveMin = 0;
+export const importRecipeResponseWaterOneVolumeLitresMax = 2000;
+
 export const ImportRecipeResponse = zod.object({
   id: zod.int(),
   name: zod.string(),
@@ -658,6 +1254,98 @@ export const ImportRecipeResponse = zod.object({
   daysFermenting: zod.int().nullish(),
   daysConditioning: zod.int().nullish(),
   daysPackaged: zod.int().nullish(),
+  water: zod
+    .union([
+      zod
+        .object({
+          target: zod
+            .object({
+              presetId: zod
+                .string()
+                .max(importRecipeResponseWaterOneTargetPresetIdMax)
+                .nullable(),
+              name: zod
+                .string()
+                .min(1)
+                .max(importRecipeResponseWaterOneTargetNameMax),
+              profile: zod
+                .object({
+                  name: zod
+                    .string()
+                    .max(importRecipeResponseWaterOneTargetProfileNameMax)
+                    .nullish(),
+                  calcium: zod
+                    .number()
+                    .min(importRecipeResponseWaterOneTargetProfileCalciumMin)
+                    .max(importRecipeResponseWaterOneTargetProfileCalciumMax),
+                  magnesium: zod
+                    .number()
+                    .min(importRecipeResponseWaterOneTargetProfileMagnesiumMin)
+                    .max(importRecipeResponseWaterOneTargetProfileMagnesiumMax),
+                  sodium: zod
+                    .number()
+                    .min(importRecipeResponseWaterOneTargetProfileSodiumMin)
+                    .max(importRecipeResponseWaterOneTargetProfileSodiumMax),
+                  sulfate: zod
+                    .number()
+                    .min(importRecipeResponseWaterOneTargetProfileSulfateMin)
+                    .max(importRecipeResponseWaterOneTargetProfileSulfateMax),
+                  chloride: zod
+                    .number()
+                    .min(importRecipeResponseWaterOneTargetProfileChlorideMin)
+                    .max(importRecipeResponseWaterOneTargetProfileChlorideMax),
+                  bicarbonate: zod
+                    .number()
+                    .min(
+                      importRecipeResponseWaterOneTargetProfileBicarbonateMin,
+                    )
+                    .max(
+                      importRecipeResponseWaterOneTargetProfileBicarbonateMax,
+                    ),
+                })
+                .describe("Ion concentrations in ppm (mg/L)."),
+            })
+            .describe(
+              "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+            ),
+          salts: zod
+            .object({
+              gypsum: zod
+                .number()
+                .min(importRecipeResponseWaterOneSaltsGypsumMin)
+                .max(importRecipeResponseWaterOneSaltsGypsumMax),
+              calciumChloride: zod
+                .number()
+                .min(importRecipeResponseWaterOneSaltsCalciumChlorideMin)
+                .max(importRecipeResponseWaterOneSaltsCalciumChlorideMax),
+              epsom: zod
+                .number()
+                .min(importRecipeResponseWaterOneSaltsEpsomMin)
+                .max(importRecipeResponseWaterOneSaltsEpsomMax),
+              tableSalt: zod
+                .number()
+                .min(importRecipeResponseWaterOneSaltsTableSaltMin)
+                .max(importRecipeResponseWaterOneSaltsTableSaltMax),
+              bakingSoda: zod
+                .number()
+                .min(importRecipeResponseWaterOneSaltsBakingSodaMin)
+                .max(importRecipeResponseWaterOneSaltsBakingSodaMax),
+            })
+            .describe(
+              "Salt additions in grams, for the recipe water's volumeLitres.",
+            ),
+          volumeLitres: zod
+            .number()
+            .gt(importRecipeResponseWaterOneVolumeLitresExclusiveMin)
+            .max(importRecipeResponseWaterOneVolumeLitresMax)
+            .describe(
+              "The total water (mash and sparge) the salts are for, in litres.",
+            ),
+        })
+        .describe("A recipe's water, as worked out in the water calculator."),
+      zod.null(),
+    ])
+    .optional(),
   avgScore: zod
     .number()
     .nullish()
@@ -927,6 +1615,48 @@ export const GetRecipeParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const getRecipeResponseOneWaterOneTargetPresetIdMax = 40;
+
+export const getRecipeResponseOneWaterOneTargetNameMax = 80;
+
+export const getRecipeResponseOneWaterOneTargetProfileNameMax = 80;
+
+export const getRecipeResponseOneWaterOneTargetProfileCalciumMin = 0;
+export const getRecipeResponseOneWaterOneTargetProfileCalciumMax = 2000;
+
+export const getRecipeResponseOneWaterOneTargetProfileMagnesiumMin = 0;
+export const getRecipeResponseOneWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const getRecipeResponseOneWaterOneTargetProfileSodiumMin = 0;
+export const getRecipeResponseOneWaterOneTargetProfileSodiumMax = 2000;
+
+export const getRecipeResponseOneWaterOneTargetProfileSulfateMin = 0;
+export const getRecipeResponseOneWaterOneTargetProfileSulfateMax = 2000;
+
+export const getRecipeResponseOneWaterOneTargetProfileChlorideMin = 0;
+export const getRecipeResponseOneWaterOneTargetProfileChlorideMax = 2000;
+
+export const getRecipeResponseOneWaterOneTargetProfileBicarbonateMin = 0;
+export const getRecipeResponseOneWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const getRecipeResponseOneWaterOneSaltsGypsumMin = 0;
+export const getRecipeResponseOneWaterOneSaltsGypsumMax = 1000;
+
+export const getRecipeResponseOneWaterOneSaltsCalciumChlorideMin = 0;
+export const getRecipeResponseOneWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const getRecipeResponseOneWaterOneSaltsEpsomMin = 0;
+export const getRecipeResponseOneWaterOneSaltsEpsomMax = 1000;
+
+export const getRecipeResponseOneWaterOneSaltsTableSaltMin = 0;
+export const getRecipeResponseOneWaterOneSaltsTableSaltMax = 1000;
+
+export const getRecipeResponseOneWaterOneSaltsBakingSodaMin = 0;
+export const getRecipeResponseOneWaterOneSaltsBakingSodaMax = 1000;
+
+export const getRecipeResponseOneWaterOneVolumeLitresExclusiveMin = 0;
+export const getRecipeResponseOneWaterOneVolumeLitresMax = 2000;
+
 export const getRecipeResponseTwoIngredientsItemDryHopDayMin = 0;
 
 export const GetRecipeResponse = zod
@@ -989,6 +1719,104 @@ export const GetRecipeResponse = zod
     daysFermenting: zod.int().nullish(),
     daysConditioning: zod.int().nullish(),
     daysPackaged: zod.int().nullish(),
+    water: zod
+      .union([
+        zod
+          .object({
+            target: zod
+              .object({
+                presetId: zod
+                  .string()
+                  .max(getRecipeResponseOneWaterOneTargetPresetIdMax)
+                  .nullable(),
+                name: zod
+                  .string()
+                  .min(1)
+                  .max(getRecipeResponseOneWaterOneTargetNameMax),
+                profile: zod
+                  .object({
+                    name: zod
+                      .string()
+                      .max(getRecipeResponseOneWaterOneTargetProfileNameMax)
+                      .nullish(),
+                    calcium: zod
+                      .number()
+                      .min(getRecipeResponseOneWaterOneTargetProfileCalciumMin)
+                      .max(getRecipeResponseOneWaterOneTargetProfileCalciumMax),
+                    magnesium: zod
+                      .number()
+                      .min(
+                        getRecipeResponseOneWaterOneTargetProfileMagnesiumMin,
+                      )
+                      .max(
+                        getRecipeResponseOneWaterOneTargetProfileMagnesiumMax,
+                      ),
+                    sodium: zod
+                      .number()
+                      .min(getRecipeResponseOneWaterOneTargetProfileSodiumMin)
+                      .max(getRecipeResponseOneWaterOneTargetProfileSodiumMax),
+                    sulfate: zod
+                      .number()
+                      .min(getRecipeResponseOneWaterOneTargetProfileSulfateMin)
+                      .max(getRecipeResponseOneWaterOneTargetProfileSulfateMax),
+                    chloride: zod
+                      .number()
+                      .min(getRecipeResponseOneWaterOneTargetProfileChlorideMin)
+                      .max(
+                        getRecipeResponseOneWaterOneTargetProfileChlorideMax,
+                      ),
+                    bicarbonate: zod
+                      .number()
+                      .min(
+                        getRecipeResponseOneWaterOneTargetProfileBicarbonateMin,
+                      )
+                      .max(
+                        getRecipeResponseOneWaterOneTargetProfileBicarbonateMax,
+                      ),
+                  })
+                  .describe("Ion concentrations in ppm (mg/L)."),
+              })
+              .describe(
+                "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+              ),
+            salts: zod
+              .object({
+                gypsum: zod
+                  .number()
+                  .min(getRecipeResponseOneWaterOneSaltsGypsumMin)
+                  .max(getRecipeResponseOneWaterOneSaltsGypsumMax),
+                calciumChloride: zod
+                  .number()
+                  .min(getRecipeResponseOneWaterOneSaltsCalciumChlorideMin)
+                  .max(getRecipeResponseOneWaterOneSaltsCalciumChlorideMax),
+                epsom: zod
+                  .number()
+                  .min(getRecipeResponseOneWaterOneSaltsEpsomMin)
+                  .max(getRecipeResponseOneWaterOneSaltsEpsomMax),
+                tableSalt: zod
+                  .number()
+                  .min(getRecipeResponseOneWaterOneSaltsTableSaltMin)
+                  .max(getRecipeResponseOneWaterOneSaltsTableSaltMax),
+                bakingSoda: zod
+                  .number()
+                  .min(getRecipeResponseOneWaterOneSaltsBakingSodaMin)
+                  .max(getRecipeResponseOneWaterOneSaltsBakingSodaMax),
+              })
+              .describe(
+                "Salt additions in grams, for the recipe water's volumeLitres.",
+              ),
+            volumeLitres: zod
+              .number()
+              .gt(getRecipeResponseOneWaterOneVolumeLitresExclusiveMin)
+              .max(getRecipeResponseOneWaterOneVolumeLitresMax)
+              .describe(
+                "The total water (mash and sparge) the salts are for, in litres.",
+              ),
+          })
+          .describe("A recipe's water, as worked out in the water calculator."),
+        zod.null(),
+      ])
+      .optional(),
     avgScore: zod
       .number()
       .nullish()
@@ -1132,6 +1960,48 @@ export const UpdateRecipeParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const updateRecipeBodyWaterOneTargetPresetIdMax = 40;
+
+export const updateRecipeBodyWaterOneTargetNameMax = 80;
+
+export const updateRecipeBodyWaterOneTargetProfileNameMax = 80;
+
+export const updateRecipeBodyWaterOneTargetProfileCalciumMin = 0;
+export const updateRecipeBodyWaterOneTargetProfileCalciumMax = 2000;
+
+export const updateRecipeBodyWaterOneTargetProfileMagnesiumMin = 0;
+export const updateRecipeBodyWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const updateRecipeBodyWaterOneTargetProfileSodiumMin = 0;
+export const updateRecipeBodyWaterOneTargetProfileSodiumMax = 2000;
+
+export const updateRecipeBodyWaterOneTargetProfileSulfateMin = 0;
+export const updateRecipeBodyWaterOneTargetProfileSulfateMax = 2000;
+
+export const updateRecipeBodyWaterOneTargetProfileChlorideMin = 0;
+export const updateRecipeBodyWaterOneTargetProfileChlorideMax = 2000;
+
+export const updateRecipeBodyWaterOneTargetProfileBicarbonateMin = 0;
+export const updateRecipeBodyWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const updateRecipeBodyWaterOneSaltsGypsumMin = 0;
+export const updateRecipeBodyWaterOneSaltsGypsumMax = 1000;
+
+export const updateRecipeBodyWaterOneSaltsCalciumChlorideMin = 0;
+export const updateRecipeBodyWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const updateRecipeBodyWaterOneSaltsEpsomMin = 0;
+export const updateRecipeBodyWaterOneSaltsEpsomMax = 1000;
+
+export const updateRecipeBodyWaterOneSaltsTableSaltMin = 0;
+export const updateRecipeBodyWaterOneSaltsTableSaltMax = 1000;
+
+export const updateRecipeBodyWaterOneSaltsBakingSodaMin = 0;
+export const updateRecipeBodyWaterOneSaltsBakingSodaMax = 1000;
+
+export const updateRecipeBodyWaterOneVolumeLitresExclusiveMin = 0;
+export const updateRecipeBodyWaterOneVolumeLitresMax = 2000;
+
 export const UpdateRecipeBody = zod.object({
   name: zod.string().optional(),
   style: zod.string().optional(),
@@ -1176,7 +2046,137 @@ export const UpdateRecipeBody = zod.object({
   daysFermenting: zod.int().nullish(),
   daysConditioning: zod.int().nullish(),
   daysPackaged: zod.int().nullish(),
+  water: zod
+    .union([
+      zod
+        .object({
+          target: zod
+            .object({
+              presetId: zod
+                .string()
+                .max(updateRecipeBodyWaterOneTargetPresetIdMax)
+                .nullable(),
+              name: zod
+                .string()
+                .min(1)
+                .max(updateRecipeBodyWaterOneTargetNameMax),
+              profile: zod
+                .object({
+                  name: zod
+                    .string()
+                    .max(updateRecipeBodyWaterOneTargetProfileNameMax)
+                    .nullish(),
+                  calcium: zod
+                    .number()
+                    .min(updateRecipeBodyWaterOneTargetProfileCalciumMin)
+                    .max(updateRecipeBodyWaterOneTargetProfileCalciumMax),
+                  magnesium: zod
+                    .number()
+                    .min(updateRecipeBodyWaterOneTargetProfileMagnesiumMin)
+                    .max(updateRecipeBodyWaterOneTargetProfileMagnesiumMax),
+                  sodium: zod
+                    .number()
+                    .min(updateRecipeBodyWaterOneTargetProfileSodiumMin)
+                    .max(updateRecipeBodyWaterOneTargetProfileSodiumMax),
+                  sulfate: zod
+                    .number()
+                    .min(updateRecipeBodyWaterOneTargetProfileSulfateMin)
+                    .max(updateRecipeBodyWaterOneTargetProfileSulfateMax),
+                  chloride: zod
+                    .number()
+                    .min(updateRecipeBodyWaterOneTargetProfileChlorideMin)
+                    .max(updateRecipeBodyWaterOneTargetProfileChlorideMax),
+                  bicarbonate: zod
+                    .number()
+                    .min(updateRecipeBodyWaterOneTargetProfileBicarbonateMin)
+                    .max(updateRecipeBodyWaterOneTargetProfileBicarbonateMax),
+                })
+                .describe("Ion concentrations in ppm (mg/L)."),
+            })
+            .describe(
+              "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+            ),
+          salts: zod
+            .object({
+              gypsum: zod
+                .number()
+                .min(updateRecipeBodyWaterOneSaltsGypsumMin)
+                .max(updateRecipeBodyWaterOneSaltsGypsumMax),
+              calciumChloride: zod
+                .number()
+                .min(updateRecipeBodyWaterOneSaltsCalciumChlorideMin)
+                .max(updateRecipeBodyWaterOneSaltsCalciumChlorideMax),
+              epsom: zod
+                .number()
+                .min(updateRecipeBodyWaterOneSaltsEpsomMin)
+                .max(updateRecipeBodyWaterOneSaltsEpsomMax),
+              tableSalt: zod
+                .number()
+                .min(updateRecipeBodyWaterOneSaltsTableSaltMin)
+                .max(updateRecipeBodyWaterOneSaltsTableSaltMax),
+              bakingSoda: zod
+                .number()
+                .min(updateRecipeBodyWaterOneSaltsBakingSodaMin)
+                .max(updateRecipeBodyWaterOneSaltsBakingSodaMax),
+            })
+            .describe(
+              "Salt additions in grams, for the recipe water's volumeLitres.",
+            ),
+          volumeLitres: zod
+            .number()
+            .gt(updateRecipeBodyWaterOneVolumeLitresExclusiveMin)
+            .max(updateRecipeBodyWaterOneVolumeLitresMax)
+            .describe(
+              "The total water (mash and sparge) the salts are for, in litres.",
+            ),
+        })
+        .describe("A recipe's water, as worked out in the water calculator."),
+      zod.null(),
+    ])
+    .optional(),
 });
+
+export const updateRecipeResponseWaterOneTargetPresetIdMax = 40;
+
+export const updateRecipeResponseWaterOneTargetNameMax = 80;
+
+export const updateRecipeResponseWaterOneTargetProfileNameMax = 80;
+
+export const updateRecipeResponseWaterOneTargetProfileCalciumMin = 0;
+export const updateRecipeResponseWaterOneTargetProfileCalciumMax = 2000;
+
+export const updateRecipeResponseWaterOneTargetProfileMagnesiumMin = 0;
+export const updateRecipeResponseWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const updateRecipeResponseWaterOneTargetProfileSodiumMin = 0;
+export const updateRecipeResponseWaterOneTargetProfileSodiumMax = 2000;
+
+export const updateRecipeResponseWaterOneTargetProfileSulfateMin = 0;
+export const updateRecipeResponseWaterOneTargetProfileSulfateMax = 2000;
+
+export const updateRecipeResponseWaterOneTargetProfileChlorideMin = 0;
+export const updateRecipeResponseWaterOneTargetProfileChlorideMax = 2000;
+
+export const updateRecipeResponseWaterOneTargetProfileBicarbonateMin = 0;
+export const updateRecipeResponseWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const updateRecipeResponseWaterOneSaltsGypsumMin = 0;
+export const updateRecipeResponseWaterOneSaltsGypsumMax = 1000;
+
+export const updateRecipeResponseWaterOneSaltsCalciumChlorideMin = 0;
+export const updateRecipeResponseWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const updateRecipeResponseWaterOneSaltsEpsomMin = 0;
+export const updateRecipeResponseWaterOneSaltsEpsomMax = 1000;
+
+export const updateRecipeResponseWaterOneSaltsTableSaltMin = 0;
+export const updateRecipeResponseWaterOneSaltsTableSaltMax = 1000;
+
+export const updateRecipeResponseWaterOneSaltsBakingSodaMin = 0;
+export const updateRecipeResponseWaterOneSaltsBakingSodaMax = 1000;
+
+export const updateRecipeResponseWaterOneVolumeLitresExclusiveMin = 0;
+export const updateRecipeResponseWaterOneVolumeLitresMax = 2000;
 
 export const UpdateRecipeResponse = zod.object({
   id: zod.int(),
@@ -1237,6 +2237,98 @@ export const UpdateRecipeResponse = zod.object({
   daysFermenting: zod.int().nullish(),
   daysConditioning: zod.int().nullish(),
   daysPackaged: zod.int().nullish(),
+  water: zod
+    .union([
+      zod
+        .object({
+          target: zod
+            .object({
+              presetId: zod
+                .string()
+                .max(updateRecipeResponseWaterOneTargetPresetIdMax)
+                .nullable(),
+              name: zod
+                .string()
+                .min(1)
+                .max(updateRecipeResponseWaterOneTargetNameMax),
+              profile: zod
+                .object({
+                  name: zod
+                    .string()
+                    .max(updateRecipeResponseWaterOneTargetProfileNameMax)
+                    .nullish(),
+                  calcium: zod
+                    .number()
+                    .min(updateRecipeResponseWaterOneTargetProfileCalciumMin)
+                    .max(updateRecipeResponseWaterOneTargetProfileCalciumMax),
+                  magnesium: zod
+                    .number()
+                    .min(updateRecipeResponseWaterOneTargetProfileMagnesiumMin)
+                    .max(updateRecipeResponseWaterOneTargetProfileMagnesiumMax),
+                  sodium: zod
+                    .number()
+                    .min(updateRecipeResponseWaterOneTargetProfileSodiumMin)
+                    .max(updateRecipeResponseWaterOneTargetProfileSodiumMax),
+                  sulfate: zod
+                    .number()
+                    .min(updateRecipeResponseWaterOneTargetProfileSulfateMin)
+                    .max(updateRecipeResponseWaterOneTargetProfileSulfateMax),
+                  chloride: zod
+                    .number()
+                    .min(updateRecipeResponseWaterOneTargetProfileChlorideMin)
+                    .max(updateRecipeResponseWaterOneTargetProfileChlorideMax),
+                  bicarbonate: zod
+                    .number()
+                    .min(
+                      updateRecipeResponseWaterOneTargetProfileBicarbonateMin,
+                    )
+                    .max(
+                      updateRecipeResponseWaterOneTargetProfileBicarbonateMax,
+                    ),
+                })
+                .describe("Ion concentrations in ppm (mg/L)."),
+            })
+            .describe(
+              "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+            ),
+          salts: zod
+            .object({
+              gypsum: zod
+                .number()
+                .min(updateRecipeResponseWaterOneSaltsGypsumMin)
+                .max(updateRecipeResponseWaterOneSaltsGypsumMax),
+              calciumChloride: zod
+                .number()
+                .min(updateRecipeResponseWaterOneSaltsCalciumChlorideMin)
+                .max(updateRecipeResponseWaterOneSaltsCalciumChlorideMax),
+              epsom: zod
+                .number()
+                .min(updateRecipeResponseWaterOneSaltsEpsomMin)
+                .max(updateRecipeResponseWaterOneSaltsEpsomMax),
+              tableSalt: zod
+                .number()
+                .min(updateRecipeResponseWaterOneSaltsTableSaltMin)
+                .max(updateRecipeResponseWaterOneSaltsTableSaltMax),
+              bakingSoda: zod
+                .number()
+                .min(updateRecipeResponseWaterOneSaltsBakingSodaMin)
+                .max(updateRecipeResponseWaterOneSaltsBakingSodaMax),
+            })
+            .describe(
+              "Salt additions in grams, for the recipe water's volumeLitres.",
+            ),
+          volumeLitres: zod
+            .number()
+            .gt(updateRecipeResponseWaterOneVolumeLitresExclusiveMin)
+            .max(updateRecipeResponseWaterOneVolumeLitresMax)
+            .describe(
+              "The total water (mash and sparge) the salts are for, in litres.",
+            ),
+        })
+        .describe("A recipe's water, as worked out in the water calculator."),
+      zod.null(),
+    ])
+    .optional(),
   avgScore: zod
     .number()
     .nullish()
@@ -1277,6 +2369,48 @@ export const ForkRecipeBody = zod.object({
       'Name for the fork. Defaults to the parent\'s name with the next version number, e.g. "Pale Ale v2".',
     ),
 });
+
+export const forkRecipeResponseWaterOneTargetPresetIdMax = 40;
+
+export const forkRecipeResponseWaterOneTargetNameMax = 80;
+
+export const forkRecipeResponseWaterOneTargetProfileNameMax = 80;
+
+export const forkRecipeResponseWaterOneTargetProfileCalciumMin = 0;
+export const forkRecipeResponseWaterOneTargetProfileCalciumMax = 2000;
+
+export const forkRecipeResponseWaterOneTargetProfileMagnesiumMin = 0;
+export const forkRecipeResponseWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const forkRecipeResponseWaterOneTargetProfileSodiumMin = 0;
+export const forkRecipeResponseWaterOneTargetProfileSodiumMax = 2000;
+
+export const forkRecipeResponseWaterOneTargetProfileSulfateMin = 0;
+export const forkRecipeResponseWaterOneTargetProfileSulfateMax = 2000;
+
+export const forkRecipeResponseWaterOneTargetProfileChlorideMin = 0;
+export const forkRecipeResponseWaterOneTargetProfileChlorideMax = 2000;
+
+export const forkRecipeResponseWaterOneTargetProfileBicarbonateMin = 0;
+export const forkRecipeResponseWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const forkRecipeResponseWaterOneSaltsGypsumMin = 0;
+export const forkRecipeResponseWaterOneSaltsGypsumMax = 1000;
+
+export const forkRecipeResponseWaterOneSaltsCalciumChlorideMin = 0;
+export const forkRecipeResponseWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const forkRecipeResponseWaterOneSaltsEpsomMin = 0;
+export const forkRecipeResponseWaterOneSaltsEpsomMax = 1000;
+
+export const forkRecipeResponseWaterOneSaltsTableSaltMin = 0;
+export const forkRecipeResponseWaterOneSaltsTableSaltMax = 1000;
+
+export const forkRecipeResponseWaterOneSaltsBakingSodaMin = 0;
+export const forkRecipeResponseWaterOneSaltsBakingSodaMax = 1000;
+
+export const forkRecipeResponseWaterOneVolumeLitresExclusiveMin = 0;
+export const forkRecipeResponseWaterOneVolumeLitresMax = 2000;
 
 export const ForkRecipeResponse = zod.object({
   id: zod.int(),
@@ -1337,6 +2471,94 @@ export const ForkRecipeResponse = zod.object({
   daysFermenting: zod.int().nullish(),
   daysConditioning: zod.int().nullish(),
   daysPackaged: zod.int().nullish(),
+  water: zod
+    .union([
+      zod
+        .object({
+          target: zod
+            .object({
+              presetId: zod
+                .string()
+                .max(forkRecipeResponseWaterOneTargetPresetIdMax)
+                .nullable(),
+              name: zod
+                .string()
+                .min(1)
+                .max(forkRecipeResponseWaterOneTargetNameMax),
+              profile: zod
+                .object({
+                  name: zod
+                    .string()
+                    .max(forkRecipeResponseWaterOneTargetProfileNameMax)
+                    .nullish(),
+                  calcium: zod
+                    .number()
+                    .min(forkRecipeResponseWaterOneTargetProfileCalciumMin)
+                    .max(forkRecipeResponseWaterOneTargetProfileCalciumMax),
+                  magnesium: zod
+                    .number()
+                    .min(forkRecipeResponseWaterOneTargetProfileMagnesiumMin)
+                    .max(forkRecipeResponseWaterOneTargetProfileMagnesiumMax),
+                  sodium: zod
+                    .number()
+                    .min(forkRecipeResponseWaterOneTargetProfileSodiumMin)
+                    .max(forkRecipeResponseWaterOneTargetProfileSodiumMax),
+                  sulfate: zod
+                    .number()
+                    .min(forkRecipeResponseWaterOneTargetProfileSulfateMin)
+                    .max(forkRecipeResponseWaterOneTargetProfileSulfateMax),
+                  chloride: zod
+                    .number()
+                    .min(forkRecipeResponseWaterOneTargetProfileChlorideMin)
+                    .max(forkRecipeResponseWaterOneTargetProfileChlorideMax),
+                  bicarbonate: zod
+                    .number()
+                    .min(forkRecipeResponseWaterOneTargetProfileBicarbonateMin)
+                    .max(forkRecipeResponseWaterOneTargetProfileBicarbonateMax),
+                })
+                .describe("Ion concentrations in ppm (mg/L)."),
+            })
+            .describe(
+              "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+            ),
+          salts: zod
+            .object({
+              gypsum: zod
+                .number()
+                .min(forkRecipeResponseWaterOneSaltsGypsumMin)
+                .max(forkRecipeResponseWaterOneSaltsGypsumMax),
+              calciumChloride: zod
+                .number()
+                .min(forkRecipeResponseWaterOneSaltsCalciumChlorideMin)
+                .max(forkRecipeResponseWaterOneSaltsCalciumChlorideMax),
+              epsom: zod
+                .number()
+                .min(forkRecipeResponseWaterOneSaltsEpsomMin)
+                .max(forkRecipeResponseWaterOneSaltsEpsomMax),
+              tableSalt: zod
+                .number()
+                .min(forkRecipeResponseWaterOneSaltsTableSaltMin)
+                .max(forkRecipeResponseWaterOneSaltsTableSaltMax),
+              bakingSoda: zod
+                .number()
+                .min(forkRecipeResponseWaterOneSaltsBakingSodaMin)
+                .max(forkRecipeResponseWaterOneSaltsBakingSodaMax),
+            })
+            .describe(
+              "Salt additions in grams, for the recipe water's volumeLitres.",
+            ),
+          volumeLitres: zod
+            .number()
+            .gt(forkRecipeResponseWaterOneVolumeLitresExclusiveMin)
+            .max(forkRecipeResponseWaterOneVolumeLitresMax)
+            .describe(
+              "The total water (mash and sparge) the salts are for, in litres.",
+            ),
+        })
+        .describe("A recipe's water, as worked out in the water calculator."),
+      zod.null(),
+    ])
+    .optional(),
   avgScore: zod
     .number()
     .nullish()
@@ -2222,6 +3444,12 @@ export const ListBrewSessionsResponseItem = zod.object({
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
     ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   boilMinutes: zod
@@ -2445,6 +3673,12 @@ export const CreateBrewSessionResponse = zod.object({
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
     ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   boilMinutes: zod
@@ -2614,6 +3848,12 @@ export const GetBrewSessionResponse = zod
       .nullish()
       .describe(
         "null = use global setting, true = always auto-advance, false = always manual",
+      ),
+    tempSensorId: zod
+      .int()
+      .nullish()
+      .describe(
+        "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
       ),
     tastingNotes: zod.string().nullish(),
     photoPath: zod.string().nullish(),
@@ -2884,6 +4124,12 @@ export const UpdateBrewSessionResponse = zod.object({
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
     ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   boilMinutes: zod
@@ -2930,6 +4176,48 @@ export const GetBrewSessionRecipeSnapshotParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetPresetIdMax = 40;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetNameMax = 80;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileNameMax = 80;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileCalciumMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileCalciumMax = 2000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileMagnesiumMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileMagnesiumMax = 2000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSodiumMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSodiumMax = 2000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSulfateMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSulfateMax = 2000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileChlorideMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileChlorideMax = 2000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileBicarbonateMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileBicarbonateMax = 2000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsGypsumMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsGypsumMax = 1000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsCalciumChlorideMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsCalciumChlorideMax = 1000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsEpsomMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsEpsomMax = 1000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsTableSaltMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsTableSaltMax = 1000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsBakingSodaMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsBakingSodaMax = 1000;
+
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneVolumeLitresExclusiveMin = 0;
+export const getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneVolumeLitresMax = 2000;
+
 export const GetBrewSessionRecipeSnapshotResponse = zod.object({
   snapshot: zod.union([
     zod
@@ -2958,6 +4246,153 @@ export const GetBrewSessionRecipeSnapshotResponse = zod.object({
           conditionTempMax: zod.number().nullish(),
           conditionTempIdeal: zod.number().nullish(),
           notes: zod.string().nullish(),
+          water: zod
+            .union([
+              zod
+                .object({
+                  target: zod
+                    .object({
+                      presetId: zod
+                        .string()
+                        .max(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetPresetIdMax,
+                        )
+                        .nullable(),
+                      name: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetNameMax,
+                        ),
+                      profile: zod
+                        .object({
+                          name: zod
+                            .string()
+                            .max(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileNameMax,
+                            )
+                            .nullish(),
+                          calcium: zod
+                            .number()
+                            .min(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileCalciumMin,
+                            )
+                            .max(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileCalciumMax,
+                            ),
+                          magnesium: zod
+                            .number()
+                            .min(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileMagnesiumMin,
+                            )
+                            .max(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileMagnesiumMax,
+                            ),
+                          sodium: zod
+                            .number()
+                            .min(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSodiumMin,
+                            )
+                            .max(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSodiumMax,
+                            ),
+                          sulfate: zod
+                            .number()
+                            .min(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSulfateMin,
+                            )
+                            .max(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileSulfateMax,
+                            ),
+                          chloride: zod
+                            .number()
+                            .min(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileChlorideMin,
+                            )
+                            .max(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileChlorideMax,
+                            ),
+                          bicarbonate: zod
+                            .number()
+                            .min(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileBicarbonateMin,
+                            )
+                            .max(
+                              getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneTargetProfileBicarbonateMax,
+                            ),
+                        })
+                        .describe("Ion concentrations in ppm (mg/L)."),
+                    })
+                    .describe(
+                      "The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.",
+                    ),
+                  salts: zod
+                    .object({
+                      gypsum: zod
+                        .number()
+                        .min(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsGypsumMin,
+                        )
+                        .max(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsGypsumMax,
+                        ),
+                      calciumChloride: zod
+                        .number()
+                        .min(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsCalciumChlorideMin,
+                        )
+                        .max(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsCalciumChlorideMax,
+                        ),
+                      epsom: zod
+                        .number()
+                        .min(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsEpsomMin,
+                        )
+                        .max(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsEpsomMax,
+                        ),
+                      tableSalt: zod
+                        .number()
+                        .min(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsTableSaltMin,
+                        )
+                        .max(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsTableSaltMax,
+                        ),
+                      bakingSoda: zod
+                        .number()
+                        .min(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsBakingSodaMin,
+                        )
+                        .max(
+                          getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneSaltsBakingSodaMax,
+                        ),
+                    })
+                    .describe(
+                      "Salt additions in grams, for the recipe water's volumeLitres.",
+                    ),
+                  volumeLitres: zod
+                    .number()
+                    .gt(
+                      getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneVolumeLitresExclusiveMin,
+                    )
+                    .max(
+                      getBrewSessionRecipeSnapshotResponseSnapshotOneRecipeWaterOneVolumeLitresMax,
+                    )
+                    .describe(
+                      "The total water (mash and sparge) the salts are for, in litres.",
+                    ),
+                })
+                .describe(
+                  "A recipe's water, as worked out in the water calculator.",
+                ),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Absent on batches recorded before recipes kept their water.",
+            ),
         }),
         ingredients: zod
           .array(
@@ -3352,6 +4787,12 @@ export const UpsertBrewRatingResponse = zod.object({
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
     ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   boilMinutes: zod
@@ -3550,6 +4991,12 @@ export const ControlBoilResponse = zod.object({
     .nullish()
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
+    ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
     ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
@@ -4022,6 +5469,167 @@ export const SetDefaultReadingsShownBody = zod.object({
 
 export const SetDefaultReadingsShownResponse = zod.object({
   count: zod.int(),
+});
+
+/**
+ * Always lists every section. A section missing from the saved layout, such as one added in a later release, appears in its default place.
+ * @summary Get the order of the brew session page's cards and which are hidden
+ */
+export const getBrewLayoutResponseOrderMax = 50;
+
+export const getBrewLayoutResponseHiddenMax = 50;
+
+export const GetBrewLayoutResponse = zod.object({
+  order: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(getBrewLayoutResponseOrderMax)
+    .describe("The cards from top to bottom."),
+  hidden: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(getBrewLayoutResponseHiddenMax)
+    .describe("Cards left off the page."),
+});
+
+/**
+ * Sections left out of `order` keep their default place; duplicates are ignored. Returns the layout as saved.
+ * @summary Set the order of the brew session page's cards and which are hidden
+ */
+export const setBrewLayoutBodyOrderMax = 50;
+
+export const setBrewLayoutBodyHiddenMax = 50;
+
+export const SetBrewLayoutBody = zod.object({
+  order: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutBodyOrderMax)
+    .describe("The cards from top to bottom."),
+  hidden: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutBodyHiddenMax)
+    .describe("Cards left off the page."),
+});
+
+export const setBrewLayoutResponseOrderMax = 50;
+
+export const setBrewLayoutResponseHiddenMax = 50;
+
+export const SetBrewLayoutResponse = zod.object({
+  order: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutResponseOrderMax)
+    .describe("The cards from top to bottom."),
+  hidden: zod
+    .array(
+      zod
+        .enum([
+          "water",
+          "dryHops",
+          "tasting",
+          "recipeAsBrewed",
+          "stageHistory",
+          "tempControl",
+          "heatingCooling",
+          "telemetry",
+          "sensors",
+          "sensorReadings",
+          "fermentationChart",
+          "referenceCharts",
+          "readings",
+        ])
+        .describe("A movable card on the brew session page."),
+    )
+    .max(setBrewLayoutResponseHiddenMax)
+    .describe("Cards left off the page."),
 });
 
 /**
@@ -5251,6 +6859,40 @@ export const GetBrewSensorTelemetryResponse = zod.object({
     ])
     .optional(),
   isDeviceActive: zod.boolean().optional(),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The sensor the brew's temperature comes from, when one was chosen and is among the fermenter readings; null means every fermenter sensor.",
+    ),
+  tempReading: zod
+    .union([
+      zod.object({
+        id: zod.int(),
+        deviceId: zod.int(),
+        brewSessionId: zod.int().nullish(),
+        gravity: zod.number().nullish(),
+        temperature: zod.number().nullish(),
+        temperatureUnit: zod.string().nullish(),
+        angle: zod.number().nullish(),
+        battery: zod.number().nullish(),
+        batteryPercentEstimate: zod
+          .number()
+          .nullish()
+          .describe(
+            "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+          ),
+        rssi: zod.int().nullish(),
+        reportedInterval: zod.int().nullish(),
+        rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
+        receivedAt: zod.iso.datetime({ offset: true }),
+      }),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "The latest reading that gives the brew's temperature: from the chosen sensor, or the latest reading when none is chosen.",
+    ),
   referenceSensors: zod.array(
     zod
       .object({
@@ -5322,6 +6964,191 @@ export const GetBrewSensorTelemetryResponse = zod.object({
         "A sensor on the brew with the reference role, with its own readings.",
       ),
   ),
+});
+
+/**
+ * With several fermenter sensors on a brew (say an iSpindel and a Shelly probe), each sends its own temperature. The chosen one alone draws the chart's temperature line, fills the telemetry temperature and is checked for temperature alerts; gravity still comes from every sensor, and manual readings always show. `null` goes back to every fermenter sensor. The choice is cleared when that sensor leaves the brew.
+ * @summary Choose which fermenter sensor the brew's temperature comes from
+ */
+export const SetBrewTempSensorParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const SetBrewTempSensorBody = zod.object({
+  sensorDeviceId: zod
+    .int()
+    .nullable()
+    .describe(
+      "A fermenter sensor on the brew, or null for every fermenter sensor.",
+    ),
+});
+
+export const setBrewTempSensorResponseAppearanceAromaScoreMax = 5;
+
+export const setBrewTempSensorResponseFlavorBalanceScoreMax = 5;
+
+export const setBrewTempSensorResponseMouthfeelScoreMax = 5;
+
+export const setBrewTempSensorResponseOverallScoreMax = 10;
+
+export const SetBrewTempSensorResponse = zod.object({
+  id: zod.int(),
+  recipeId: zod.int().nullish(),
+  recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
+  brewDate: zod.iso.date(),
+  plannedDate: zod.iso
+    .date()
+    .nullish()
+    .describe(
+      "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
+    ),
+  packagedDate: zod.iso.date().nullish(),
+  packagingMethod: zod
+    .union([zod.literal("keg"), zod.literal("bottle"), zod.literal(null)])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
+  batchSizeGallons: zod.number(),
+  originalGravityActual: zod.number().nullish(),
+  finalGravityActual: zod.number().nullish(),
+  abvActual: zod.number().nullish(),
+  appearanceAromaScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseAppearanceAromaScoreMax)
+    .nullish(),
+  flavorBalanceScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseFlavorBalanceScoreMax)
+    .nullish(),
+  mouthfeelScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseMouthfeelScoreMax)
+    .nullish(),
+  overallScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseOverallScoreMax)
+    .nullish()
+    .describe(
+      "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+    ),
+  offFlavors: zod
+    .array(
+      zod
+        .enum([
+          "diacetyl",
+          "acetaldehyde",
+          "dms",
+          "phenolic",
+          "oxidized",
+          "astringent",
+          "sour",
+          "solvent",
+          "sulfur",
+          "light_struck",
+        ])
+        .describe(
+          'Common homebrew off-flavor. "None" is an empty offFlavors array rather than a member here.',
+        ),
+    )
+    .nullish(),
+  brewAgain: zod
+    .union([
+      zod.literal("as_is"),
+      zod.literal("with_tweaks"),
+      zod.literal("no"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  ratedAt: zod.iso
+    .datetime({ offset: true })
+    .nullish()
+    .describe(
+      'Set whenever the scorecard is saved. Distinguishes "never rated" from a partially filled card.',
+    ),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
+  autoAdvanceToConditioning: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "null = use global setting, true = always auto-advance, false = always manual",
+    ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
+  tastingNotes: zod.string().nullish(),
+  photoPath: zod.string().nullish(),
+  boilMinutes: zod
+    .int()
+    .nullish()
+    .describe("Planned boil length. Null until a boil is started."),
+  boilStartedAt: zod.iso.datetime({ offset: true }).nullish(),
+  boilPausedAt: zod.iso
+    .datetime({ offset: true })
+    .nullish()
+    .describe("Set while the boil timer is paused."),
+  boilPausedMs: zod
+    .int()
+    .nullish()
+    .describe("Milliseconds spent paused before the current pause, if any."),
+  boilEndedAt: zod.iso.datetime({ offset: true }).nullish(),
+  boilDoneAdditionIds: zod
+    .array(zod.int())
+    .nullish()
+    .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
+  createdAt: zod.iso.datetime({ offset: true }),
+  updatedAt: zod.iso.datetime({ offset: true }),
 });
 
 /**

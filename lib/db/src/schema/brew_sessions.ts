@@ -1,5 +1,5 @@
 import { pgTable, serial, text, real, integer, boolean, timestamp, date, jsonb } from "drizzle-orm/pg-core";
-import { recipesTable, recipeVariantEnum, type ingredientTypeEnum, type ingredientUseEnum, type stepPhaseEnum } from "./recipes";
+import { recipesTable, recipeVariantEnum, type RecipeWater, type ingredientTypeEnum, type ingredientUseEnum, type stepPhaseEnum } from "./recipes";
 
 /**
  * The recipe as a batch was brewed: a frozen copy kept for the record, so
@@ -27,6 +27,8 @@ export interface RecipeSnapshot {
     conditionTempMax: number | null;
     conditionTempIdeal: number | null;
     notes: string | null;
+    /** Absent on batches recorded before recipes kept their water. */
+    water?: RecipeWater | null;
   };
   /** Only the ingredients of the version that was brewed. */
   ingredients: {
@@ -113,6 +115,11 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   conditionTempMax: real("condition_temp_max"),
   conditionTempIdeal: real("condition_temp_ideal"),
   autoAdvanceToConditioning: boolean("auto_advance_to_conditioning"),
+  // The fermenter sensor whose temperature the brew goes by (chart, telemetry,
+  // temperature alerts) when several are on it. Null: every fermenter sensor.
+  // Not a foreign key: a sensor that has gone, or left the brew's fermenter
+  // readings, simply falls back to every sensor (see lib/tempSource.ts).
+  tempSensorId: integer("temp_sensor_id"),
   tastingNotes: text("tasting_notes"),
   photoPath: text("photo_path"),
   // Boil timer. Stored as timestamps rather than a remaining count so every

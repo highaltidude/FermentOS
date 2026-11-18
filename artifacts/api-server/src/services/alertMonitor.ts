@@ -12,6 +12,7 @@ import { resolveRepeatHours } from "../lib/notifyIntervals.js";
 import { alertAppliesToStatus, notifiesOncePerBrew } from "../lib/alertPolicy.js";
 import { getTempAlertReadings } from "./tempAlertReadings.js";
 import { consecutiveTempExcursions, tempAlertConfirmed } from "../lib/tempExcursion.js";
+import { tempReadings } from "../lib/tempSource.js";
 
 /**
  * Scheduled alert monitor.
@@ -66,7 +67,10 @@ async function runAlertCheck(): Promise<void> {
         ));
 
       const telemetry = activeAssignment ? await computeBrewAlerts(session.id) : null;
-      const tempStreak = telemetry ? consecutiveTempExcursions(telemetry.readings, telemetry.tempRange) : 0;
+      // Counted on the brew's temperature sensor alone when one is chosen.
+      const tempStreak = telemetry
+        ? consecutiveTempExcursions(tempReadings(telemetry.readings, telemetry.tempSensorId, (r) => r.deviceId), telemetry.tempRange)
+        : 0;
       const firing = new Set(
         (telemetry?.alerts ?? [])
           .map((a) => a.type)

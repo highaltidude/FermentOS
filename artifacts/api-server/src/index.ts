@@ -9,6 +9,14 @@ import { resumeBoilAlerts } from "./services/boilScheduler";
 import { startDevicePoller } from "./services/devicePoller";
 import { startFlowEngine, RELAY_HEARTBEAT_SEC } from "./services/flowEngine";
 import { closeStaleRelayRuns } from "./services/relayRuns";
+import { isNodeSupported, MIN_NODE_MAJOR } from "./lib/nodeVersion";
+
+if (!isNodeSupported()) {
+  logger.warn(
+    { nodeVersion: process.version, minimum: MIN_NODE_MAJOR },
+    `Node.js ${process.version} is older than FermentOS supports (${MIN_NODE_MAJOR} or newer). Kit-sheet PDF import will not work; upgrade Node.js.`,
+  );
+}
 
 const rawPort = process.env["PORT"];
 

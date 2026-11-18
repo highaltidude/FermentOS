@@ -38,7 +38,20 @@ export async function getActiveAssignment(deviceId: number) {
   return activeAssignment ?? null;
 }
 
+/**
+ * A sensor that leaves a brew, or its fermenter readings, stops being the
+ * sensor the brew takes its temperature from.
+ */
+async function clearTempSensor(deviceId: number, brewSessionId: number): Promise<void> {
+  await db
+    .update(brewSessionsTable)
+    .set({ tempSensorId: null })
+    .where(and(eq(brewSessionsTable.id, brewSessionId), eq(brewSessionsTable.tempSensorId, deviceId)));
+}
+
 export async function closeActiveAssignment(deviceId: number): Promise<void> {
+  const active = await getActiveAssignment(deviceId);
+  if (active) await clearTempSensor(deviceId, active.brewSessionId);
   await db
     .update(sensorDeviceBrewAssignmentsTable)
     .set({ unassignedAt: new Date() })
@@ -80,6 +93,7 @@ export async function setAssignmentRole(deviceId: number, role: SensorAssignment
     .where(and(eq(sensorDeviceBrewAssignmentsTable.deviceId, deviceId), eq(sensorDeviceBrewAssignmentsTable.brewSessionId, brewSessionId)));
 
   if (role === "reference") {
+    await clearTempSensor(deviceId, brewSessionId);
     const [device] = await db.select().from(sensorDevicesTable).where(eq(sensorDevicesTable.id, deviceId));
     const source = device?.deviceType === "shelly_probe" ? "shelly" : "ispindel";
     // Rows mirrored before sensor_device_id existed are matched by the device

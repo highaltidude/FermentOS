@@ -17,7 +17,8 @@ import { parseIdParam } from "../lib/http";
 import { parseMorebeerKitSheet, type KitSheetParseResult, type PdfPage } from "../lib/morebeerKitSheet";
 import { parseKitSheet } from "../lib/kitSheet";
 import { normalizeIngredientVariants, normalizeRecipeVariants } from "../lib/recipeVariants";
-import { extractPdfTextItems } from "../services/pdfText";
+import { extractPdfTextItems, PdfEngineUnavailableError } from "../services/pdfText";
+import { isNodeSupported, MIN_NODE_MAJOR } from "../lib/nodeVersion";
 import { reloadFlows } from "../services/flowEngine";
 import { buildRecipeSnapshot, diffRecipeSnapshots, nextVersionName, recipeBrewHistory, recipeFamily } from "../lib/recipeHistory";
 
@@ -254,6 +255,14 @@ const KIT_SHEET_ERRORS = {
   unreadable_pdf: "This PDF could not be opened. It may be damaged or password-protected.",
 } as const;
 
+/** The server, not the file, is at fault; say which part when we can tell. */
+function pdfEngineMessage(): string {
+  const base = "FermentOS couldn't start its PDF reader. This is a problem with the server, not with your file.";
+  return isNodeSupported()
+    ? `${base} The server log has the details.`
+    : `${base} It is running Node.js ${process.version}; kit-sheet import needs Node.js ${MIN_NODE_MAJOR} or newer. Upgrade Node.js on the server and restart FermentOS.`;
+}
+
 const KIT_SHEET_MAX_MB = 10;
 const pdfBody = express.raw({ type: "application/pdf", limit: `${KIT_SHEET_MAX_MB}mb` });
 
@@ -283,6 +292,11 @@ const kitSheetRoute = (parse: (pages: PdfPage[]) => KitSheetParseResult): Reques
   try {
     pages = await extractPdfTextItems(pdf);
   } catch (err) {
+    if (err instanceof PdfEngineUnavailableError) {
+      req.log.error({ err, nodeVersion: process.version }, "PDF engine could not be loaded");
+      res.status(503).json({ error: pdfEngineMessage(), code: "pdf_engine_unavailable" });
+      return;
+    }
     req.log.warn({ err }, "Kit sheet PDF could not be read");
     res.status(422).json({ error: KIT_SHEET_ERRORS.unreadable_pdf, code: "unreadable_pdf" });
     return;

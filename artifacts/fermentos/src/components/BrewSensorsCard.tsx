@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useSetSensorDeviceRole,
+  useSetBrewTempSensor,
   getListSensorDevicesQueryKey,
   getGetBrewSensorTelemetryQueryKey,
   getGetBrewSessionQueryKey,
@@ -19,29 +20,41 @@ const ROLE_HINT: Record<SensorAssignmentRole, string> = {
 /**
  * The sensors assigned to a brew, each with its role. A brew with more than one
  * sensor needs to know which is the beer: switching one to Reference gives it
- * its own chart and keeps it out of fermentation data and alerts.
+ * its own chart and keeps it out of fermentation data and alerts. With two or
+ * more fermenter sensors, the brew can also take its temperature from just one.
  */
-export function BrewSensorsCard({ brewSessionId, sensors, unit }: {
+export function BrewSensorsCard({ brewSessionId, sensors, unit, tempSensorId }: {
   brewSessionId: number;
   sensors: SensorDeviceWithStatus[];
   unit: "C" | "F";
+  tempSensorId: number | null;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetBrewSensorTelemetryQueryKey(brewSessionId) });
+    qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(brewSessionId) });
+  };
   const setRole = useSetSensorDeviceRole({
     mutation: {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getListSensorDevicesQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetBrewSensorTelemetryQueryKey(brewSessionId) });
-        qc.invalidateQueries({ queryKey: getGetBrewSessionQueryKey(brewSessionId) });
-      },
+      onSuccess: refresh,
       onError: (err) => toast({ title: "Couldn't change the sensor's role", description: getErrorMessage(err), variant: "destructive" }),
+    },
+  });
+  const setTempSensor = useSetBrewTempSensor({
+    mutation: {
+      onSuccess: refresh,
+      onError: (err) => toast({ title: "Couldn't change the temperature sensor", description: getErrorMessage(err), variant: "destructive" }),
     },
   });
 
   const onBrew = sensors.filter((s) => s.assignedBrewSessionId === brewSessionId);
   // One fermenter sensor and nothing else is the common case; there's nothing to choose.
   if (onBrew.length < 2 && onBrew.every((s) => (s.assignedRole ?? "fermenter") === "fermenter")) return null;
+
+  const fermenters = onBrew.filter((s) => (s.assignedRole ?? "fermenter") === "fermenter");
+  const chosen = fermenters.some((s) => s.device.id === tempSensorId) ? String(tempSensorId) : "";
 
   const change = (s: SensorDeviceWithStatus, role: SensorAssignmentRole) => {
     if (role === "reference" && !window.confirm(
@@ -85,6 +98,28 @@ export function BrewSensorsCard({ brewSessionId, sensors, unit }: {
           );
         })}
       </ul>
+      {fermenters.length > 1 && (
+        <div className="flex items-center gap-3 pt-2 border-t border-border flex-wrap">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-foreground">Temperature from</p>
+            <p className="text-[11px] text-muted-foreground">
+              The sensor whose temperature goes on the chart and is checked for temperature alerts. Gravity still comes from any sensor that measures it.
+            </p>
+          </div>
+          <select
+            aria-label="Temperature from"
+            className="text-xs bg-background border border-input rounded px-2 py-1.5 text-foreground"
+            value={chosen}
+            disabled={setTempSensor.isPending}
+            onChange={(e) => setTempSensor.mutate({ id: brewSessionId, data: { sensorDeviceId: e.target.value ? Number(e.target.value) : null } })}
+          >
+            <option value="">Every fermenter sensor</option>
+            {fermenters.map((s) => (
+              <option key={s.device.id} value={s.device.id}>{s.device.deviceName}</option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }

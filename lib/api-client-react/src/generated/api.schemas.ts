@@ -601,6 +601,109 @@ export const RecipeVariant = {
   all_grain: "all_grain",
 } as const;
 
+/**
+ * Ion concentrations in ppm (mg/L).
+ */
+export interface WaterProfile {
+  /**
+   * @maxLength 80
+   * @nullable
+   */
+  name?: string | null;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  calcium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  magnesium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  sodium: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  sulfate: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  chloride: number;
+  /**
+   * @minimum 0
+   * @maximum 2000
+   */
+  bicarbonate: number;
+}
+
+/**
+ * The profile a recipe's water aims for. Its ions are kept with the recipe; presetId (a water calculator preset, null for a custom target) and name are for display.
+ */
+export interface RecipeWaterTarget {
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  presetId: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  name: string;
+  profile: WaterProfile;
+}
+
+/**
+ * Salt additions in grams, for the recipe water's volumeLitres.
+ */
+export interface RecipeWaterSalts {
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  gypsum: number;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  calciumChloride: number;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  epsom: number;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  tableSalt: number;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  bakingSoda: number;
+}
+
+/**
+ * A recipe's water, as worked out in the water calculator.
+ */
+export interface RecipeWater {
+  target: RecipeWaterTarget;
+  salts: RecipeWaterSalts;
+  /**
+   * The total water (mash and sparge) the salts are for, in litres.
+   * @maximum 2000
+   * @exclusiveMinimum 0
+   */
+  volumeLitres: number;
+}
+
 export interface Recipe {
   id: number;
   name: string;
@@ -674,6 +777,7 @@ export interface Recipe {
   daysConditioning?: number | null;
   /** @nullable */
   daysPackaged?: number | null;
+  water?: RecipeWater | null;
   /**
    * Mean overallScore across every rated batch of this recipe, 1-10.
    * @nullable
@@ -824,6 +928,8 @@ export type RecipeSnapshotRecipe = {
   conditionTempIdeal?: number | null;
   /** @nullable */
   notes?: string | null;
+  /** Absent on batches recorded before recipes kept their water. */
+  water?: RecipeWater | null;
 };
 
 /**
@@ -987,6 +1093,7 @@ export interface CreateRecipeBody {
   daysConditioning?: number | null;
   /** @nullable */
   daysPackaged?: number | null;
+  water?: RecipeWater | null;
 }
 
 export interface UpdateRecipeBody {
@@ -1051,6 +1158,7 @@ export interface UpdateRecipeBody {
   daysConditioning?: number | null;
   /** @nullable */
   daysPackaged?: number | null;
+  water?: RecipeWater | null;
 }
 
 export interface CreateRecipeIngredientBody {
@@ -1239,6 +1347,7 @@ export const KitSheetParseErrorCode = {
   no_text: "no_text",
   unrecognized_sheet: "unrecognized_sheet",
   unreadable_pdf: "unreadable_pdf",
+  pdf_engine_unavailable: "pdf_engine_unavailable",
 } as const;
 
 export interface KitSheetParseError {
@@ -1340,6 +1449,11 @@ export interface BrewSession {
    * @nullable
    */
   autoAdvanceToConditioning?: boolean | null;
+  /**
+   * The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.
+   * @nullable
+   */
+  tempSensorId?: number | null;
   /** @nullable */
   tastingNotes?: string | null;
   /** @nullable */
@@ -1623,47 +1737,6 @@ export interface UnitSystemBody {
   system: UnitSystem;
 }
 
-/**
- * Ion concentrations in ppm (mg/L).
- */
-export interface WaterProfile {
-  /**
-   * @maxLength 80
-   * @nullable
-   */
-  name?: string | null;
-  /**
-   * @minimum 0
-   * @maximum 2000
-   */
-  calcium: number;
-  /**
-   * @minimum 0
-   * @maximum 2000
-   */
-  magnesium: number;
-  /**
-   * @minimum 0
-   * @maximum 2000
-   */
-  sodium: number;
-  /**
-   * @minimum 0
-   * @maximum 2000
-   */
-  sulfate: number;
-  /**
-   * @minimum 0
-   * @maximum 2000
-   */
-  chloride: number;
-  /**
-   * @minimum 0
-   * @maximum 2000
-   */
-  bicarbonate: number;
-}
-
 export interface SourceWater {
   profile: WaterProfile | null;
 }
@@ -1684,6 +1757,41 @@ export interface DefaultReadingsShownResponse {
 
 export interface DefaultReadingsShownBody {
   count: number;
+}
+
+/**
+ * A movable card on the brew session page.
+ */
+export type BrewLayoutSection =
+  (typeof BrewLayoutSection)[keyof typeof BrewLayoutSection];
+
+export const BrewLayoutSection = {
+  water: "water",
+  dryHops: "dryHops",
+  tasting: "tasting",
+  recipeAsBrewed: "recipeAsBrewed",
+  stageHistory: "stageHistory",
+  tempControl: "tempControl",
+  heatingCooling: "heatingCooling",
+  telemetry: "telemetry",
+  sensors: "sensors",
+  sensorReadings: "sensorReadings",
+  fermentationChart: "fermentationChart",
+  referenceCharts: "referenceCharts",
+  readings: "readings",
+} as const;
+
+export interface BrewLayout {
+  /**
+   * The cards from top to bottom.
+   * @maxItems 50
+   */
+  order: BrewLayoutSection[];
+  /**
+   * Cards left off the page.
+   * @maxItems 50
+   */
+  hidden: BrewLayoutSection[];
 }
 
 export interface BreweryNameResponse {
@@ -2240,7 +2348,22 @@ export interface BrewSensorTelemetry {
   alerts: SensorAlert[];
   tempRange?: BrewTempRange | null;
   isDeviceActive?: boolean;
+  /**
+   * The sensor the brew's temperature comes from, when one was chosen and is among the fermenter readings; null means every fermenter sensor.
+   * @nullable
+   */
+  tempSensorId?: number | null;
+  /** The latest reading that gives the brew's temperature: from the chosen sensor, or the latest reading when none is chosen. */
+  tempReading?: SensorReading | null;
   referenceSensors: BrewReferenceSensor[];
+}
+
+export interface SetBrewTempSensorBody {
+  /**
+   * A fermenter sensor on the brew, or null for every fermenter sensor.
+   * @nullable
+   */
+  sensorDeviceId: number | null;
 }
 
 export interface ISpindelPayload {

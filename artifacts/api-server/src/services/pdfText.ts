@@ -3,6 +3,17 @@ import type { PdfPage } from "../lib/morebeerKitSheet";
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /**
+ * The PDF engine itself would not load: a fault in the server (most often a
+ * Node.js too old for pdf.js), not in the file being read.
+ */
+export class PdfEngineUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super("The PDF engine could not be loaded", { cause });
+    this.name = "PdfEngineUnavailableError";
+  }
+}
+
+/**
  * Pull the positioned text out of a PDF, one entry per run of text.
  *
  * Positions matter more than reading order for the layouts we parse, so every
@@ -13,7 +24,14 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  * boot ever needs it.
  */
 export async function extractPdfTextItems(data: Uint8Array): Promise<PdfPage[]> {
-  const { getDocumentProxy } = await import("unpdf");
+  const { getDocumentProxy, getResolvedPDFJS } = await import("unpdf");
+  // Load pdf.js on its own first, so a server that can't run it isn't
+  // reported as a damaged file.
+  try {
+    await getResolvedPDFJS();
+  } catch (err) {
+    throw new PdfEngineUnavailableError(err);
+  }
   // pdf.js takes ownership of the buffer it is given, so hand it a copy.
   const pdf = await getDocumentProxy(new Uint8Array(data));
   try {

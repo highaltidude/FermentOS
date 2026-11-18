@@ -36,10 +36,38 @@ export const UPDATE_STEPS = [
   "Restarting services",
 ];
 
+/**
+ * The part of update.log written by the most recent update or rollback. The
+ * log is appended to on every run, so earlier runs' markers would otherwise
+ * be read as this one's.
+ */
+export function latestRun(log: string): string {
+  const starts = [...log.matchAll(/^=== (?:Update|Rollback)\b.*\bstarted at\b.*$/gm)];
+  const last = starts[starts.length - 1];
+  return last?.index != null ? log.slice(last.index) : log;
+}
+
+/**
+ * Why the latest run stopped, when update.sh refused or failed with an
+ * `ERROR:` line (an unsupported Node.js, say): that line and the indented
+ * lines after it. Null when it reported no error.
+ */
+export function updateFailure(log: string): string | null {
+  const lines = latestRun(log).split("\n");
+  const at = lines.findIndex((l) => l.startsWith("ERROR:"));
+  if (at < 0) return null;
+  const detail = [lines[at]!.slice("ERROR:".length).trim()];
+  for (const l of lines.slice(at + 1)) {
+    if (!/^\s+\S/.test(l)) break;
+    detail.push(l.trim());
+  }
+  return detail.join("\n");
+}
+
 export function parseLastStep(log: string): { step: number; label: string } | null {
   // Find the last `[N/5] some text...` marker. We rely on update.sh's exact
   // formatting; if the format changes the bar just sits at its previous step.
-  const matches = [...log.matchAll(/\[(\d+)\/5\]\s*([^\n]*)/g)];
+  const matches = [...latestRun(log).matchAll(/\[(\d+)\/5\]\s*([^\n]*)/g)];
   if (matches.length === 0) return null;
   const last = matches[matches.length - 1]!;
   const step = Math.min(5, Math.max(1, parseInt(last[1]!, 10)));

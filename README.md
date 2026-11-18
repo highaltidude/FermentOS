@@ -76,8 +76,9 @@ install to a tracked first batch.
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
-- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). Recipe scaling and batch cost are planned
+- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). A recipe can keep its water: the target and salt additions show on the recipe, and brew day lists the additions scaled to the batch. Recipe scaling and batch cost are planned
 - **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
+- **Brew page layout** — Choose the order of the cards on a brew's page and hide the ones you don't use, such as the Heating & cooling chart if you have no relays. Set once in Settings, the same on every device
 - **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
 - **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
 - **Updates and rollback** — Update from inside the app with a live progress bar, read the release notes in place, and roll back to a previous deploy in one click (bare-metal installs; Docker updates by rebuilding the image)
@@ -707,6 +708,8 @@ You can put several probes on one brew, say one in the wort and one in an ice ba
 - **Fermenter**: the beer's temperature. Its readings make up the fermentation chart, readings list, temperature alerts and fermentation insights. A newly assigned sensor starts as a fermenter.
 - **Reference**: anything else, such as an ice bath, the room or the chamber. It gets its own chart on the brew page, titled with the probe's name, and is kept out of the fermentation data and alerts. Switching a sensor to Reference also moves its earlier readings off the fermentation chart, while its own history stays on its chart. To be alerted when a reference probe gets too warm, use a [Temperature alert](#get-alerted-when-a-temperature-goes-too-high-or-low) flow.
 
+With two fermenter sensors on one brew, such as an iSpindel in the beer and a Shelly probe in a thermowell, both send a temperature, and by default the chart's temperature line and the temperature alerts use whichever reported last. To go by one of them, pick it under **Temperature from** on the same card. Its temperature alone is then drawn on the chart, shown on the telemetry card and checked for temperature alerts. Gravity still comes from any sensor that measures it, hand-entered readings still show, and the readings list keeps every row. The choice applies to earlier readings too, and goes back to **Every fermenter sensor** if that sensor is taken off the brew or switched to Reference.
+
 The settings page marks a reference probe's brew with *(reference)*. Sensor temperatures everywhere follow your temperature unit setting, whatever unit the device reports in.
 
 One probe is marked **Controls flows**. That's the probe the brew's [Temperature control](#6-control-a-brews-temperature) and any flow set to the device itself reads. At first it's the lowest-numbered probe; click **Use for control** on another to switch. The new probe takes over the old one's brew. A Brew Flow can also read one particular probe: each probe has its own entry under **Temperature from**, and the brew's Temperature control card shows the device's other probes next to the controlling reading.
@@ -849,6 +852,17 @@ water salty with baking soda. Target values
 come from Brewer's Friend's published table; treat the historic city ones as a
 starting point, not a specification.
 
+**A recipe's water.** To keep the water with a recipe, use **Add water** on the
+recipe's **Water** card. It opens the same calculator, starting from your saved
+tap water and the recipe's batch size as the total water; pick the target, set
+the volume and salts, and **Save**. The card then shows the target, the salts
+and the volume they are for, and, with your tap water saved, the profile they
+give and the sulfate-to-chloride ratio. **Edit** reopens the calculator where
+you left it, and **Remove water** takes it off the recipe. On brew day, the
+batch's page lists the salts to add, scaled when the batch is bigger or smaller
+than the recipe. Forking a recipe copies its water, and changes to it show in
+version history, e.g. "Gypsum: 4 g → 6 g".
+
 Only Brew Day, Fermenting, and Conditioning batches with a sensor assigned are
 monitored for alerts. Once a batch is **Packaged** it is finished, and a stale
 probe reading will never wake you up about it.
@@ -858,6 +872,13 @@ deletes readings older than the age you choose from packaged batches, along
 with old sensor readings that belong to no batch, every night. It is off until
 you turn it on, and what it deletes is gone. The default
 number of readings shown on a session page is set there too.
+
+**Settings → Brewing → Brew Page Layout** sets the order of the cards on a brew's
+page, top to bottom: move a card with its arrows, or switch it off to hide it.
+Changes save straight away and apply on every device. The stage prompts at the
+top of the page, like the boil timer and Enter OG, always show. Hiding a card
+hides everything in it: hide Telemetry and the "fermentation may be complete"
+prompt goes with it. **Reset to default** puts everything back.
 
 **Settings → System → Power** has **Restart App** and, on a bare-metal install,
 **Reboot Host**.
@@ -878,7 +899,7 @@ This section is for bare-metal (systemd) installs. Docker installs update with `
 
 The easiest way to update is from the app itself: **Settings → System → Updates**. **Check for updates** looks for a newer commit; when there is one, **Update now** pulls it, runs migrations, rebuilds, and restarts the services automatically, with a live progress bar. Release notes are shown in-app, and every deploy is recorded in a history log with a one-click rollback if something goes wrong. If a build fails, the update rolls itself back.
 
-An update is refused while the [backup coverage audit](#backups--restore) is below 100%. If an update is interrupted and leaves the page stuck, the same panel offers **Force-clear lock** and **Repair install**.
+An update is refused while the [backup coverage audit](#backups--restore) is below 100%, and when the system's Node.js is older than 22: `install.sh` upgrades an older Node.js, but only on a fresh install, so an install that started on Node.js 20 stays there until you upgrade it (`curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -`, then `sudo apt-get install -y nodejs`). The update panel shows why it stopped, and nothing is changed. On an unsupported Node.js, kit-sheet PDF import reports that the server, not the file, is at fault. If an update is interrupted and leaves the page stuck, the same panel offers **Force-clear lock** and **Repair install**.
 
 **Channels.** An install follows whichever branch its checkout is on: `main` for stable releases, `beta` for prereleases. To switch, `git checkout beta` (or `main`) in the install directory, then update.
 
@@ -1397,7 +1418,27 @@ previous recorded brew, `null` for the first) and `sinceLastBrew`.
 and `changesSinceBrew`. A change has a `kind` (`field`, `ingredient_added`,
 `ingredient_removed`, `ingredient_changed`, `step_added`, `step_removed`,
 `step_changed`) with `field`/`from`/`to` or the `ingredient`/`step` involved and
-its `previousIngredient`/`previousStep`.
+its `previousIngredient`/`previousStep`. Water changes are `field` changes: `water`
+when it was added or removed (values are the target's name), otherwise
+`water.target`, `water.volumeLitres` and one `water.<salt>` per salt whose
+grams changed.
+
+**Recipe water.** `water` on `POST`/`PUT /api/recipes` (and the `recipe` of
+`POST /api/recipes/import`) is `null` or the target profile in ppm, the salts in
+grams, and the total water they are for in litres; `PUT` with `"water": null`
+removes it:
+```json
+{
+  "water": {
+    "target": { "presetId": "burton", "name": "Burton on Trent",
+      "profile": { "calcium": 270, "magnesium": 41, "sodium": 113, "sulfate": 720, "chloride": 85, "bicarbonate": 270 } },
+    "salts": { "gypsum": 4, "calciumChloride": 1, "epsom": 0, "tableSalt": 0, "bakingSoda": 0 },
+    "volumeLitres": 28.4
+  }
+}
+```
+`presetId` names a water calculator preset (`null` for your own target); the
+ions are kept with the recipe either way.
 
 **Recipe versions.** A recipe's `variants` is `null` for an ordinary recipe, or
 a list drawn from `lme` | `dme` | `all_grain` when it can be brewed more than
@@ -1436,7 +1477,9 @@ Draft ingredients may have a `null` `amount`, `unit` or `use` where the sheet
 does not state one; fill those in before posting to `/api/recipes/import`.
 `400` means the body is not a PDF or is too large. `422` means it is a PDF that
 could not be read as a kit sheet, with a `code` of `no_text` (a scan),
-`unrecognized_sheet` or `unreadable_pdf`.
+`unrecognized_sheet` or `unreadable_pdf`. `503` with `pdf_engine_unavailable` means the
+server could not load its PDF reader at all, most often because its Node.js is
+older than 22.
 
 ---
 
@@ -1721,6 +1764,7 @@ Each of these follows the same `GET`/`PUT` pattern, returning and accepting the 
 | `/api/settings/reading-retention` | `{ "days": 0 \| 90 \| 180 \| 365 \| 730 \| null }` | Nightly, deletes readings older than N days that belong to packaged sessions, and sensor readings not tied to any session; `0`/`null` keeps forever |
 | `/api/settings/brewery-name` | `{ "name": string \| null }` | Shown in the UI header |
 | `/api/settings/default-readings-shown` | `{ "count": 5 \| 10 \| 25 \| 50 \| 100 }` | Default number of readings shown on a fresh fermentation chart |
+| `/api/settings/brew-layout` | `{ "order": ["water", "dryHops", "tasting", …], "hidden": ["heatingCooling"] }` | The brew page's cards top to bottom, and the ones hidden. Sections: `water`, `dryHops`, `tasting`, `recipeAsBrewed`, `stageHistory`, `tempControl`, `heatingCooling`, `telemetry`, `sensors`, `sensorReadings`, `fermentationChart`, `referenceCharts`, `readings`. An unknown section is a `400`; one left out of `order` keeps its default place, so `GET` always lists all of them |
 | `/api/settings/ferment-temp-unit` | `{ "unit": "F" \| "C" }` | Unit used for fermentation temperature thresholds/readings |
 | `/api/settings/temp-alert-readings` | `{ "count": 2..10 }` | Consecutive out-of-range readings required before a temperature alert fires |
 | `/api/settings/source-water` | `{ "profile": { "calcium": 30, "magnesium": 8, "sodium": 12, "sulfate": 25, "chloride": 20, "bicarbonate": 90, "name": "Tap" } \| null }` | Your tap water in ppm, used to prefill the water calculator. Each ion is 0–2000; `name` is optional. `null` clears it, and `GET` returns `null` until one is saved |
@@ -1744,7 +1788,8 @@ are described under [Webhooks & alert payloads](#webhooks--alert-payloads).
 | PATCH | `/api/sensors/devices/:id/assign` | Change the device's role on its current brew — body `{ "role": "fermenter" \| "reference" }`. Switching to `reference` removes its rows from that brew's fermentation readings (its own sensor readings stay). 409 if the device isn't on a brew |
 | DELETE | `/api/sensors/devices/:id/assign` | Unassign a device from its current brew session |
 | GET | `/api/sensors/devices/:id/readings` | List raw readings for a device — query param `limit` (default 100, max 500) |
-| GET | `/api/brew-sessions/:id/sensor-telemetry` | Live telemetry for a brew from its fermenter sensors: device info, latest reading, fermentation insights, alerts, `tempRange`, plus `referenceSensors` (each reference sensor's device, connection status and readings) |
+| GET | `/api/brew-sessions/:id/sensor-telemetry` | Live telemetry for a brew from its fermenter sensors: device info, latest reading, fermentation insights, alerts, `tempRange`, `tempSensorId` and `tempReading` (the sensor the brew's temperature comes from, null for all, and its latest reading), plus `referenceSensors` (each reference sensor's device, connection status and readings) |
+| PUT | `/api/brew-sessions/:id/temp-sensor` | `{ "sensorDeviceId": number \| null }`: which fermenter sensor gives the brew's temperature for its chart, telemetry and temperature alerts; `null` for every fermenter sensor. `409` if the sensor isn't a fermenter sensor on the brew. Cleared when that sensor leaves the brew or becomes a reference. The brew session's `tempSensorId` holds the choice |
 | GET | `/api/brew-sessions/:id/relay-runs` | How long relays ran for a brew: `runs` (each with `outputDeviceId`, `deviceName`, `mode` `heat`/`cool`/null, `startedAt`, `endedAt`, null while still on), and `hasRelays` |
 
 **POST /api/sensors/devices** body — `deviceName` and `deviceKey` are required:

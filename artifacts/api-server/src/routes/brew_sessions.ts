@@ -9,6 +9,7 @@ import {
   UpsertBrewRatingBody,
   ControlBoilBody,
   MarkDryHopAddedParams,
+  SetBrewTempSensorBody,
 } from "@workspace/api-zod";
 import type { Request, Response } from "express";
 import { boilPhase } from "../lib/boilTimer";
@@ -115,6 +116,39 @@ router.get("/brew-sessions/:id", async (req, res) => {
 });
 
 // The recipe as this batch was brewed, and what has changed in it since.
+// ── PUT /brew-sessions/:id/temp-sensor ────────────────────────────────────
+// Which fermenter sensor the brew's temperature comes from; null for all.
+router.put("/brew-sessions/:id/temp-sensor", async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === undefined) return;
+  const body = SetBrewTempSensorBody.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "sensorDeviceId must be a sensor id or null" });
+
+  const [existing] = await db.select({ id: brewSessionsTable.id }).from(brewSessionsTable).where(eq(brewSessionsTable.id, id));
+  if (!existing) return res.status(404).json({ error: "Brew session not found" });
+
+  const sensorDeviceId = body.data.sensorDeviceId ?? null;
+  if (sensorDeviceId != null) {
+    const [onBrew] = await db
+      .select({ id: sensorDeviceBrewAssignmentsTable.id })
+      .from(sensorDeviceBrewAssignmentsTable)
+      .where(and(
+        eq(sensorDeviceBrewAssignmentsTable.deviceId, sensorDeviceId),
+        eq(sensorDeviceBrewAssignmentsTable.brewSessionId, id),
+        isNull(sensorDeviceBrewAssignmentsTable.unassignedAt),
+        eq(sensorDeviceBrewAssignmentsTable.role, "fermenter"),
+      ));
+    if (!onBrew) return res.status(409).json({ error: "That sensor isn't a fermenter sensor on this brew" });
+  }
+
+  const [session] = await db
+    .update(brewSessionsTable)
+    .set({ tempSensorId: sensorDeviceId, updatedAt: new Date() })
+    .where(eq(brewSessionsTable.id, id))
+    .returning();
+  return res.json(withoutSnapshot(session!));
+});
+
 // ── GET /brew-sessions/:id/relay-runs ─────────────────────────────────────
 router.get("/brew-sessions/:id/relay-runs", async (req, res) => {
   const id = parseIdParam(req, res);

@@ -1535,6 +1535,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/BrewSensorTelemetry"
 
+  /brew-sessions/{id}/temp-sensor:
+    put:
+      operationId: setBrewTempSensor
+      tags: [brew-sessions]
+      summary: Choose which fermenter sensor the brew's temperature comes from
+      description: >-
+        With several fermenter sensors on a brew (say an iSpindel and a Shelly
+        probe), each sends its own temperature. The chosen one alone draws the
+        chart's temperature line, fills the telemetry temperature and is
+        checked for temperature alerts; gravity still comes from every sensor,
+        and manual readings always show. `null` goes back to every fermenter
+        sensor. The choice is cleared when that sensor leaves the brew.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetBrewTempSensorBody"
+      responses:
+        "200":
+          description: The updated brew session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrewSession"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The sensor isn't a fermenter sensor on this brew
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /brew-sessions/{id}/relay-runs:
     get:
       operationId: getBrewRelayRuns
@@ -3930,6 +3976,13 @@ components:
           type: boolean
           nullable: true
           description: "null = use global setting, true = always auto-advance, false = always manual"
+        tempSensorId:
+          type: integer
+          nullable: true
+          description: >-
+            The fermenter sensor whose temperature the brew goes by on its
+            chart, telemetry and temperature alerts. Null means every fermenter
+            sensor. Set with PUT /brew-sessions/{id}/temp-sensor.
         tastingNotes:
           type: string
           nullable: true
@@ -5197,11 +5250,33 @@ components:
           nullable: true
         isDeviceActive:
           type: boolean
+        tempSensorId:
+          type: integer
+          nullable: true
+          description: >-
+            The sensor the brew's temperature comes from, when one was chosen
+            and is among the fermenter readings; null means every fermenter
+            sensor.
+        tempReading:
+          $ref: "#/components/schemas/SensorReading"
+          nullable: true
+          description: >-
+            The latest reading that gives the brew's temperature: from the
+            chosen sensor, or the latest reading when none is chosen.
         referenceSensors:
           type: array
           items:
             $ref: "#/components/schemas/BrewReferenceSensor"
       required: [brewSessionId, readings, alerts, referenceSensors]
+
+    SetBrewTempSensorBody:
+      type: object
+      properties:
+        sensorDeviceId:
+          type: integer
+          nullable: true
+          description: A fermenter sensor on the brew, or null for every fermenter sensor.
+      required: [sensorDeviceId]
 
     ISpindelPayload:
       type: object

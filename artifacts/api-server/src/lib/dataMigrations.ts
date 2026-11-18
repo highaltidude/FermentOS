@@ -92,6 +92,10 @@ export async function migrateLegacyStatuses(): Promise<void> {
   // existing recipe.
   await db.execute(sql`ALTER TABLE recipes ADD COLUMN IF NOT EXISTS water jsonb`);
 
+  // ── A brew's temperature sensor ───────────────────────────────────────
+  // Null is "every fermenter sensor", what every existing brew already does.
+  await db.execute(sql`ALTER TABLE brew_sessions ADD COLUMN IF NOT EXISTS temp_sensor_id integer`);
+
   // ── Lifecycle simplification (v2) ─────────────────────────────────────
   // Old stages: planned → scheduled → brewing → fermenting → conditioning
   //             → packaged → complete

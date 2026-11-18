@@ -1449,6 +1449,11 @@ export interface BrewSession {
    * @nullable
    */
   autoAdvanceToConditioning?: boolean | null;
+  /**
+   * The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.
+   * @nullable
+   */
+  tempSensorId?: number | null;
   /** @nullable */
   tastingNotes?: string | null;
   /** @nullable */
@@ -2343,7 +2348,22 @@ export interface BrewSensorTelemetry {
   alerts: SensorAlert[];
   tempRange?: BrewTempRange | null;
   isDeviceActive?: boolean;
+  /**
+   * The sensor the brew's temperature comes from, when one was chosen and is among the fermenter readings; null means every fermenter sensor.
+   * @nullable
+   */
+  tempSensorId?: number | null;
+  /** The latest reading that gives the brew's temperature: from the chosen sensor, or the latest reading when none is chosen. */
+  tempReading?: SensorReading | null;
   referenceSensors: BrewReferenceSensor[];
+}
+
+export interface SetBrewTempSensorBody {
+  /**
+   * A fermenter sensor on the brew, or null for every fermenter sensor.
+   * @nullable
+   */
+  sensorDeviceId: number | null;
 }
 
 export interface ISpindelPayload {

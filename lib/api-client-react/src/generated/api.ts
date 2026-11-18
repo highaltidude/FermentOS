@@ -96,6 +96,7 @@ import type {
   SensorDevice,
   SensorDeviceWithStatus,
   SensorReading,
+  SetBrewTempSensorBody,
   SetOutputDeviceRelayBody,
   SetSensorRoleBody,
   SimulateISpindelReading200,
@@ -8126,6 +8127,125 @@ export function useGetBrewSensorTelemetry<
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+export const getSetBrewTempSensorUrl = (id: number) => {
+  return `/api/brew-sessions/${id}/temp-sensor`;
+};
+
+/**
+ * With several fermenter sensors on a brew (say an iSpindel and a Shelly probe), each sends its own temperature. The chosen one alone draws the chart's temperature line, fills the telemetry temperature and is checked for temperature alerts; gravity still comes from every sensor, and manual readings always show. `null` goes back to every fermenter sensor. The choice is cleared when that sensor leaves the brew.
+ * @summary Choose which fermenter sensor the brew's temperature comes from
+ */
+export const setBrewTempSensor = async (
+  id: number,
+  setBrewTempSensorBody: SetBrewTempSensorBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<BrewSession> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<BrewSession>(getSetBrewTempSensorUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(setBrewTempSensorBody),
+  });
+};
+
+export const getSetBrewTempSensorMutationKey = () =>
+  ["setBrewTempSensor"] as const;
+
+export const getSetBrewTempSensorMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setBrewTempSensor>>,
+    TError,
+    SetBrewTempSensorMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setBrewTempSensor>>,
+  TError,
+  SetBrewTempSensorMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSetBrewTempSensorMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setBrewTempSensor>>,
+    SetBrewTempSensorMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setBrewTempSensor(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetBrewTempSensorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setBrewTempSensor>>
+>;
+export type SetBrewTempSensorMutationBody = BodyType<SetBrewTempSensorBody>;
+export type SetBrewTempSensorMutationError = ErrorType<ErrorResponse>;
+export type SetBrewTempSensorMutationVariables = {
+  id: number;
+  data: BodyType<SetBrewTempSensorBody>;
+};
+
+/**
+ * @summary Choose which fermenter sensor the brew's temperature comes from
+ */
+export const useSetBrewTempSensor = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setBrewTempSensor>>,
+    TError,
+    SetBrewTempSensorMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setBrewTempSensor>>,
+  TError,
+  SetBrewTempSensorMutationVariables,
+  TContext
+> => {
+  return useMutation(getSetBrewTempSensorMutationOptions(options));
+};
 
 export const getGetBrewRelayRunsUrl = (id: number) => {
   return `/api/brew-sessions/${id}/relay-runs`;

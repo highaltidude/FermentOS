@@ -437,11 +437,15 @@ export default function BrewSessionDetail() {
   if (isLoading) return <div className="p-6"><Skeleton className="h-8 w-48 mb-4" /><Skeleton className="h-64 w-full" /></div>;
   if (!session) return <div className="p-6 text-muted-foreground">Session not found.</div>;
 
+  // With a temperature sensor chosen (and still among the fermenter readings,
+  // which the server checks), only its temperatures and hand-entered ones are
+  // drawn; other sensors still add their gravity.
+  const tempFrom = telemetry?.tempSensorId ?? null;
   const chartData = (session.readings ?? []).map((r) => ({
     date: formatDateTime(r.readingAt),
-    temp: r.temperatureFahrenheit,
+    temp: tempFrom == null || r.source === "manual" || r.sensorDeviceId === tempFrom ? r.temperatureFahrenheit : null,
     gravity: r.gravity,
-  }));
+  })).filter((p) => p.temp != null || p.gravity != null);
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
@@ -930,14 +934,23 @@ export default function BrewSessionDetail() {
                           <p className="text-base font-semibold text-blue-700 dark:text-blue-400">{Number(telemetry.latestReading.gravity).toFixed(3)}</p>
                         </div>
                       )}
-                      {telemetry.latestReading.temperature != null && (
-                        <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
-                          <p className="text-xs text-muted-foreground">Temperature</p>
-                          <p className="text-base font-semibold text-amber-700 dark:text-amber-400">
-                            {formatSensorTemp(telemetry.latestReading.temperature, telemetry.latestReading.temperatureUnit, tempUnit)}
-                          </p>
-                        </div>
-                      )}
+                      {(() => {
+                        // The brew's temperature: the chosen sensor's latest, or the latest reading.
+                        const tr = telemetry.tempReading ?? telemetry.latestReading;
+                        if (tr?.temperature == null) return null;
+                        const from = telemetry.tempSensorId != null
+                          ? sensorDevices?.find((d) => d.device.id === telemetry.tempSensorId)?.device.deviceName
+                          : undefined;
+                        return (
+                          <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
+                            <p className="text-xs text-muted-foreground">Temperature</p>
+                            <p className="text-base font-semibold text-amber-700 dark:text-amber-400">
+                              {formatSensorTemp(tr.temperature, tr.temperatureUnit, tempUnit)}
+                            </p>
+                            {from && <p className="text-xs text-muted-foreground truncate">{from}</p>}
+                          </div>
+                        );
+                      })()}
                       {telemetry.latestReading.battery != null && (
                         <div className="bg-muted/40 rounded-lg px-3 py-2 text-center">
                           <p className="text-xs text-muted-foreground">Battery</p>
@@ -1022,7 +1035,7 @@ export default function BrewSessionDetail() {
           ),
           sensors: (
             <>
-              {sensorDevices && <BrewSensorsCard brewSessionId={id} sensors={sensorDevices} unit={tempUnit} />}
+              {sensorDevices && <BrewSensorsCard brewSessionId={id} sensors={sensorDevices} unit={tempUnit} tempSensorId={session.tempSensorId ?? null} />}
             </>
           ),
           sensorReadings: (

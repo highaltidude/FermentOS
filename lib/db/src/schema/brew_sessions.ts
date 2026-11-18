@@ -115,6 +115,11 @@ export const brewSessionsTable = pgTable("brew_sessions", {
   conditionTempMax: real("condition_temp_max"),
   conditionTempIdeal: real("condition_temp_ideal"),
   autoAdvanceToConditioning: boolean("auto_advance_to_conditioning"),
+  // The fermenter sensor whose temperature the brew goes by (chart, telemetry,
+  // temperature alerts) when several are on it. Null: every fermenter sensor.
+  // Not a foreign key: a sensor that has gone, or left the brew's fermenter
+  // readings, simply falls back to every sensor (see lib/tempSource.ts).
+  tempSensorId: integer("temp_sensor_id"),
   tastingNotes: text("tasting_notes"),
   photoPath: text("photo_path"),
   // Boil timer. Stored as timestamps rather than a remaining count so every

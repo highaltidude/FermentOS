@@ -158,6 +158,12 @@ export const GetDashboardSummaryResponse = zod.object({
         .describe(
           "null = use global setting, true = always auto-advance, false = always manual",
         ),
+      tempSensorId: zod
+        .int()
+        .nullish()
+        .describe(
+          "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+        ),
       tastingNotes: zod.string().nullish(),
       photoPath: zod.string().nullish(),
       boilMinutes: zod
@@ -3438,6 +3444,12 @@ export const ListBrewSessionsResponseItem = zod.object({
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
     ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   boilMinutes: zod
@@ -3661,6 +3673,12 @@ export const CreateBrewSessionResponse = zod.object({
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
     ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   boilMinutes: zod
@@ -3830,6 +3848,12 @@ export const GetBrewSessionResponse = zod
       .nullish()
       .describe(
         "null = use global setting, true = always auto-advance, false = always manual",
+      ),
+    tempSensorId: zod
+      .int()
+      .nullish()
+      .describe(
+        "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
       ),
     tastingNotes: zod.string().nullish(),
     photoPath: zod.string().nullish(),
@@ -4099,6 +4123,12 @@ export const UpdateBrewSessionResponse = zod.object({
     .nullish()
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
+    ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
     ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
@@ -4757,6 +4787,12 @@ export const UpsertBrewRatingResponse = zod.object({
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
     ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
   boilMinutes: zod
@@ -4955,6 +4991,12 @@ export const ControlBoilResponse = zod.object({
     .nullish()
     .describe(
       "null = use global setting, true = always auto-advance, false = always manual",
+    ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
     ),
   tastingNotes: zod.string().nullish(),
   photoPath: zod.string().nullish(),
@@ -6817,6 +6859,40 @@ export const GetBrewSensorTelemetryResponse = zod.object({
     ])
     .optional(),
   isDeviceActive: zod.boolean().optional(),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The sensor the brew's temperature comes from, when one was chosen and is among the fermenter readings; null means every fermenter sensor.",
+    ),
+  tempReading: zod
+    .union([
+      zod.object({
+        id: zod.int(),
+        deviceId: zod.int(),
+        brewSessionId: zod.int().nullish(),
+        gravity: zod.number().nullish(),
+        temperature: zod.number().nullish(),
+        temperatureUnit: zod.string().nullish(),
+        angle: zod.number().nullish(),
+        battery: zod.number().nullish(),
+        batteryPercentEstimate: zod
+          .number()
+          .nullish()
+          .describe(
+            "Estimated battery percentage using a non-linear Li-ion discharge curve (0–100)",
+          ),
+        rssi: zod.int().nullish(),
+        reportedInterval: zod.int().nullish(),
+        rawPayload: zod.record(zod.string(), zod.unknown()).nullish(),
+        receivedAt: zod.iso.datetime({ offset: true }),
+      }),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "The latest reading that gives the brew's temperature: from the chosen sensor, or the latest reading when none is chosen.",
+    ),
   referenceSensors: zod.array(
     zod
       .object({
@@ -6888,6 +6964,191 @@ export const GetBrewSensorTelemetryResponse = zod.object({
         "A sensor on the brew with the reference role, with its own readings.",
       ),
   ),
+});
+
+/**
+ * With several fermenter sensors on a brew (say an iSpindel and a Shelly probe), each sends its own temperature. The chosen one alone draws the chart's temperature line, fills the telemetry temperature and is checked for temperature alerts; gravity still comes from every sensor, and manual readings always show. `null` goes back to every fermenter sensor. The choice is cleared when that sensor leaves the brew.
+ * @summary Choose which fermenter sensor the brew's temperature comes from
+ */
+export const SetBrewTempSensorParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const SetBrewTempSensorBody = zod.object({
+  sensorDeviceId: zod
+    .int()
+    .nullable()
+    .describe(
+      "A fermenter sensor on the brew, or null for every fermenter sensor.",
+    ),
+});
+
+export const setBrewTempSensorResponseAppearanceAromaScoreMax = 5;
+
+export const setBrewTempSensorResponseFlavorBalanceScoreMax = 5;
+
+export const setBrewTempSensorResponseMouthfeelScoreMax = 5;
+
+export const setBrewTempSensorResponseOverallScoreMax = 10;
+
+export const SetBrewTempSensorResponse = zod.object({
+  id: zod.int(),
+  recipeId: zod.int().nullish(),
+  recipeName: zod.string(),
+  recipeVariant: zod
+    .union([
+      zod
+        .enum(["lme", "dme", "all_grain"])
+        .describe("A version a kit recipe can be brewed as."),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Which version of a multi-version recipe this batch was brewed as.",
+    ),
+  status: zod.enum(["brew_day", "fermenting", "conditioning", "packaged"]),
+  brewDate: zod.iso.date(),
+  plannedDate: zod.iso
+    .date()
+    .nullish()
+    .describe(
+      "Originally intended brew date. Set when a scheduled session is started so brewDate can hold the actual date.",
+    ),
+  packagedDate: zod.iso.date().nullish(),
+  packagingMethod: zod
+    .union([zod.literal("keg"), zod.literal("bottle"), zod.literal(null)])
+    .nullish()
+    .describe(
+      "How a finished batch was packaged. Null until the batch is packaged.",
+    ),
+  batchSizeGallons: zod.number(),
+  originalGravityActual: zod.number().nullish(),
+  finalGravityActual: zod.number().nullish(),
+  abvActual: zod.number().nullish(),
+  appearanceAromaScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseAppearanceAromaScoreMax)
+    .nullish(),
+  flavorBalanceScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseFlavorBalanceScoreMax)
+    .nullish(),
+  mouthfeelScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseMouthfeelScoreMax)
+    .nullish(),
+  overallScore: zod
+    .int()
+    .min(1)
+    .max(setBrewTempSensorResponseOverallScoreMax)
+    .nullish()
+    .describe(
+      "Overall enjoyment, 1-10. The canonical score that rolls up to the recipe.",
+    ),
+  offFlavors: zod
+    .array(
+      zod
+        .enum([
+          "diacetyl",
+          "acetaldehyde",
+          "dms",
+          "phenolic",
+          "oxidized",
+          "astringent",
+          "sour",
+          "solvent",
+          "sulfur",
+          "light_struck",
+        ])
+        .describe(
+          'Common homebrew off-flavor. "None" is an empty offFlavors array rather than a member here.',
+        ),
+    )
+    .nullish(),
+  brewAgain: zod
+    .union([
+      zod.literal("as_is"),
+      zod.literal("with_tweaks"),
+      zod.literal("no"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  ratedAt: zod.iso
+    .datetime({ offset: true })
+    .nullish()
+    .describe(
+      'Set whenever the scorecard is saved. Distinguishes "never rated" from a partially filled card.',
+    ),
+  notes: zod.string().nullish(),
+  fermentTempMin: zod
+    .number()
+    .nullish()
+    .describe("Minimum fermentation temperature threshold"),
+  fermentTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum fermentation temperature threshold"),
+  fermentTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal fermentation temperature target"),
+  conditionTempMin: zod
+    .number()
+    .nullish()
+    .describe(
+      "Minimum conditioning temperature threshold. When no conditioning range is set, temperature alerts are off while conditioning.",
+    ),
+  conditionTempMax: zod
+    .number()
+    .nullish()
+    .describe("Maximum conditioning temperature threshold"),
+  conditionTempIdeal: zod
+    .number()
+    .nullish()
+    .describe("Ideal conditioning temperature target"),
+  autoAdvanceToConditioning: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "null = use global setting, true = always auto-advance, false = always manual",
+    ),
+  tempSensorId: zod
+    .int()
+    .nullish()
+    .describe(
+      "The fermenter sensor whose temperature the brew goes by on its chart, telemetry and temperature alerts. Null means every fermenter sensor. Set with PUT /brew-sessions/{id}/temp-sensor.",
+    ),
+  tastingNotes: zod.string().nullish(),
+  photoPath: zod.string().nullish(),
+  boilMinutes: zod
+    .int()
+    .nullish()
+    .describe("Planned boil length. Null until a boil is started."),
+  boilStartedAt: zod.iso.datetime({ offset: true }).nullish(),
+  boilPausedAt: zod.iso
+    .datetime({ offset: true })
+    .nullish()
+    .describe("Set while the boil timer is paused."),
+  boilPausedMs: zod
+    .int()
+    .nullish()
+    .describe("Milliseconds spent paused before the current pause, if any."),
+  boilEndedAt: zod.iso.datetime({ offset: true }).nullish(),
+  boilDoneAdditionIds: zod
+    .array(zod.int())
+    .nullish()
+    .describe("Recipe ingredient ids ticked off during the boil."),
+  dryHopAddedIds: zod
+    .array(zod.int())
+    .nullish()
+    .describe(
+      "Recipe ingredient ids of dry hops marked as added. Each one clears its reminder.",
+    ),
+  createdAt: zod.iso.datetime({ offset: true }),
+  updatedAt: zod.iso.datetime({ offset: true }),
 });
 
 /**

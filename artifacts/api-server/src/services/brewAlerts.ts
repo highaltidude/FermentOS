@@ -10,6 +10,7 @@ import { getConfigValue } from "./appConfig";
 import { activeTempPhase } from "../lib/alertPolicy";
 import { isGravityStalled } from "../lib/gravityStall";
 import { tempExcursion, type TempRange } from "../lib/tempExcursion";
+import { effectiveTempSensor } from "../lib/tempSource";
 
 export { tempExcursion, type TempRange, type TempReadingLike, type TempExcursion } from "../lib/tempExcursion";
 
@@ -109,10 +110,11 @@ const RANGE_COLUMNS = {
  * which switches temperature alerts off — so a batch in conditioning with no
  * conditioning range is simply not checked.
  */
-async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | null; range: TempRange; originalGravity: number | null }> {
+async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | null; range: TempRange; originalGravity: number | null; tempSensorId: number | null }> {
   const [session] = await db.select().from(brewSessionsTable).where(eq(brewSessionsTable.id, brewId));
-  if (!session) return { status: null, range: null, originalGravity: null };
+  if (!session) return { status: null, range: null, originalGravity: null, tempSensorId: null };
   const originalGravity = session.originalGravityActual ?? null;
+  const tempSensorId = session.tempSensorId ?? null;
 
   const phase = activeTempPhase(session.status);
   const cols = RANGE_COLUMNS[phase];
@@ -129,9 +131,9 @@ async function resolveTempRange(brewId: number): Promise<{ status: BrewStatus | 
     }
   }
 
-  if (min == null && max == null && ideal == null) return { status: session.status, range: null, originalGravity };
+  if (min == null && max == null && ideal == null) return { status: session.status, range: null, originalGravity, tempSensorId };
   const unit = (await getConfigValue("ferment_temp_unit")) === "C" ? "C" : "F";
-  return { status: session.status, range: { min, max, ideal, unit, phase }, originalGravity };
+  return { status: session.status, range: { min, max, ideal, unit, phase }, originalGravity, tempSensorId };
 }
 
 export type BrewTelemetry = {
@@ -148,6 +150,10 @@ export type BrewTelemetry = {
   status?: BrewStatus | null;
   /** False when the brew has no assignment history at all. */
   hasAssignments: boolean;
+  /** The sensor the brew's temperature comes from; null for every fermenter sensor. */
+  tempSensorId?: number | null;
+  /** The latest reading that gives the brew's temperature. */
+  tempReading?: Reading | null;
   /** Sensors on the brew with the reference role, each with its own readings. */
   referenceSensors: ReferenceSensor[];
 };
@@ -250,8 +256,15 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
   const readings = await readingsInWindows(assignments);
 
   const latestReading = readings[readings.length - 1] ?? null;
-  const { status, range: tempRange, originalGravity } = await resolveTempRange(brewId);
+  const { status, range: tempRange, originalGravity, tempSensorId: chosen } = await resolveTempRange(brewId);
   const insights = calcInsights(readings, originalGravity);
+
+  // With a sensor chosen, the brew's temperature is that sensor's latest;
+  // otherwise it is whichever fermenter sensor reported last, as it always was.
+  const tempSensorId = effectiveTempSensor(readings, chosen, (r) => r.deviceId);
+  const tempReading = tempSensorId == null
+    ? latestReading
+    : [...readings].reverse().find((r) => r.deviceId === tempSensorId && r.temperature != null) ?? null;
 
   const activeIds = [...new Set(assignments.filter((a) => a.unassignedAt == null).map((a) => a.deviceId))];
   const connectionStatus = activeIds.length > 1
@@ -263,6 +276,8 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
   const batteryReading = [...readings].reverse().find((r) => r.batteryPercentEstimate != null && (activeIds.length === 0 || activeIds.includes(r.deviceId)));
   const alertReading = latestReading && {
     ...latestReading,
+    temperature: tempReading?.temperature ?? null,
+    temperatureUnit: tempReading?.temperatureUnit ?? null,
     battery: batteryReading?.battery ?? null,
     batteryPercentEstimate: batteryReading?.batteryPercentEstimate ?? null,
   };
@@ -273,5 +288,8 @@ export async function computeBrewAlerts(brewId: number): Promise<BrewTelemetry> 
     alerts.push({ type: "gravity_stalled", message: "Gravity unchanged for 24+ hours", triggeredAt: new Date().toISOString() });
   }
 
-  return { brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, status, hasAssignments: true, referenceSensors };
+  return {
+    brewSessionId: brewId, device: device ?? null, latestReading, readings, insights, alerts, tempRange, isDeviceActive, status,
+    hasAssignments: true, tempSensorId, tempReading, referenceSensors,
+  };
 }

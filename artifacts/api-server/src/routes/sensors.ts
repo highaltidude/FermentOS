@@ -158,6 +158,8 @@ router.get("/brew-sessions/:id/sensor-telemetry", async (req, res) => {
     alerts: t.alerts,
     tempRange: t.tempRange,
     isDeviceActive: t.isDeviceActive,
+    tempSensorId: t.tempSensorId ?? null,
+    tempReading: t.tempReading ?? null,
     referenceSensors: t.referenceSensors,
   });
 });

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.16.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.16.0-beta1...fermentos-v1.16.0-beta2) (2026-11-18)
+
+
+### Features
+
+* **recipes:** save a water profile on a recipe ([7193b61](https://github.com/highaltidude/FermentOS/commit/7193b61734b5625d897b6c3d5ddaf937929c9883)), closes [#232](https://github.com/highaltidude/FermentOS/issues/232)
+* **sensors:** choose which sensor a brew takes its temperature from ([4160919](https://github.com/highaltidude/FermentOS/commit/4160919ad02325152207b93e879c894c5cdb6da2))
+* **settings:** set the order of the brew page's cards and hide the ones you don't use ([0ec397c](https://github.com/highaltidude/FermentOS/commit/0ec397ce23e0a17d407d6c043588517fd1325853))
+
+
+### Bug Fixes
+
+* **system:** stop updates on Node.js older than 22 and report a PDF reader that won't load as a server fault ([8576997](https://github.com/highaltidude/FermentOS/commit/8576997fb592b4c919ff48cdf45adb386ae2b107))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

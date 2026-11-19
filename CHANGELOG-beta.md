@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.17.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.17.0-beta1...fermentos-v1.17.0-beta2) (2026-11-19)
+
+
+### Features
+
+* **recipes:** import recipes from BeerXML files ([4bca474](https://github.com/highaltidude/FermentOS/commit/4bca4743607f2f38f193c759636470af9755356a))
+
+
+### Bug Fixes
+
+* **sensors:** index sensor readings and share Home Assistant status polls ([8da41ae](https://github.com/highaltidude/FermentOS/commit/8da41aedff4055f25e4f548a47b21659482e47f6))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

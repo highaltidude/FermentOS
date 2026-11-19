@@ -986,7 +986,7 @@ service, so it does not work for Docker. The endpoint reference is under
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown |
+| GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown. Requests within 10 seconds of each other share one response, so several REST sensors polling it cost no more than one. |
 
 If you already run Home Assistant, you can build notification automations on
 this endpoint instead of using FermentOS's own notifications. Each device's

@@ -96,6 +96,14 @@ export async function migrateLegacyStatuses(): Promise<void> {
   // Null is "every fermenter sensor", what every existing brew already does.
   await db.execute(sql`ALTER TABLE brew_sessions ADD COLUMN IF NOT EXISTS temp_sensor_id integer`);
 
+  // ── Sensor reading lookups ────────────────────────────────────────────
+  // Same self-healing rationale. Readings are always read per device by
+  // time; without this index a long-running install scans the whole table
+  // on every poll. Same name as the schema's, so drizzle-kit push agrees.
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS sensor_readings_device_received_idx ON sensor_readings (device_id, received_at)`,
+  );
+
   // ── Lifecycle simplification (v2) ─────────────────────────────────────
   // Old stages: planned → scheduled → brewing → fermenting → conditioning
   //             → packaged → complete

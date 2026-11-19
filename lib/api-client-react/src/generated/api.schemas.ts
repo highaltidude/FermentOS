@@ -1273,6 +1273,7 @@ export type KitSheetDraftSource =
 export const KitSheetDraftSource = {
   morebeer: "morebeer",
   northern_brewer: "northern_brewer",
+  beerxml: "beerxml",
 } as const;
 
 export type KitSheetDraftStats = {
@@ -1301,6 +1302,11 @@ export type KitSheetDraftHints = {
   /** @nullable */
   fermentTempMaxF: number | null;
   /**
+   * A target inside the range, when the source names one (BeerXML's primary temperature).
+   * @nullable
+   */
+  fermentTempIdealF?: number | null;
+  /**
    * The sheet's suggested primary fermentation, in days.
    * @nullable
    */
@@ -1317,6 +1323,23 @@ export type KitSheetDraftHints = {
 export interface KitSheetDraft {
   source: KitSheetDraftSource;
   name: string;
+  /**
+   * The style the file names. BeerXML only; kit sheets print none.
+   * @nullable
+   */
+  style?: string | null;
+  /**
+   * BeerXML only.
+   * @nullable
+   */
+  finalGravity?: number | null;
+  /**
+   * Brewhouse efficiency. BeerXML only.
+   * @nullable
+   */
+  efficiencyPercent?: number | null;
+  /** Mash and boil steps. BeerXML only; kit sheets leave this out. */
+  steps?: CreateRecipeStepBody[];
   /**
    * The sheet's blurb about the beer, when it has one.
    * @nullable
@@ -1353,6 +1376,24 @@ export const KitSheetParseErrorCode = {
 export interface KitSheetParseError {
   error: string;
   code: KitSheetParseErrorCode;
+}
+
+export interface BeerXmlParseResult {
+  recipes: KitSheetDraft[];
+}
+
+export type BeerXmlParseErrorCode =
+  (typeof BeerXmlParseErrorCode)[keyof typeof BeerXmlParseErrorCode];
+
+export const BeerXmlParseErrorCode = {
+  not_xml: "not_xml",
+  unreadable_xml: "unreadable_xml",
+  no_recipes: "no_recipes",
+} as const;
+
+export interface BeerXmlParseError {
+  error: string;
+  code: BeerXmlParseErrorCode;
 }
 
 export interface BrewSession {

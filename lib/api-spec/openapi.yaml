@@ -269,6 +269,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/KitSheetParseError"
 
+  /recipes/import/beerxml/parse:
+    post:
+      operationId: parseBeerXml
+      tags: [recipes]
+      summary: Read a BeerXML file into recipe drafts
+      description: >-
+        Send the BeerXML 1.0 file as the raw request body. A file can hold
+        several recipes; each comes back as its own draft, in the order the
+        file lists them. Amounts are converted to the configured unit system.
+        Nothing is saved: the chosen draft is reviewed and then posted to
+        /recipes/import.
+      requestBody:
+        required: true
+        content:
+          # The file as-is, bytes and all: its own declaration names its encoding.
+          application/xml:
+            schema:
+              type: string
+              format: binary
+          text/xml:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Parsed drafts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BeerXmlParseResult"
+        "400":
+          description: The body is empty, or is too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Not XML, not readable, or no recipes in it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BeerXmlParseError"
+
   /recipes/{id}:
     get:
       operationId: getRecipe
@@ -3779,9 +3822,26 @@ components:
       properties:
         source:
           type: string
-          enum: [morebeer, northern_brewer]
+          enum: [morebeer, northern_brewer, beerxml]
         name:
           type: string
+        style:
+          type: string
+          nullable: true
+          description: The style the file names. BeerXML only; kit sheets print none.
+        finalGravity:
+          type: number
+          nullable: true
+          description: BeerXML only.
+        efficiencyPercent:
+          type: number
+          nullable: true
+          description: Brewhouse efficiency. BeerXML only.
+        steps:
+          type: array
+          description: Mash and boil steps. BeerXML only; kit sheets leave this out.
+          items:
+            $ref: "#/components/schemas/CreateRecipeStepBody"
         description:
           type: string
           nullable: true
@@ -3832,6 +3892,10 @@ components:
             fermentTempMaxF:
               type: number
               nullable: true
+            fermentTempIdealF:
+              type: number
+              nullable: true
+              description: A target inside the range, when the source names one (BeerXML's primary temperature).
             primaryDays:
               type: integer
               nullable: true
@@ -3869,6 +3933,25 @@ components:
         code:
           type: string
           enum: [no_text, unrecognized_sheet, unreadable_pdf, pdf_engine_unavailable]
+      required: [error, code]
+
+    BeerXmlParseResult:
+      type: object
+      properties:
+        recipes:
+          type: array
+          items:
+            $ref: "#/components/schemas/KitSheetDraft"
+      required: [recipes]
+
+    BeerXmlParseError:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum: [not_xml, unreadable_xml, no_recipes]
       required: [error, code]
 
     BrewSession:

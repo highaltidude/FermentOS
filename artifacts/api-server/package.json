@@ -17,6 +17,7 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
+    "fast-xml-parser": "^5.12.1",
     "multer": "^2.5.0",
     "node-cron": "^4.6.0",
     "pino": "^10.4.0",

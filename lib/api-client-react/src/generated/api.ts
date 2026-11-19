@@ -21,6 +21,8 @@ import type {
   AssignDeviceBody,
   BackupAuditResult,
   BeerStyle,
+  BeerXmlParseError,
+  BeerXmlParseResult,
   BoilControlBody,
   BrewLayout,
   BrewRelayRuns,
@@ -1105,6 +1107,122 @@ export const useParseMorebeerKitSheet = <
   TContext
 > => {
   return useMutation(getParseMorebeerKitSheetMutationOptions(options));
+};
+
+export const getParseBeerXmlUrl = () => {
+  return `/api/recipes/import/beerxml/parse`;
+};
+
+/**
+ * Send the BeerXML 1.0 file as the raw request body. A file can hold several recipes; each comes back as its own draft, in the order the file lists them. Amounts are converted to the configured unit system. Nothing is saved: the chosen draft is reviewed and then posted to /recipes/import.
+ * @summary Read a BeerXML file into recipe drafts
+ */
+export const parseBeerXml = async (
+  parseBeerXmlBody: Blob,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<BeerXmlParseResult> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<BeerXmlParseResult>(getParseBeerXmlUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/xml",
+      ...getHeaders(options?.headers),
+    },
+    body: parseBeerXmlBody,
+  });
+};
+
+export const getParseBeerXmlMutationKey = () => ["parseBeerXml"] as const;
+
+export const getParseBeerXmlMutationOptions = <
+  TError = ErrorType<ErrorResponse | BeerXmlParseError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseBeerXml>>,
+    TError,
+    ParseBeerXmlMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof parseBeerXml>>,
+  TError,
+  ParseBeerXmlMutationVariables,
+  TContext
+> => {
+  const mutationKey = getParseBeerXmlMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof parseBeerXml>>,
+    ParseBeerXmlMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return parseBeerXml(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ParseBeerXmlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseBeerXml>>
+>;
+export type ParseBeerXmlMutationBody = BodyType<Blob>;
+export type ParseBeerXmlMutationError = ErrorType<
+  ErrorResponse | BeerXmlParseError
+>;
+export type ParseBeerXmlMutationVariables = { data: BodyType<Blob> };
+
+/**
+ * @summary Read a BeerXML file into recipe drafts
+ */
+export const useParseBeerXml = <
+  TError = ErrorType<ErrorResponse | BeerXmlParseError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseBeerXml>>,
+    TError,
+    ParseBeerXmlMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof parseBeerXml>>,
+  TError,
+  ParseBeerXmlMutationVariables,
+  TContext
+> => {
+  return useMutation(getParseBeerXmlMutationOptions(options));
 };
 
 export const getGetRecipeUrl = (id: number) => {

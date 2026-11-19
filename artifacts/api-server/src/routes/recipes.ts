@@ -16,6 +16,8 @@ import {
 import { parseIdParam } from "../lib/http";
 import { parseMorebeerKitSheet, type KitSheetParseResult, type PdfPage } from "../lib/morebeerKitSheet";
 import { parseKitSheet } from "../lib/kitSheet";
+import { parseBeerXml } from "../lib/beerXml";
+import { getUnitSystem } from "../services/unitSystem";
 import { normalizeIngredientVariants, normalizeRecipeVariants } from "../lib/recipeVariants";
 import { extractPdfTextItems, PdfEngineUnavailableError } from "../services/pdfText";
 import { isNodeSupported, MIN_NODE_MAJOR } from "../lib/nodeVersion";
@@ -313,6 +315,56 @@ const kitSheetRoute = (parse: (pages: PdfPage[]) => KitSheetParseResult): Reques
 // Works out which supplier the sheet is from.
 router.post("/recipes/import/kit-sheet/parse", readPdfBody, kitSheetRoute(parseKitSheet));
 router.post("/recipes/import/morebeer/parse", readPdfBody, kitSheetRoute(parseMorebeerKitSheet));
+
+const BEERXML_ERRORS = {
+  not_xml: "This is not a BeerXML file. Export the recipe from your brewing software as BeerXML (.xml).",
+  unreadable_xml: "This XML file could not be read. It may be damaged or cut short; try exporting it again.",
+  no_recipes: "This XML file has no recipes in it. Export recipes as BeerXML, not equipment or ingredient lists.",
+} as const;
+
+const BEERXML_MAX_MB = 5;
+// Raw bytes, decoded below: BeerSmith writes ISO-8859-1, which reading the
+// body as UTF-8 would garble.
+const xmlBody = express.raw({ type: ["application/xml", "text/xml"], limit: `${BEERXML_MAX_MB}mb` });
+
+/** The text of an XML file in the encoding its declaration names, UTF-8 when it names none. */
+function decodeXml(buf: Buffer): string {
+  const declared = /^\s*<\?xml[^>]*encoding=["']([\w-]+)["']/i.exec(buf.subarray(0, 200).toString("latin1"))?.[1];
+  try {
+    return new TextDecoder(declared ?? "utf-8").decode(buf);
+  } catch {
+    return buf.toString("utf8");
+  }
+}
+
+const readXmlBody: RequestHandler = (req, res, next) => {
+  xmlBody(req, res, (err?: unknown) => {
+    if (!err) return next();
+    if ((err as { type?: string }).type === "entity.too.large") {
+      res.status(400).json({ error: `That file is too large. The limit is ${BEERXML_MAX_MB} MB.` });
+      return;
+    }
+    next(err);
+  });
+};
+
+// Reads every recipe in the file into a draft. Nothing is saved: the one the
+// brewer picks is reviewed in the browser and comes back through POST /recipes/import.
+router.post("/recipes/import/beerxml/parse", readXmlBody, async (req, res) => {
+  const body: unknown = req.body;
+  if (!Buffer.isBuffer(body) || body.length === 0) {
+    res.status(400).json({ error: "Upload a BeerXML file." });
+    return;
+  }
+  const xml = decodeXml(body);
+  const units = (await getUnitSystem()) === "metric" ? "metric" : "imperial";
+  const result = parseBeerXml(xml, units);
+  if (!result.ok) {
+    res.status(422).json({ error: BEERXML_ERRORS[result.code], code: result.code });
+    return;
+  }
+  res.json({ recipes: result.recipes });
+});
 
 router.get("/recipes/styles", async (req, res) => {
   const rows = await db.select().from(recipesTable);

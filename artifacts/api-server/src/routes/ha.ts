@@ -5,10 +5,29 @@ import { calcConnectionStatus, buildAlerts, computeBrewAlerts } from "../service
 import { alertsForBrew } from "../lib/alertPolicy";
 import { getLatestReading, getActiveAssignment, getBrewName } from "../services/sensorDevices";
 import { calcInsights } from "../lib/fermentationInsights";
+import { sharedResult } from "../lib/sharedResult";
 
 const router = Router();
 
-router.get("/status", async (req, res) => {
+/**
+ * Home Assistant polls this on a timer, often from several REST sensors at
+ * once, so requests arriving within a few seconds of each other share one
+ * build of the response rather than each re-reading every brew's history.
+ */
+const STATUS_TTL_MS = 10_000;
+
+async function buildStatus() {
+  // Several fermenter sensors on one brew share its alert computation.
+  const brewAlerts = new Map<number, ReturnType<typeof computeBrewAlerts>>();
+  const alertsFor = (brewId: number) => {
+    let p = brewAlerts.get(brewId);
+    if (!p) {
+      p = computeBrewAlerts(brewId);
+      brewAlerts.set(brewId, p);
+    }
+    return p;
+  };
+
   const devices = await db
     .select()
     .from(sensorDevicesTable)
@@ -45,7 +64,7 @@ router.get("/status", async (req, res) => {
       // it gets the same device-only alerts.
       let alerts;
       if (activeAssignment && activeAssignment.role === "fermenter") {
-        const telemetry = await computeBrewAlerts(activeAssignment.brewSessionId);
+        const telemetry = await alertsFor(activeAssignment.brewSessionId);
         const status = telemetry.status ?? null;
         alerts = alertsForBrew(telemetry.alerts, {
           status,
@@ -81,7 +100,13 @@ router.get("/status", async (req, res) => {
     }),
   );
 
-  return res.json(results);
+  return results;
+}
+
+const getStatus = sharedResult(STATUS_TTL_MS, buildStatus);
+
+router.get("/status", async (_req, res) => {
+  return res.json(await getStatus());
 });
 
 export default router;

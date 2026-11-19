@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real, integer, timestamp, jsonb, boolean, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, timestamp, jsonb, boolean, unique, index } from "drizzle-orm/pg-core";
 import { brewSessionsTable } from "./brew_sessions";
 
 // Generic sensor device registry — supports iSpindel, Tilt, RAPT Pill, etc.
@@ -37,7 +37,11 @@ export const sensorReadingsTable = pgTable("sensor_readings", {
   reportedInterval: integer("reported_interval"),
   rawPayload: jsonb("raw_payload"),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // Every read of this table is one device's readings by time (latest, or
+  // since an assignment began); without this each is a full-table scan.
+  index("sensor_readings_device_received_idx").on(t.deviceId, t.receivedAt),
+]);
 
 export type SensorReading = typeof sensorReadingsTable.$inferSelect;
 

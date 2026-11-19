@@ -54,7 +54,7 @@ install to a tracked first batch.
 ## Features
 
 - **Recipe manager** — Store your recipes with full ingredient lists and step-by-step instructions, plus gravity targets, ABV, IBU, and color. Ingredients and steps are editable in place, and a recipe starts its own brew session in one click
-- **Kit import** — Upload the recipe PDF from a MoreBeer kit, or the instructions PDF from a Northern Brewer kit, and FermentOS reads the ingredients, hop schedule, stats and suggested yeasts into a recipe for you to check before it is saved. A sheet that covers the LME, DME and All-Grain kits becomes one recipe with three versions; you pick the version each time you brew, and only that version's ingredients are deducted from stock and called on the boil timer
+- **Kit import** — Upload the recipe PDF from a MoreBeer kit, or the instructions PDF from a Northern Brewer kit, and FermentOS reads the ingredients, hop schedule, stats and suggested yeasts into a recipe for you to check before it is saved. A sheet that covers the LME, DME and All-Grain kits becomes one recipe with three versions; you pick the version each time you brew, and only that version's ingredients are deducted from stock and called on the boil timer. BeerXML files from BeerSmith, Brewfather, Brewer's Friend and other brewing software import the same way, mash schedule included
 - **Brew log** — Track every batch from grain to glass through four stages: Brew Day → Fermenting → Conditioning → Packaged, recording whether the finished batch went into a keg or into bottles
 - **Boil timer** — A brew-day countdown that pulls the boil length and hop schedule from the recipe, ticks additions off as you go, and beeps at each addition and at flameout. With alerts set up, your phone gets each addition on time even when it is locked. See [Your first brew](#your-first-brew)
 - **Dry hop reminders** — Give each dry hop a day of conditioning and the recipe gets a Dry Hop Schedule. When a batch reaches that day, your phone is reminded every 6 hours (adjustable) until you mark the addition as added on the brew page. No sensor needed
@@ -217,6 +217,24 @@ sheet's schedule fills in the recipe's days per stage: primary as
 **Fermenting**, secondary as **Conditioning** and bottle conditioning as
 **Packaged**. The steep temperature and priming amounts go into the notes; the
 rest of the walkthrough is the same for every kit and is left out.
+
+Coming from other brewing software? **Recipes → Import** also takes a
+**BeerXML** file (.xml), the format BeerSmith, Brewfather, Brewer's Friend and
+most others export. You check it on the same screen before anything is saved.
+
+- If the file holds several recipes, you pick the one to import. Choose the
+  file again to import another.
+- Amounts are converted to your unit system (**Settings → Brewing → Unit System**). Each yeast
+  comes in as one packet, with its lab and product code in its notes.
+- The file's style is picked when it matches one of yours; otherwise pick one.
+- The mash schedule and the boil come in as recipe steps. The yeast's
+  temperature range becomes the fermentation range, with the recipe's primary
+  temperature as the ideal. Primary, secondary and aging times fill in
+  **Fermenting**, **Conditioning** and **Packaged**.
+- Dry hops come in without a day: BeerXML records how long they stay in, not
+  when they go in, so set the day of conditioning yourself.
+- Water profiles and equipment are not imported; the water profile's name is
+  kept in the notes.
 
 Set the **fermentation temperature range** while you are here. It is optional,
 but it is what lets FermentOS tell you later that a batch is running hot — see
@@ -986,7 +1004,7 @@ service, so it does not work for Docker. The endpoint reference is under
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown |
+| GET | `/api/ha/status` | Status for every enabled sensor device — always exempt from API token lockdown. Requests within 10 seconds of each other share one response, so several REST sensors polling it cost no more than one. |
 
 If you already run Home Assistant, you can build notification automations on
 this endpoint instead of using FermentOS's own notifications. Each device's
@@ -1331,6 +1349,7 @@ response shape, is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
 | POST | `/api/recipes/import` | Create a recipe with its ingredients and steps in one call |
 | POST | `/api/recipes/import/kit-sheet/parse` | Read a MoreBeer or Northern Brewer kit-sheet PDF into a draft (saves nothing) |
 | POST | `/api/recipes/import/morebeer/parse` | The same, for MoreBeer sheets only |
+| POST | `/api/recipes/import/beerxml/parse` | Read every recipe in a BeerXML file into drafts (saves nothing) |
 | GET | `/api/recipes/:id` | Get a recipe with its ingredients, steps, batch rating summary, and fork lineage |
 | PUT | `/api/recipes/:id` | Update a recipe |
 | DELETE | `/api/recipes/:id` | Delete a recipe (its forks move up to its own parent) |
@@ -1480,6 +1499,19 @@ could not be read as a kit sheet, with a `code` of `no_text` (a scan),
 `unrecognized_sheet` or `unreadable_pdf`. `503` with `pdf_engine_unavailable` means the
 server could not load its PDF reader at all, most often because its Node.js is
 older than 22.
+
+**POST /api/recipes/import/beerxml/parse** takes a BeerXML 1.0 file as the
+request body, up to 5 MB, in whatever encoding its XML declaration names:
+```bash
+curl -X POST http://localhost:8080/api/recipes/import/beerxml/parse \
+  -H "Content-Type: application/xml" --data-binary @recipes.xml
+```
+It returns `{ "recipes": [...] }`, one draft per recipe in the file, in the
+same shape as a kit-sheet draft with `source` set to `beerxml`. A BeerXML draft
+also has `style`, `finalGravity`, `efficiencyPercent`, `hints.fermentTempIdealF`
+and `steps` (mash steps and the boil, ready to post as `steps`). Amounts are in
+the server's unit system. `422` has a `code` of `not_xml`, `unreadable_xml`
+(malformed or cut short) or `no_recipes`.
 
 ---
 

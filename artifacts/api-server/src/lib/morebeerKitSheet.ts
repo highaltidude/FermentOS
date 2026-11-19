@@ -47,10 +47,15 @@ export type KitSheetWarning = {
 };
 
 export type KitSheetDraft = {
-  source: "morebeer" | "northern_brewer";
+  source: "morebeer" | "northern_brewer" | "beerxml";
   name: string;
   /** The sheet's blurb about the beer, when it has one. */
   description: string | null;
+  // BeerXML carries these; kit sheets don't, and leave them out.
+  style?: string | null;
+  finalGravity?: number | null;
+  efficiencyPercent?: number | null;
+  steps?: { body: string; phase: "mash" | "boil" | "fermentation" | "conditioning" | "packaging" | "other" | null; durationMinutes: number | null }[];
   variants: RecipeVariant[] | null;
   batchSizeGallons: number;
   batchSizeAssumed: boolean;
@@ -66,6 +71,8 @@ export type KitSheetDraft = {
     mashTempF: number | null;
     fermentTempMinF: number | null;
     fermentTempMaxF: number | null;
+    /** A target inside the range, when the source names one (BeerXML's primary temperature). */
+    fermentTempIdealF?: number | null;
     /** The sheet's suggested schedule, in days. */
     primaryDays: number | null;
     secondaryDays: number | null;

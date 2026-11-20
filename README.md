@@ -227,7 +227,10 @@ most others export. You check it on the same screen before anything is saved.
 - Amounts are converted to your unit system (**Settings → Brewing → Unit System**). Each yeast
   comes in as one packet, with its lab and product code in its notes.
 - The file's style is picked when it matches one of yours; otherwise pick one.
-- The mash schedule and the boil come in as recipe steps. The yeast's
+- The mash schedule and the boil come in as recipe steps, followed by a step
+  for each timed addition: first-wort hops, boil additions by minutes left
+  (several at the same time share a step), whirlpool and dry hops. The
+  ingredients keep their times too, so the boil timer still calls them. The yeast's
   temperature range becomes the fermentation range, with the recipe's primary
   temperature as the ideal. Primary, secondary and aging times fill in
   **Fermenting**, **Conditioning** and **Packaged**.
@@ -1509,7 +1512,7 @@ curl -X POST http://localhost:8080/api/recipes/import/beerxml/parse \
 It returns `{ "recipes": [...] }`, one draft per recipe in the file, in the
 same shape as a kit-sheet draft with `source` set to `beerxml`. A BeerXML draft
 also has `style`, `finalGravity`, `efficiencyPercent`, `hints.fermentTempIdealF`
-and `steps` (mash steps and the boil, ready to post as `steps`). Amounts are in
+and `steps` (mash steps, the boil and its timed additions, whirlpool and dry hops, ready to post as `steps`). Amounts are in
 the server's unit system. `422` has a `code` of `not_xml`, `unreadable_xml`
 (malformed or cut short) or `no_recipes`.
 

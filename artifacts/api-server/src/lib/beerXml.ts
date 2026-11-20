@@ -104,7 +104,11 @@ function volume(l: number, units: BeerXmlUnits): Amount {
 
 // ── Ingredients ──────────────────────────────────────────────────────────────
 
-type Built = Omit<KitSheetDraftIngredient, "variants" | "sourceText">;
+type Built = Omit<KitSheetDraftIngredient, "variants" | "sourceText"> & {
+  /** Only for building steps; not part of the draft ingredient. */
+  firstWort?: boolean;
+  contactDays?: number | null;
+};
 
 function fermentable(f: Node, recipeType: string, units: BeerXmlUnits): Built {
   const type = lower(f, "TYPE");
@@ -130,6 +134,7 @@ function fermentable(f: Node, recipeType: string, units: BeerXmlUnits): Built {
 
 function hop(h: Node, boilMinutes: number | null, units: BeerXmlUnits): Built {
   const use = lower(h, "USE");
+  let contactDays: number | null = null;
   const time = num(h, "TIME");
   const notes: string[] = [];
   const alpha = num(h, "ALPHA");
@@ -142,7 +147,10 @@ function hop(h: Node, boilMinutes: number | null, units: BeerXmlUnits): Built {
   if (use === "dry hop") {
     mapped = "dry_hop";
     // BeerXML gives how long the hops sit, not which day they go in.
-    if (time != null && time > 0) notes.push(`${round(time / 1440, 1)} days in contact`);
+    if (time != null && time > 0) {
+      contactDays = round(time / 1440, 1);
+      notes.push(`${contactDays} days in contact`);
+    }
   } else if (use === "first wort") {
     mapped = "boil";
     timing = boilMinutes;
@@ -167,6 +175,8 @@ function hop(h: Node, boilMinutes: number | null, units: BeerXmlUnits): Built {
     use: mapped,
     timingMinutes: timing,
     notes: notes.length > 0 ? notes.join(", ") : null,
+    firstWort: use === "first wort",
+    contactDays,
   };
 }
 
@@ -208,6 +218,58 @@ function yeast(y: Node): Built {
     timingMinutes: null,
     notes: notes.length > 0 ? notes.join(", ") : null,
   };
+}
+
+// ── Addition steps ───────────────────────────────────────────────────────────
+
+/** "0.75 oz Columbus", or the name alone when the file gives no amount. */
+function describe(ing: Built): string {
+  return ing.amount != null ? [ing.amount, ing.unit, ing.name].filter((p) => p != null && p !== "").join(" ") : ing.name;
+}
+
+const joinAll = (items: Built[]) => items.map(describe).join(", ");
+
+/** Groups items by a key, keeping first-seen order within each group. */
+function groupBy<K>(items: Built[], key: (i: Built) => K): Map<K, Built[]> {
+  const out = new Map<K, Built[]>();
+  for (const i of items) {
+    const k = key(i);
+    out.set(k, [...(out.get(k) ?? []), i]);
+  }
+  return out;
+}
+
+/**
+ * Brew-day steps for the timed additions, so the step list reads as a
+ * checklist: first-wort hops before the boil, boil additions by minutes
+ * remaining, whirlpool additions after it, dry hops in fermentation. The
+ * ingredients keep their use and timing too, which the boil timer runs from.
+ */
+function additionSteps(ingredients: Built[], boilStep: Step | null): Step[] {
+  const firstWort = ingredients.filter((i) => i.firstWort);
+  const boil = ingredients.filter((i) => i.use === "boil" && !i.firstWort && i.timingMinutes != null);
+  const whirlpool = ingredients.filter((i) => i.use === "whirlpool");
+  const dryHop = ingredients.filter((i) => i.use === "dry_hop");
+
+  const steps: Step[] = [];
+  if (firstWort.length > 0) {
+    steps.push({ body: `First wort: add ${joinAll(firstWort)} to the kettle while lautering`, phase: "boil", durationMinutes: null });
+  }
+  if (boilStep) steps.push(boilStep);
+  const byMinute = [...groupBy(boil, (i) => i.timingMinutes!)].sort((a, b) => b[0] - a[0]);
+  for (const [minutes, items] of byMinute) {
+    const when = minutes <= 0 ? "Flameout" : `${minutes} min`;
+    steps.push({ body: `${when}: add ${joinAll(items)}`, phase: "boil", durationMinutes: null });
+  }
+  for (const [minutes, items] of groupBy(whirlpool, (i) => i.timingMinutes)) {
+    const length = minutes != null && minutes > 0 ? ` for ${minutes} minutes` : "";
+    steps.push({ body: `Whirlpool: add ${joinAll(items)}${length}`, phase: "boil", durationMinutes: minutes != null && minutes > 0 ? minutes : null });
+  }
+  for (const [days, items] of groupBy(dryHop, (i) => i.contactDays ?? null)) {
+    const length = days != null ? ` for ${days} ${days === 1 ? "day" : "days"}` : "";
+    steps.push({ body: `Dry hop: add ${joinAll(items)}${length}`, phase: "fermentation", durationMinutes: null });
+  }
+  return steps;
 }
 
 // ── Recipe ───────────────────────────────────────────────────────────────────
@@ -269,10 +331,10 @@ function draftFor(recipe: Node, units: BeerXmlUnits): KitSheetDraft {
     return n != null && n > 0 ? Math.round(n) : null;
   };
 
-  const steps = mashSteps(stepNodes);
-  if (boilMinutes != null && boilMinutes > 0) {
-    steps.push({ body: `Boil for ${Math.round(boilMinutes)} minutes`, phase: "boil", durationMinutes: Math.round(boilMinutes) });
-  }
+  const boilStep: Step | null = boilMinutes != null && boilMinutes > 0
+    ? { body: `Boil for ${Math.round(boilMinutes)} minutes`, phase: "boil", durationMinutes: Math.round(boilMinutes) }
+    : null;
+  const steps = [...mashSteps(stepNodes), ...additionSteps(ingredients, boilStep)];
 
   const og = gravity(recipe, "EST_OG", "OG");
   const description = [text(recipe, "NOTES"), text(recipe, "BREWER") && `Brewer: ${text(recipe, "BREWER")}`]
@@ -312,7 +374,7 @@ function draftFor(recipe: Node, units: BeerXmlUnits): KitSheetDraft {
       conditioningDays: days("AGE"),
     },
     suggestedYeasts: [],
-    ingredients: ingredients.map((ing) => ({ ...ing, variants: null, sourceText: "" })),
+    ingredients: ingredients.map(({ firstWort: _fw, contactDays: _cd, ...ing }) => ({ ...ing, variants: null, sourceText: "" })),
     tips,
     warnings,
   };

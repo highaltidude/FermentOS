@@ -126,11 +126,39 @@ describe("parseBeerXml: an all-grain recipe", () => {
     });
   });
 
-  it("turns the mash schedule and boil into steps", () => {
+  it("turns the mash schedule, boil and timed additions into steps", () => {
     expect(d!.steps).toEqual([
       { body: "Mash In: 152°F (66.7°C)", phase: "mash", durationMinutes: 60 },
       { body: "Mash Out: 168°F (75.6°C)", phase: "mash", durationMinutes: 10 },
+      { body: "First wort: add 0.5 oz Magnum to the kettle while lautering", phase: "boil", durationMinutes: null },
       { body: "Boil for 60 minutes", phase: "boil", durationMinutes: 60 },
+      { body: "15 min: add Whirlfloc Tablet", phase: "boil", durationMinutes: null },
+      { body: "10 min: add 1 oz Cascade", phase: "boil", durationMinutes: null },
+      { body: "Whirlpool: add 1 oz Citra for 20 minutes", phase: "boil", durationMinutes: 20 },
+      { body: "Dry hop: add 2 oz Mosaic for 3 days", phase: "fermentation", durationMinutes: null },
+    ]);
+  });
+
+  it("keeps step-building details out of the ingredients", () => {
+    for (const i of d!.ingredients) {
+      expect(i).not.toHaveProperty("firstWort");
+      expect(i).not.toHaveProperty("contactDays");
+    }
+  });
+
+  it("groups additions made at the same time, latest-in last, flameout as its own step", () => {
+    const [g] = drafts(`<RECIPE><NAME>G</NAME><BATCH_SIZE>19</BATCH_SIZE><BOIL_TIME>60</BOIL_TIME><HOPS>
+      <HOP><NAME>Simcoe</NAME><AMOUNT>0.0141748</AMOUNT><USE>Boil</USE><TIME>0</TIME></HOP>
+      <HOP><NAME>Columbus</NAME><AMOUNT>0.0212622</AMOUNT><USE>Boil</USE><TIME>60</TIME></HOP>
+      <HOP><NAME>Amarillo</NAME><AMOUNT>0.0283495</AMOUNT><USE>Dry Hop</USE><TIME>4320</TIME></HOP>
+      <HOP><NAME>Centennial</NAME><AMOUNT>0.0283495</AMOUNT><USE>Boil</USE><TIME>60</TIME></HOP>
+      <HOP><NAME>Simcoe</NAME><AMOUNT>0.0141748</AMOUNT><USE>Dry Hop</USE><TIME>4320</TIME></HOP>
+    </HOPS></RECIPE>`);
+    expect(g!.steps!.map((s) => s.body)).toEqual([
+      "Boil for 60 minutes",
+      "60 min: add 0.75 oz Columbus, 1 oz Centennial",
+      "Flameout: add 0.5 oz Simcoe",
+      "Dry hop: add 1 oz Amarillo, 0.5 oz Simcoe for 3 days",
     ]);
   });
 

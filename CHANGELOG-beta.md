@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.18.1-beta1...fermentos-v1.19.0-beta1) (2026-11-20)
+
+
+### Features
+
+* **recipes:** add BeerXML hop and addition steps to imported recipes ([037226d](https://github.com/highaltidude/FermentOS/commit/037226dd40e5cc17788a32804c3512c7816f0674))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

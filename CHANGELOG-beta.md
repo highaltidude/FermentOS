@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0-beta2](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.18.0-beta1...fermentos-v1.18.0-beta2) (2026-11-20)
+
+
+### Bug Fixes
+
+* **system:** chart CPU as the average over each sample interval ([b4a25c6](https://github.com/highaltidude/FermentOS/commit/b4a25c6c8136876ebb61fdc75b3e5cae1f471e2b))
+
 ## [1.6.0-beta1](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.5.1-beta1...fermentos-v1.6.0-beta1) (2026-09-21)
 
 

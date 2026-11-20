@@ -77,7 +77,7 @@ install to a tracked first batch.
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
 - **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). A recipe can keep its water: the target and salt additions show on the recipe, and brew day lists the additions scaled to the batch. Recipe scaling and batch cost are planned
-- **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts
+- **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts (CPU history is the average over each 5-minute sample interval)
 - **Brew page layout** — Choose the order of the cards on a brew's page and hide the ones you don't use, such as the Heating & cooling chart if you have no relays. Set once in Settings, the same on every device
 - **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
 - **Backups** — Local backups and scheduled SFTP export, restore from a file or from history, and a coverage audit that checks every database table is actually accounted for
@@ -1922,7 +1922,7 @@ Node types and their `config` (temperatures are always °C):
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/system/stats` | Live host stats: CPU, memory, disk, network, temperature |
-| GET | `/api/system/health-history?hours=` | Historical health samples for trend charts. `hours` defaults to 24, max 336 (14 days) |
+| GET | `/api/system/health-history?hours=` | Historical health samples for trend charts, one every 5 minutes; `cpuPercent` is the average since the previous sample. `hours` defaults to 24, max 336 (14 days) |
 
 Backs the Settings → System → Health panel, which auto-refreshes every 5 seconds.
 

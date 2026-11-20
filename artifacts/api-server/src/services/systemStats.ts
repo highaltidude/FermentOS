@@ -2,6 +2,7 @@ import os from "os";
 import fs from "fs";
 import { execSync } from "child_process";
 import { IS_DOCKER } from "../lib/runtime";
+import { cpuPercentBetween, parseProcStat, type CpuTimes } from "../lib/cpuUsage.js";
 
 export type SystemStats = {
   hostname: string;
@@ -16,13 +17,9 @@ export type SystemStats = {
   isDocker: boolean;
 };
 
-function readProcStat(): { total: number; idle: number } | null {
+export function readProcStat(): CpuTimes | null {
   try {
-    const line = fs.readFileSync("/proc/stat", "utf8").split("\n")[0];
-    const parts = line.trim().split(/\s+/).slice(1).map(Number);
-    const idle = parts[3] + (parts[4] ?? 0);
-    const total = parts.reduce((s, v) => s + v, 0);
-    return { total, idle };
+    return parseProcStat(fs.readFileSync("/proc/stat", "utf8"));
   } catch {
     return null;
   }
@@ -76,12 +73,7 @@ export async function getSystemStats(): Promise<SystemStats> {
   const net2 = readNetDev();
   const elapsed = (Date.now() - t0) / 1000;
 
-  let cpuPercent: number | null = null;
-  if (s1 && s2) {
-    const dTotal = s2.total - s1.total;
-    const dIdle = s2.idle - s1.idle;
-    cpuPercent = dTotal > 0 ? Math.round(((dTotal - dIdle) / dTotal) * 100) : 0;
-  }
+  const cpuPercent = s1 && s2 ? cpuPercentBetween(s1, s2) ?? 0 : null;
 
   const netInterfaces = Object.entries(net2).map(([name, v2]) => {
     const v1 = net1[name];

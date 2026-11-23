@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Calculator, Scale, DollarSign, FlaskConical } from "lucide-react";
 import { estimateAbv } from "@/lib/brewMath";
 import { WaterChemistryCalculator } from "@/components/WaterChemistryCalculator";
+import { CarbonationCalculator } from "@/components/CarbonationCalculator";
 
 const comingSoon = [
   {
@@ -120,6 +121,8 @@ export default function Calculators() {
       </div>
 
       <WaterChemistryCalculator />
+
+      <CarbonationCalculator />
 
       {/* Remaining placeholders */}
       <div className="space-y-3">

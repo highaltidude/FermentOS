@@ -76,7 +76,7 @@ install to a tracked first batch.
 - **Beer styles** — Keep your own style list, used as the dropdown when creating recipes
 - **Units** — Imperial, metric, or both. Controls the units offered in the ingredient form; existing entries keep what they were saved with
 - **Dashboard** — What is fermenting right now and what you brewed recently, at a glance
-- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after). A recipe can keep its water: the target and salt additions show on the recipe, and brew day lists the additions scaled to the batch. Recipe scaling and batch cost are planned
+- **Calculators** — ABV and attenuation from OG and FG, and a water chemistry calculator that suggests brewing salt additions to reach a target profile from your own tap water (saved once, prefilled after), and a carbonation calculator that gives priming sugar amounts for bottling or regulator pressure for force-carbonating a keg, with target CO₂ levels by style. A recipe can keep its water: the target and salt additions show on the recipe, and brew day lists the additions scaled to the batch. Recipe scaling and batch cost are planned
 - **System health** — Live CPU, memory, disk, and network for the host, refreshed every 5 seconds, with historical trend charts (CPU history is the average over each 5-minute sample interval)
 - **Brew page layout** — Choose the order of the cards on a brew's page and hide the ones you don't use, such as the Heating & cooling chart if you have no relays. Set once in Settings, the same on every device
 - **Reading retention** — Optionally delete old readings from packaged batches each night to keep the database small. Off by default
@@ -853,7 +853,7 @@ Day to day, that means:
 - **Recipes** carries the average score of every batch brewed from it, so your best recipes surface themselves over time
 - **Ingredients** tracks what you have and flags what is about to expire
 - **Equipment** is a register of your kit, searchable and filtered by category
-- **Calculators** has ABV and attenuation, and water chemistry (below)
+- **Calculators** has ABV and attenuation, water chemistry, and carbonation (below)
 
 **Water chemistry.** Under **Calculators → Water Chemistry**, enter the six
 values from your water report (calcium, magnesium, sodium, sulfate, chloride,
@@ -872,6 +872,18 @@ targets such as Dublin or Munich the calculator says so rather than making the
 water salty with baking soda. Target values
 come from Brewer's Friend's published table; treat the historic city ones as a
 starting point, not a specification.
+
+**Carbonation.** Under **Calculators → Carbonation**, choose **Bottling** or
+**Kegging**, then pick a style to fill in its typical CO₂ level (in volumes),
+or type your own. For bottling, enter the batch volume and the warmest
+temperature the beer reached after fermentation finished: the beer still holds
+some CO₂ from fermentation, and warmer beer holds less, so this sets how much
+sugar is needed. It shows the weight of corn sugar, table sugar, dry malt
+extract, or honey to add; use one of them. For kegging, enter the temperature
+the keg sits at and it shows the regulator pressure to hold until the beer
+reaches the target, usually one to two weeks. Volumes and temperatures follow
+your unit settings. The dry malt extract and honey amounts are estimates,
+because their sugar content varies.
 
 **A recipe's water.** To keep the water with a recipe, use **Add water** on the
 recipe's **Water** card. It opens the same calculator, starting from your saved

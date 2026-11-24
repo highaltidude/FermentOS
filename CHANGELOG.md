@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.19.0...fermentos-v1.20.0) (2026-11-24)
+
+
+### Features
+
+* **calculators:** add carbonation calculator for priming sugar and keg pressure ([5106555](https://github.com/highaltidude/FermentOS/commit/5106555e4d4e077ff95ae6c125723485e8203b66))
+
 ## [1.19.0](https://github.com/highaltidude/FermentOS/compare/fermentos-v1.18.1...fermentos-v1.19.0) (2026-11-20)
 
 
